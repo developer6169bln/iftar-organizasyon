@@ -24,6 +24,7 @@ model User {
   assignedTasks TaskAssignment[]
   tasks Task[]  // Direkt zugewiesene Aufgaben
   checklistItems ChecklistItem[]
+  responsibleCategories Category[]  // Bereiche, für die dieser Benutzer verantwortlich ist
   
   @@map("users")
 }
@@ -184,6 +185,25 @@ model ProgramItem {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   
   @@map("program_items")
+}
+
+// Organisationsbereiche (editierbar)
+model Category {
+  id                String   @id @default(cuid())
+  categoryId        String   @unique  // Eindeutige ID (z.B. 'PROTOCOL', 'GUEST_LIST')
+  name              String
+  icon              String
+  color             String
+  description       String?
+  responsibleUserId String?  // Hauptverantwortlicher
+  order             Int      @default(0)  // Reihenfolge
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  responsibleUser   User?    @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  
+  @@map("categories")
 }
 
 // Dateianhänge für Tasks und ChecklistItems

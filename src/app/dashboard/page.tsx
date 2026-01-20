@@ -4,79 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-const categories = [
-  {
-    id: 'PROTOCOL',
-    name: 'Protokol',
-    icon: '📋',
-    color: 'bg-blue-500',
-    description: 'Protokol düzenlemeleri ve kuralları'
-  },
-  {
-    id: 'GUEST_LIST',
-    name: 'Davet Listesi',
-    icon: '👥',
-    color: 'bg-green-500',
-    description: 'Misafir listesi ve davetiyeler'
-  },
-  {
-    id: 'GUEST_RECEPTION',
-    name: 'Misafir Karşılama',
-    icon: '🚪',
-    color: 'bg-purple-500',
-    description: 'Giriş ve karşılama organizasyonu'
-  },
-  {
-    id: 'SECURITY',
-    name: 'Güvenlik',
-    icon: '🔒',
-    color: 'bg-red-500',
-    description: 'Güvenlik önlemleri ve kontroller'
-  },
-  {
-    id: 'HOTEL_COORDINATION',
-    name: 'Otel Koordinasyon',
-    icon: '🏨',
-    color: 'bg-yellow-500',
-    description: 'Otel ile koordinasyon ve düzenlemeler'
-  },
-  {
-    id: 'SAHUR_COORDINATION',
-    name: 'Sahur Koordinasyon',
-    icon: '🌙',
-    color: 'bg-indigo-500',
-    description: 'Sahur organizasyonu ve planlama'
-  },
-  {
-    id: 'MUSIC_TEAM',
-    name: 'Müzik Ekibi',
-    icon: '🎵',
-    color: 'bg-pink-500',
-    description: 'Müzik ekibi ve program koordinasyonu'
-  },
-  {
-    id: 'SPEAKER',
-    name: 'Konuşmacı',
-    icon: '🎤',
-    color: 'bg-teal-500',
-    description: 'Konuşmacı organizasyonu ve program'
-  },
-  {
-    id: 'HEADQUARTERS',
-    name: 'Genel Merkez Koordinasyon',
-    icon: '🏢',
-    color: 'bg-gray-500',
-    description: 'Genel merkez ile koordinasyon'
-  },
-  {
-    id: 'PROGRAM_FLOW',
-    name: 'Program Akışı',
-    icon: '⏱️',
-    color: 'bg-orange-500',
-    description: 'Zaman planlaması ve program akışı'
-  }
-]
-
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -87,13 +14,18 @@ export default function DashboardPage() {
     checklistItems: 0,
   })
   const [loadingStats, setLoadingStats] = useState(true)
-  const [customCategories, setCustomCategories] = useState<any[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false)
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<any>(null)
+  const [users, setUsers] = useState<any[]>([])
   const [newCategory, setNewCategory] = useState({
     name: '',
     icon: '📌',
     color: 'bg-slate-500',
     description: '',
+    responsibleUserId: '',
   })
 
   useEffect(() => {
@@ -129,17 +61,74 @@ export default function DashboardPage() {
 
     checkAuth()
     loadStatistics()
-    
-    // Lade gespeicherte benutzerdefinierte Kategorien
-    const savedCategories = localStorage.getItem('customCategories')
-    if (savedCategories) {
+    loadCategories()
+    loadUsers()
+  }, [router])
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch('/api/users')
+      if (response.ok) {
+        const usersData = await response.json()
+        setUsers(usersData)
+      }
+    } catch (error) {
+      console.error('Benutzer yükleme hatası:', error)
+    }
+  }
+
+  const loadCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const response = await fetch('/api/categories')
+      if (response.ok) {
+        const categoriesData = await response.json()
+        if (categoriesData.length === 0) {
+          // Initialisiere Standard-Categories
+          await initializeDefaultCategories()
+          // Lade erneut
+          const reloadResponse = await fetch('/api/categories')
+          if (reloadResponse.ok) {
+            const reloaded = await reloadResponse.json()
+            setCategories(reloaded)
+          }
+        } else {
+          setCategories(categoriesData)
+        }
+      }
+    } catch (error) {
+      console.error('Kategorien yükleme hatası:', error)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+
+  const initializeDefaultCategories = async () => {
+    const defaultCategories = [
+      { categoryId: 'PROTOCOL', name: 'Protokol', icon: '📋', color: 'bg-blue-500', description: 'Protokol düzenlemeleri ve kuralları', order: 1 },
+      { categoryId: 'GUEST_LIST', name: 'Davet Listesi', icon: '👥', color: 'bg-green-500', description: 'Misafir listesi ve davetiyeler', order: 2 },
+      { categoryId: 'GUEST_RECEPTION', name: 'Misafir Karşılama', icon: '🚪', color: 'bg-purple-500', description: 'Giriş ve karşılama organizasyonu', order: 3 },
+      { categoryId: 'SECURITY', name: 'Güvenlik', icon: '🔒', color: 'bg-red-500', description: 'Güvenlik önlemleri ve kontroller', order: 4 },
+      { categoryId: 'HOTEL_COORDINATION', name: 'Otel Koordinasyon', icon: '🏨', color: 'bg-yellow-500', description: 'Otel ile koordinasyon ve düzenlemeler', order: 5 },
+      { categoryId: 'SAHUR_COORDINATION', name: 'Sahur Koordinasyon', icon: '🌙', color: 'bg-indigo-500', description: 'Sahur organizasyonu ve planlama', order: 6 },
+      { categoryId: 'MUSIC_TEAM', name: 'Müzik Ekibi', icon: '🎵', color: 'bg-pink-500', description: 'Müzik ekibi ve program koordinasyonu', order: 7 },
+      { categoryId: 'SPEAKER', name: 'Konuşmacı', icon: '🎤', color: 'bg-teal-500', description: 'Konuşmacı organizasyonu ve program', order: 8 },
+      { categoryId: 'HEADQUARTERS', name: 'Genel Merkez Koordinasyon', icon: '🏢', color: 'bg-gray-500', description: 'Genel merkez ile koordinasyon', order: 9 },
+      { categoryId: 'PROGRAM_FLOW', name: 'Program Akışı', icon: '⏱️', color: 'bg-orange-500', description: 'Zaman planlaması ve program akışı', order: 10 },
+    ]
+
+    for (const cat of defaultCategories) {
       try {
-        setCustomCategories(JSON.parse(savedCategories))
-      } catch (e) {
-        console.error('Fehler beim Laden der Kategorien:', e)
+        await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cat),
+        })
+      } catch (error) {
+        console.error(`Fehler beim Erstellen der Kategorie ${cat.categoryId}:`, error)
       }
     }
-  }, [router])
+  }
 
   const loadStatistics = async () => {
     try {
@@ -198,30 +187,80 @@ export default function DashboardPage() {
     window.location.href = '/login'
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategory.name.trim()) {
       alert('Bitte geben Sie einen Namen ein')
       return
     }
 
-    const categoryId = `CUSTOM_${Date.now()}`
-    const newCat = {
-      id: categoryId,
-      name: newCategory.name,
-      icon: newCategory.icon,
-      color: newCategory.color,
-      description: newCategory.description || '',
-    }
+    try {
+      const categoryId = `CUSTOM_${Date.now()}`
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categoryId,
+          name: newCategory.name,
+          icon: newCategory.icon,
+          color: newCategory.color,
+          description: newCategory.description || '',
+          responsibleUserId: newCategory.responsibleUserId || undefined,
+          order: categories.length + 1,
+        }),
+      })
 
-    const updated = [...customCategories, newCat]
-    setCustomCategories(updated)
-    localStorage.setItem('customCategories', JSON.stringify(updated))
-    
-    setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '' })
-    setShowAddCategoryModal(false)
+      if (response.ok) {
+        const created = await response.json()
+        setCategories([...categories, created])
+        setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '', responsibleUserId: '' })
+        setShowAddCategoryModal(false)
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Kategorie konnte nicht erstellt werden')
+      }
+    } catch (error) {
+      console.error('Kategorie erstellen Fehler:', error)
+      alert('Kategorie konnte nicht erstellt werden')
+    }
   }
 
-  const allCategories = [...categories, ...customCategories]
+  const handleEditCategory = (category: any) => {
+    setEditingCategory(category)
+    setShowEditCategoryModal(true)
+  }
+
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCategory) return
+
+    try {
+      const response = await fetch('/api/categories', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingCategory.id,
+          name: editingCategory.name,
+          icon: editingCategory.icon,
+          color: editingCategory.color,
+          description: editingCategory.description || '',
+          responsibleUserId: editingCategory.responsibleUserId || undefined,
+        }),
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        setCategories(categories.map(cat => cat.id === editingCategory.id ? updated : cat))
+        setShowEditCategoryModal(false)
+        setEditingCategory(null)
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Kategorie konnte nicht aktualisiert werden')
+      }
+    } catch (error) {
+      console.error('Kategorie aktualisieren Fehler:', error)
+      alert('Kategorie konnte nicht aktualisiert werden')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -267,41 +306,54 @@ export default function DashboardPage() {
         {/* Categories Grid */}
         <div className="mb-8">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Organizasyon Alanları</h2>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {allCategories.map((category) => {
-              // Özel links
-              let href = `/dashboard/${category.id.toLowerCase()}`
-              if (category.id === 'GUEST_LIST') {
-                href = '/dashboard/guests'
-              } else if (category.id === 'PROGRAM_FLOW') {
-                href = '/dashboard/program_flow'
-              } else if (category.id.startsWith('CUSTOM_')) {
-                href = `/dashboard/${category.id.toLowerCase()}`
-              }
+          {loadingCategories ? (
+            <p className="text-gray-500">Kategorien werden geladen...</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {categories.filter(cat => cat.isActive).map((category) => {
+                // Özel links
+                let href = `/dashboard/${category.categoryId.toLowerCase()}`
+                if (category.categoryId === 'GUEST_LIST') {
+                  href = '/dashboard/guests'
+                } else if (category.categoryId === 'PROGRAM_FLOW') {
+                  href = '/dashboard/program_flow'
+                }
+                
+                return (
+                <div key={category.id} className="group relative rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg">
+                  <button
+                    onClick={() => handleEditCategory(category)}
+                    className="absolute right-2 top-2 rounded bg-gray-100 p-1 text-gray-600 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
+                    title="Bearbeiten"
+                  >
+                    ✎
+                  </button>
+                  <Link href={href} className="block">
+                    <div className="mb-4 flex items-center gap-4">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${category.color} text-2xl text-white`}>
+                        {category.icon}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
+                        {category.responsibleUser && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            👤 Verantwortlich: {category.responsibleUser.name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">{category.description}</p>
+                    <div className="mt-4 flex items-center text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+                      Detayları Gör
+                      <span className="ml-2">→</span>
+                    </div>
+                  </Link>
+                </div>
+                )
+              })}
               
-              return (
-              <Link
-                key={category.id}
-                href={href}
-                className="group rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
-              >
-                <div className="mb-4 flex items-center gap-4">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${category.color} text-2xl text-white`}>
-                    {category.icon}
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900">{category.name}</h3>
-                </div>
-                <p className="text-sm text-gray-600">{category.description}</p>
-                <div className="mt-4 flex items-center text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
-                  Detayları Gör
-                  <span className="ml-2">→</span>
-                </div>
-              </Link>
-              )
-            })}
-            
-            {/* Plus-Zeichen zum Hinzufügen */}
-            <button
+              {/* Plus-Zeichen zum Hinzufügen */}
+              <button
               onClick={() => setShowAddCategoryModal(true)}
               className="group flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white p-6 transition-all hover:border-indigo-500 hover:bg-indigo-50"
             >
@@ -311,8 +363,9 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-gray-600 group-hover:text-indigo-600">
                 Yeni Alan Ekle
               </p>
-            </button>
-          </div>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Modal zum Hinzufügen neuer Kategorie */}
@@ -382,6 +435,22 @@ export default function DashboardPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hauptverantwortlicher</label>
+                  <select
+                    value={newCategory.responsibleUserId}
+                    onChange={(e) => setNewCategory({ ...newCategory, responsibleUserId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">Kein Verantwortlicher</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -393,7 +462,115 @@ export default function DashboardPage() {
                     type="button"
                     onClick={() => {
                       setShowAddCategoryModal(false)
-                      setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '' })
+                      setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '', responsibleUserId: '' })
+                    }}
+                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal zum Bearbeiten der Kategorie */}
+        {showEditCategoryModal && editingCategory && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h2 className="mb-4 text-xl font-semibold">Organizasyon Alanı Bearbeiten</h2>
+              <form onSubmit={handleUpdateCategory} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingCategory.name}
+                    onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Icon</label>
+                  <input
+                    type="text"
+                    value={editingCategory.icon}
+                    onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="📌"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Emoji oder Unicode-Zeichen</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Farbe</label>
+                  <select
+                    value={editingCategory.color}
+                    onChange={(e) => setEditingCategory({ ...editingCategory, color: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="bg-slate-500">Grau</option>
+                    <option value="bg-blue-500">Blau</option>
+                    <option value="bg-green-500">Grün</option>
+                    <option value="bg-purple-500">Lila</option>
+                    <option value="bg-red-500">Rot</option>
+                    <option value="bg-yellow-500">Gelb</option>
+                    <option value="bg-indigo-500">Indigo</option>
+                    <option value="bg-pink-500">Rosa</option>
+                    <option value="bg-teal-500">Türkis</option>
+                    <option value="bg-orange-500">Orange</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Beschreibung</label>
+                  <textarea
+                    value={editingCategory.description || ''}
+                    onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="Kurze Beschreibung des Bereichs..."
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700">Hauptverantwortlicher</label>
+                    <a
+                      href="/register"
+                      target="_blank"
+                      className="text-xs text-indigo-600 hover:text-indigo-700"
+                    >
+                      + Neuer Benutzer
+                    </a>
+                  </div>
+                  <select
+                    value={editingCategory.responsibleUserId || ''}
+                    onChange={(e) => setEditingCategory({ ...editingCategory, responsibleUserId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">Kein Verantwortlicher</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                  >
+                    Speichern
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditCategoryModal(false)
+                      setEditingCategory(null)
                     }}
                     className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
                   >
