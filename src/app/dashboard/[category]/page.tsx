@@ -21,7 +21,33 @@ export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
   const category = params.category as string
-  const categoryInfo = categoryMap[category]
+  
+  // Lade benutzerdefinierte Kategorien aus localStorage
+  const [customCategories, setCustomCategories] = useState<any[]>([])
+  useEffect(() => {
+    const saved = localStorage.getItem('customCategories')
+    if (saved) {
+      try {
+        setCustomCategories(JSON.parse(saved))
+      } catch (e) {
+        console.error('Fehler beim Laden der Kategorien:', e)
+      }
+    }
+  }, [])
+  
+  // Erweitere categoryMap mit benutzerdefinierten Kategorien
+  const extendedCategoryMap = { ...categoryMap }
+  customCategories.forEach(cat => {
+    const key = cat.id.toLowerCase()
+    extendedCategoryMap[key] = {
+      name: cat.name,
+      icon: cat.icon,
+      color: cat.color,
+      dbCategory: cat.id
+    }
+  })
+  
+  const categoryInfo = extendedCategoryMap[category]
   const [checklistItems, setChecklistItems] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,13 +77,27 @@ export default function CategoryPage() {
   const [receptionGuestEditData, setReceptionGuestEditData] = useState<any>({})
 
   useEffect(() => {
+    // Lade customCategories aus localStorage
+    const saved = localStorage.getItem('customCategories')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setCustomCategories(parsed)
+      } catch (e) {
+        console.error('Fehler beim Laden der Kategorien:', e)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    // Prüfe ob Kategorie existiert (nachdem customCategories geladen wurden)
     if (!categoryInfo) {
       router.push('/dashboard')
       return
     }
 
     loadEventAndData()
-  }, [category])
+  }, [category, categoryInfo])
 
   const loadEventAndData = async () => {
     try {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { headers } from 'next/headers'
 import { exec } from 'child_process'
 import { promisify } from 'util'
 
@@ -7,7 +8,8 @@ const execAsync = promisify(exec)
 export async function POST() {
   // Nur in Development oder mit Secret Key erlauben
   const secret = process.env.MIGRATE_SECRET
-  const providedSecret = (await import('next/headers')).headers().get('x-migrate-secret')
+  const headersList = await headers()
+  const providedSecret = headersList.get('x-migrate-secret')
   
   if (process.env.NODE_ENV === 'production' && secret && providedSecret !== secret) {
     return NextResponse.json(
