@@ -25,6 +25,7 @@ export default function CategoryPage() {
   // Lade benutzerdefinierte Kategorien aus localStorage
   const [customCategories, setCustomCategories] = useState<any[]>([])
   const [categoryInfo, setCategoryInfo] = useState<any>(null)
+  const [categoryChecked, setCategoryChecked] = useState(false)
   
   useEffect(() => {
     // Lade customCategories aus localStorage
@@ -54,6 +55,7 @@ export default function CategoryPage() {
     // Setze categoryInfo
     const info = extendedCategoryMap[category]
     setCategoryInfo(info)
+    setCategoryChecked(true) // Markiere dass Prüfung abgeschlossen ist
   }, [category])
   const [checklistItems, setChecklistItems] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
@@ -85,30 +87,24 @@ export default function CategoryPage() {
   const [uploadingFile, setUploadingFile] = useState<{ taskId?: string; checklistItemId?: string } | null>(null)
 
   useEffect(() => {
-    // Lade customCategories aus localStorage
-    const saved = localStorage.getItem('customCategories')
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        setCustomCategories(parsed)
-      } catch (e) {
-        console.error('Fehler beim Laden der Kategorien:', e)
-      }
+    // Warte bis categoryInfo geprüft wurde, bevor wir weiterleiten
+    if (!categoryChecked) {
+      return // Warte noch auf die Prüfung
     }
-  }, [])
 
-  useEffect(() => {
     // Prüfe ob Kategorie existiert (nachdem customCategories geladen wurden)
     if (!categoryInfo) {
       router.push('/dashboard')
       return
     }
 
+    // Kategorie existiert, lade Daten
     loadEventAndData()
-  }, [category, categoryInfo])
+  }, [category, categoryInfo, categoryChecked, router])
 
   const loadEventAndData = async () => {
     try {
+      setLoading(true)
       // Önce Event'i al veya oluştur
       const eventResponse = await fetch('/api/events')
       if (eventResponse.ok) {
@@ -117,6 +113,9 @@ export default function CategoryPage() {
         
         // Tasks ve Checklist items yükle
         await loadData(event.id)
+      } else {
+        console.error('Event response not ok:', eventResponse.status)
+        setLoading(false)
       }
     } catch (error) {
       console.error('Event yükleme hatası:', error)
@@ -126,23 +125,35 @@ export default function CategoryPage() {
 
   const loadData = async (eventId: string) => {
     try {
+      if (!categoryInfo || !categoryInfo.dbCategory) {
+        console.error('categoryInfo oder dbCategory fehlt')
+        setLoading(false)
+        return
+      }
+
       // Tasks yükle
-      const tasksResponse = await fetch(`/api/tasks?category=${categoryInfo.dbCategory}&eventId=${eventId}`)
+      const tasksResponse = await fetch(`/api/tasks?category=${encodeURIComponent(categoryInfo.dbCategory)}&eventId=${encodeURIComponent(eventId)}`)
       if (tasksResponse.ok) {
         const tasksData = await tasksResponse.json()
-        setTasks(tasksData)
+        setTasks(tasksData || [])
         
         // Eğer tasks yoksa, seed data yükle
         if (tasksData.length === 0) {
           await loadCategorySeedData(eventId, categoryInfo.dbCategory)
         }
+      } else {
+        console.error('Tasks response not ok:', tasksResponse.status)
+        setTasks([])
       }
 
       // Checklist items yükle
-      const checklistResponse = await fetch(`/api/checklist?category=${categoryInfo.dbCategory}&eventId=${eventId}`)
+      const checklistResponse = await fetch(`/api/checklist?category=${encodeURIComponent(categoryInfo.dbCategory)}&eventId=${encodeURIComponent(eventId)}`)
       if (checklistResponse.ok) {
         const checklistData = await checklistResponse.json()
-        setChecklistItems(checklistData)
+        setChecklistItems(checklistData || [])
+      } else {
+        console.error('Checklist response not ok:', checklistResponse.status)
+        setChecklistItems([])
       }
 
       // VIP-Gäste laden (nur für Protokoll)
@@ -159,6 +170,9 @@ export default function CategoryPage() {
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
       setLoading(false)
+      // Setze leere Arrays als Fallback
+      setTasks([])
+      setChecklistItems([])
     }
   }
 
@@ -1206,6 +1220,20 @@ export default function CategoryPage() {
     }
   }
 
+  // Warte bis Kategorie-Prüfung abgeschlossen ist
+  if (!categoryChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-indigo-600 border-r-transparent"></div>
+          <p className="text-gray-600">Lade...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Wenn Kategorie nicht existiert, wird bereits in useEffect weitergeleitet
+  // Hier nur als Fallback
   if (!categoryInfo) {
     return null
   }
