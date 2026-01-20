@@ -26,32 +26,59 @@ export async function GET(request: NextRequest) {
       where.eventId = eventId
     }
 
-    const tasks = await prisma.task.findMany({
-      where,
-      include: {
-        assignments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
+    // Prüfe ob attachments Tabelle existiert
+    let includeAttachments = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'attachments'
+        ) as exists
+      `
+      includeAttachments = result[0]?.exists === true
+    } catch (e) {
+      // Tabelle existiert nicht, ignoriere
+      includeAttachments = false
+    }
+
+    const includeOptions: any = {
+      assignments: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
             },
           },
         },
-        attachments: {
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
       },
+    }
+
+    if (includeAttachments) {
+      includeOptions.attachments = {
+        orderBy: {
+          createdAt: 'desc' as const,
+        },
+      }
+    }
+
+    const tasks = await prisma.task.findMany({
+      where,
+      include: includeOptions,
       orderBy: {
         createdAt: 'desc',
       },
     })
 
-    return NextResponse.json(tasks)
+    // Füge leeres attachments Array hinzu, falls nicht vorhanden
+    const tasksWithAttachments = tasks.map((task: any) => ({
+      ...task,
+      attachments: task.attachments || [],
+    }))
+
+    return NextResponse.json(tasksWithAttachments)
   } catch (error) {
     console.error('Tasks fetch error:', error)
     return NextResponse.json(

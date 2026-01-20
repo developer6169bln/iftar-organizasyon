@@ -27,32 +27,59 @@ export async function GET(request: NextRequest) {
       where.eventId = eventId
     }
 
-    const items = await prisma.checklistItem.findMany({
-      where,
-      include: {
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        attachments: {
-          orderBy: {
-            createdAt: 'desc',
-          },
+    // Prüfe ob attachments Tabelle existiert
+    let includeAttachments = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'attachments'
+        ) as exists
+      `
+      includeAttachments = result[0]?.exists === true
+    } catch (e) {
+      // Tabelle existiert nicht, ignoriere
+      includeAttachments = false
+    }
+
+    const includeOptions: any = {
+      assignedUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
         },
       },
+    }
+
+    if (includeAttachments) {
+      includeOptions.attachments = {
+        orderBy: {
+          createdAt: 'desc' as const,
+        },
+      }
+    }
+
+    const items = await prisma.checklistItem.findMany({
+      where,
+      include: includeOptions,
       orderBy: {
         createdAt: 'desc',
       },
     })
 
-    return NextResponse.json(items)
+    // Füge leeres attachments Array hinzu, falls nicht vorhanden
+    const itemsWithAttachments = items.map((item: any) => ({
+      ...item,
+      attachments: item.attachments || [],
+    }))
+
+    return NextResponse.json(itemsWithAttachments)
   } catch (error) {
     console.error('Checklist fetch error:', error)
     return NextResponse.json(
-      { error: 'Checklist yüklenirken hata oluştu' },
+      { error: 'Checklist yüklenirken hata oluştu', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }
