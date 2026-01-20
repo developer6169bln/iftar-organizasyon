@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
         googleSheetsSheetName: true,
         googleSheetsEnabled: true,
         googleSheetsLastSync: true,
+        googleSheetsColumnMapping: true,
       },
     })
 
