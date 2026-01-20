@@ -1,13 +1,13 @@
-// PostgreSQL Schema für Produktion
-// Kopiere dies nach schema.prisma und ändere die DATABASE_URL
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 // Benutzer für die Anwendung
@@ -26,6 +26,8 @@ model User {
   
   @@map("users")
 }
+
+// UserRole: ADMIN, COORDINATOR, STAFF
 
 // Iftar Event Details
 model Event {
@@ -46,6 +48,8 @@ model Event {
   
   @@map("events")
 }
+
+// EventStatus: PLANNING, IN_PROGRESS, COMPLETED, CANCELLED
 
 // Gäste / Davet Listesi
 model Guest {
@@ -72,6 +76,8 @@ model Guest {
   @@map("guests")
 }
 
+// GuestStatus: INVITED, CONFIRMED, ATTENDED, CANCELLED, NO_SHOW
+
 // Aufgabenbereiche (9 Hauptbereiche)
 model Task {
   id          String   @id @default(cuid())
@@ -92,6 +98,10 @@ model Task {
   
   @@map("tasks")
 }
+
+// TaskCategory: PROTOCOL, GUEST_LIST, GUEST_RECEPTION, SECURITY, HOTEL_COORDINATION, SAHUR_COORDINATION, MUSIC_TEAM, SPEAKER, HEADQUARTERS
+// TaskStatus: PENDING, IN_PROGRESS, COMPLETED, BLOCKED
+// Priority: LOW, MEDIUM, HIGH, URGENT
 
 // Aufgaben-Zuweisungen
 model TaskAssignment {
@@ -131,6 +141,8 @@ model ChecklistItem {
   @@map("checklist_items")
 }
 
+// ChecklistStatus: NOT_STARTED, IN_PROGRESS, COMPLETED, BLOCKED
+
 // Protokoll-Einträge
 model Protocol {
   id          String   @id @default(cuid())
@@ -164,9 +176,9 @@ model Note {
 model ProgramItem {
   id          String   @id @default(cuid())
   eventId     String
-  type        String   // SPEECH, MUSIC, EZAN, QURAN, HITABET, IFTAR_START, SUNUCU
+  type        String   // SPEECH, MUSIC, EZAN, QURAN, HITABET, IFTAR_START
   title       String   // Titel/Name des Programmpunkts
-  speakerName String?  // Name des Konuşmacı/Kuran okuyan/Ezan okuyan/Sunucu
+  speakerName String?  // Name des Konuşmacı/Kuran okuyan/Ezan okuyan
   topic       String?  // Konu/Thema
   duration    Int      // Dauer in Minuten
   startTime   DateTime // Startzeit
@@ -180,3 +192,5 @@ model ProgramItem {
   
   @@map("program_items")
 }
+
+// ProgramItemType: SPEECH, MUSIC, EZAN, QURAN, HITABET, IFTAR_START
