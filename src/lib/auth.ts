@@ -10,14 +10,19 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export async function createUser(email: string, name: string, password: string) {
-  const hashedPassword = await hashPassword(password)
-  return prisma.user.create({
-    data: {
-      email,
-      name,
-      password: hashedPassword,
-    },
-  })
+  try {
+    const hashedPassword = await hashPassword(password)
+    return await prisma.user.create({
+      data: {
+        email,
+        name,
+        password: hashedPassword,
+      },
+    })
+  } catch (error) {
+    console.error('createUser error:', error)
+    throw error
+  }
 }
 
 export async function getUserByEmail(email: string) {

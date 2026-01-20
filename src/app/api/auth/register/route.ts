@@ -46,8 +46,24 @@ export async function POST(request: NextRequest) {
 
     console.error('Registration error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    // Prisma-spezifische Fehler erkennen
+    let detailedError = errorMessage
+    if (errorMessage.includes('P1001') || errorMessage.includes('Can\'t reach database')) {
+      detailedError = 'Datenbankverbindung fehlgeschlagen. Prüfe DATABASE_URL.'
+    } else if (errorMessage.includes('P2002') || errorMessage.includes('Unique constraint')) {
+      detailedError = 'E-Mail-Adresse bereits vorhanden'
+    } else if (errorMessage.includes('P2025') || errorMessage.includes('Record to update not found')) {
+      detailedError = 'Datenbank-Tabellen fehlen. Führe Migrationen aus.'
+    }
+    
     return NextResponse.json(
-      { error: 'Kayıt sırasında bir hata oluştu', details: errorMessage },
+      { 
+        error: 'Kayıt sırasında bir hata oluştu', 
+        details: detailedError,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     )
   }
