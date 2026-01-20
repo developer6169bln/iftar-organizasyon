@@ -25,10 +25,55 @@ export default function GuestsPage() {
     arrivalDate: '',
     notes: '',
   })
+  const [eventId, setEventId] = useState<string | null>(null)
+  const [googleSheetsConfig, setGoogleSheetsConfig] = useState({
+    spreadsheetId: '',
+    sheetName: 'Gästeliste',
+    enabled: false,
+  })
+  const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<any>(null)
 
   useEffect(() => {
-    loadGuests()
+    loadEventAndGuests()
+    loadGoogleSheetsConfig()
   }, [])
+
+  const loadEventAndGuests = async () => {
+    try {
+      const eventResponse = await fetch('/api/events')
+      if (eventResponse.ok) {
+        const event = await eventResponse.json()
+        setEventId(event.id)
+      }
+      await loadGuests()
+    } catch (error) {
+      console.error('Event yükleme hatası:', error)
+      await loadGuests()
+    }
+  }
+
+  const loadGoogleSheetsConfig = async () => {
+    try {
+      const eventResponse = await fetch('/api/events')
+      if (eventResponse.ok) {
+        const event = await eventResponse.json()
+        const statusResponse = await fetch(`/api/google-sheets/sync?eventId=${event.id}&action=status`)
+        if (statusResponse.ok) {
+          const status = await statusResponse.json()
+          setGoogleSheetsConfig({
+            spreadsheetId: status.spreadsheetId || '',
+            sheetName: status.sheetName || 'Gästeliste',
+            enabled: status.enabled || false,
+          })
+          setSyncStatus(status)
+        }
+      }
+    } catch (error) {
+      console.error('Google Sheets Config yükleme hatası:', error)
+    }
+  }
 
   useEffect(() => {
     // Filter guests based on search query
@@ -106,7 +151,16 @@ export default function GuestsPage() {
           arrivalDate: '',
           notes: '',
         })
-        loadGuests()
+        await loadGuests()
+        
+        // Automatische Synchronisation zu Google Sheets (wenn aktiviert)
+        if (googleSheetsConfig.enabled && eventId) {
+          try {
+            await syncToGoogleSheets()
+          } catch (error) {
+            console.error('Automatische Sync fehlgeschlagen:', error)
+          }
+        }
       } else {
         const error = await response.json()
         alert(error.error || 'Misafir eklenirken hata oluştu')
@@ -114,6 +168,100 @@ export default function GuestsPage() {
     } catch (error) {
       console.error('Misafir eklenirken hata:', error)
       alert('Misafir eklenirken hata oluştu')
+    }
+  }
+
+  const syncToGoogleSheets = async () => {
+    if (!eventId || !googleSheetsConfig.enabled) return
+
+    try {
+      setSyncing(true)
+      const response = await fetch('/api/google-sheets/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          direction: 'to',
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
+        return true
+      } else {
+        const error = await response.json()
+        console.error('Sync Fehler:', error)
+        return false
+      }
+    } catch (error) {
+      console.error('Sync Fehler:', error)
+      return false
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const syncFromGoogleSheets = async () => {
+    if (!eventId || !googleSheetsConfig.enabled) return
+
+    try {
+      setSyncing(true)
+      const response = await fetch('/api/google-sheets/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          direction: 'from',
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        await loadGuests()
+        setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
+        alert(`Synchronisation abgeschlossen: ${result.created} erstellt, ${result.updated} aktualisiert`)
+        return true
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Synchronisation fehlgeschlagen')
+        return false
+      }
+    } catch (error) {
+      console.error('Sync Fehler:', error)
+      alert('Synchronisation fehlgeschlagen')
+      return false
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const handleSaveGoogleSheetsConfig = async () => {
+    if (!eventId) return
+
+    try {
+      const response = await fetch('/api/google-sheets/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          spreadsheetId: googleSheetsConfig.spreadsheetId,
+          sheetName: googleSheetsConfig.sheetName,
+          enabled: googleSheetsConfig.enabled,
+        }),
+      })
+
+      if (response.ok) {
+        await loadGoogleSheetsConfig()
+        setShowGoogleSheetsModal(false)
+        alert('Google Sheets Konfiguration gespeichert')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Konfiguration konnte nicht gespeichert werden')
+      }
+    } catch (error) {
+      console.error('Config Fehler:', error)
+      alert('Konfiguration konnte nicht gespeichert werden')
     }
   }
 
@@ -168,7 +316,16 @@ export default function GuestsPage() {
       })
 
       if (response.ok) {
-        loadGuests()
+        await loadGuests()
+        
+        // Automatische Synchronisation zu Google Sheets (wenn aktiviert)
+        if (googleSheetsConfig.enabled && eventId) {
+          try {
+            await syncToGoogleSheets()
+          } catch (error) {
+            console.error('Automatische Sync fehlgeschlagen:', error)
+          }
+        }
       } else {
         const error = await response.json()
         alert(error.error || error.details || 'VIP durumu güncellenemedi')
@@ -229,12 +386,50 @@ export default function GuestsPage() {
               </Link>
               <h1 className="text-2xl font-bold text-gray-900">Misafir Yönetimi</h1>
             </div>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-            >
-              + Yeni Misafir
-            </button>
+            <div className="flex gap-2">
+              {googleSheetsConfig.enabled && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={syncToGoogleSheets}
+                    disabled={syncing}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    title="Zu Google Sheets synchronisieren"
+                  >
+                    {syncing ? '⏳ Sync...' : '📤 Zu Sheets'}
+                  </button>
+                  <button
+                    onClick={syncFromGoogleSheets}
+                    disabled={syncing}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    title="Von Google Sheets synchronisieren"
+                  >
+                    {syncing ? '⏳ Sync...' : '📥 Von Sheets'}
+                  </button>
+                  {syncStatus?.lastSync && (
+                    <span className="text-xs text-gray-500">
+                      Letzte Sync: {new Date(syncStatus.lastSync).toLocaleString('de-DE')}
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                onClick={() => setShowGoogleSheetsModal(true)}
+                className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                  googleSheetsConfig.enabled
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Google Sheets Konfiguration"
+              >
+                📊 Google Sheets
+              </button>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                + Yeni Misafir
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -681,6 +876,103 @@ export default function GuestsPage() {
             )}
           </div>
         </div>
+
+        {/* Google Sheets Konfigurations-Modal */}
+        {showGoogleSheetsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h2 className="mb-4 text-xl font-semibold">Google Sheets Synchronisation</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Spreadsheet ID *
+                  </label>
+                    <p className="mb-1 text-xs text-gray-500">
+                      Aus der Google Sheets URL: https://docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit
+                    </p>
+                  <input
+                    type="text"
+                    value={googleSheetsConfig.spreadsheetId}
+                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, spreadsheetId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Sheet Name
+                  </label>
+                  <input
+                    type="text"
+                    value={googleSheetsConfig.sheetName}
+                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, sheetName: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="Gästeliste"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Name des Tabs im Spreadsheet (Standard: "Gästeliste")
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="sheetsEnabled"
+                    checked={googleSheetsConfig.enabled}
+                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, enabled: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="sheetsEnabled" className="text-sm font-medium text-gray-700">
+                    Automatische Synchronisation aktivieren
+                  </label>
+                </div>
+
+                {syncStatus && (
+                  <div className="rounded-lg bg-gray-50 p-3 text-sm">
+                    <p className="font-medium text-gray-700">Status:</p>
+                    <p className="text-gray-600">
+                      {syncStatus.configured ? '✅ Konfiguriert' : '❌ Nicht konfiguriert'}
+                    </p>
+                    {syncStatus.lastSync && (
+                      <p className="text-gray-600">
+                        Letzte Sync: {new Date(syncStatus.lastSync).toLocaleString('de-DE')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
+                  <p className="font-medium mb-1">📋 Setup-Anleitung:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs">
+                    <li>Erstelle ein Google Sheet oder öffne ein bestehendes</li>
+                    <li>Teile das Sheet mit der Service Account E-Mail (siehe .env)</li>
+                    <li>Kopiere die Spreadsheet ID aus der URL</li>
+                    <li>Füge die ID hier ein und aktiviere die Synchronisation</li>
+                  </ol>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveGoogleSheetsConfig}
+                    className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                  >
+                    Speichern
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowGoogleSheetsModal(false)
+                      loadGoogleSheetsConfig() // Reset auf gespeicherte Werte
+                    }}
+                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

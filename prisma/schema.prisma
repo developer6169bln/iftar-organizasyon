@@ -37,6 +37,10 @@ model Event {
   location    String
   description String?
   status      String @default("PLANNING")
+  googleSheetsId String?  // Google Sheets Spreadsheet ID
+  googleSheetsSheetName String?  // Sheet Name (default: 'Gästeliste')
+  googleSheetsEnabled Boolean @default(false)  // Synchronisation aktiviert
+  googleSheetsLastSync DateTime?  // Letzte Synchronisation
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
