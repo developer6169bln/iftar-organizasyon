@@ -71,6 +71,7 @@ export default function CategoryPage() {
     priority: 'MEDIUM',
     dueDate: '',
     status: 'PENDING',
+    assignedTo: '',
   })
   const [checklistForm, setChecklistForm] = useState({
     title: '',
@@ -85,6 +86,14 @@ export default function CategoryPage() {
   const [editingReceptionGuest, setEditingReceptionGuest] = useState<string | null>(null)
   const [receptionGuestEditData, setReceptionGuestEditData] = useState<any>({})
   const [uploadingFile, setUploadingFile] = useState<{ taskId?: string; checklistItemId?: string } | null>(null)
+  const [users, setUsers] = useState<any[]>([])
+  const [showUserModal, setShowUserModal] = useState(false)
+  const [newUser, setNewUser] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'COORDINATOR',
+  })
 
   useEffect(() => {
     // Warte bis categoryInfo geprüft wurde, bevor wir weiterleiten
@@ -102,9 +111,24 @@ export default function CategoryPage() {
     loadEventAndData()
   }, [category, categoryInfo, categoryChecked, router])
 
+  const loadUsers = async () => {
+    try {
+      const response = await fetch('/api/users')
+      if (response.ok) {
+        const usersData = await response.json()
+        setUsers(usersData)
+      }
+    } catch (error) {
+      console.error('Benutzer yükleme hatası:', error)
+    }
+  }
+
   const loadEventAndData = async () => {
     try {
       setLoading(true)
+      // Lade Benutzer
+      await loadUsers()
+      
       // Önce Event'i al veya oluştur
       const eventResponse = await fetch('/api/events')
       if (eventResponse.ok) {
@@ -798,6 +822,7 @@ export default function CategoryPage() {
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
+          assignedTo: taskForm.assignedTo || undefined,
         }),
       })
 
@@ -805,7 +830,7 @@ export default function CategoryPage() {
         const newTask = await response.json()
         setTasks([newTask, ...tasks])
         setShowTaskModal(false)
-        setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING' })
+        setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING', assignedTo: '' })
       } else {
         const error = await response.json()
         alert(error.error || 'Görev eklenirken hata oluştu')
@@ -824,6 +849,7 @@ export default function CategoryPage() {
       priority: task.priority,
       dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
       status: task.status,
+      assignedTo: task.assignedTo || task.assignedUser?.id || '',
     })
     setShowTaskModal(true)
   }
@@ -843,6 +869,7 @@ export default function CategoryPage() {
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
+          assignedTo: taskForm.assignedTo || undefined,
         }),
       })
 
@@ -851,7 +878,7 @@ export default function CategoryPage() {
         setTasks(tasks.map(task => task.id === editingTask ? updated : task))
         setShowTaskModal(false)
         setEditingTask(null)
-        setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING' })
+        setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING', assignedTo: '' })
       } else {
         const error = await response.json()
         alert(error.error || 'Görev güncellenirken hata oluştu')
@@ -859,6 +886,32 @@ export default function CategoryPage() {
     } catch (error) {
       console.error('Görev güncelleme hatası:', error)
       alert('Görev güncellenirken hata oluştu')
+    }
+  }
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser),
+      })
+
+      if (response.ok) {
+        const createdUser = await response.json()
+        setUsers([...users, createdUser])
+        setShowUserModal(false)
+        setNewUser({ name: '', email: '', password: '', role: 'COORDINATOR' })
+        alert('Benutzer erfolgreich erstellt')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Benutzer konnte nicht erstellt werden')
+      }
+    } catch (error) {
+      console.error('Benutzer erstellen Fehler:', error)
+      alert('Benutzer konnte nicht erstellt werden')
     }
   }
 
@@ -1438,6 +1491,11 @@ export default function CategoryPage() {
                           {task.dueDate && (
                             <span>Bitiş: {new Date(task.dueDate).toLocaleDateString('tr-TR')}</span>
                           )}
+                          {(task.assignedUser || task.assignedTo) && (
+                            <span className="flex items-center gap-1">
+                              👤 Verantwortlich: {task.assignedUser?.name || 'Unbekannt'}
+                            </span>
+                          )}
                         </div>
                         
                         {/* Dateianhänge */}
@@ -2007,6 +2065,30 @@ export default function CategoryPage() {
                   className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                 />
               </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">Verantwortlicher</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowUserModal(true)}
+                    className="text-xs text-indigo-600 hover:text-indigo-700"
+                  >
+                    + Neuer Benutzer
+                  </button>
+                </div>
+                <select
+                  value={taskForm.assignedTo}
+                  onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="">Kein Verantwortlicher</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -2019,11 +2101,86 @@ export default function CategoryPage() {
                   onClick={() => {
                     setShowTaskModal(false)
                     setEditingTask(null)
-                    setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING' })
+                    setTaskForm({ title: '', description: '', priority: 'MEDIUM', dueDate: '', status: 'PENDING', assignedTo: '' })
                   }}
                   className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
                 >
                   İptal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* User Creation Modal */}
+      {showUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-xl font-semibold">Neuen Benutzer erstellen</h2>
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newUser.name}
+                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  placeholder="Max Mustermann"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">E-Mail *</label>
+                <input
+                  type="email"
+                  required
+                  value={newUser.email}
+                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  placeholder="max@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Passwort *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  placeholder="Mindestens 6 Zeichen"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Rolle</label>
+                <select
+                  value={newUser.role}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="COORDINATOR">Koordinator</option>
+                  <option value="ADMIN">Administrator</option>
+                  <option value="VIEWER">Betrachter</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  Benutzer erstellen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserModal(false)
+                    setNewUser({ name: '', email: '', password: '', role: 'COORDINATOR' })
+                  }}
+                  className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Abbrechen
                 </button>
               </div>
             </form>

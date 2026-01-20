@@ -10,6 +10,7 @@ const taskSchema = z.object({
   status: z.string().optional(),
   priority: z.string().optional(),
   dueDate: z.string().optional(),
+  assignedTo: z.string().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -52,6 +53,13 @@ export async function GET(request: NextRequest) {
               email: true,
             },
           },
+        },
+      },
+      assignedUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
         },
       },
     }
@@ -102,6 +110,7 @@ export async function POST(request: NextRequest) {
         status: validatedData.status || 'PENDING',
         priority: validatedData.priority || 'MEDIUM',
         dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : undefined,
+        assignedTo: validatedData.assignedTo || undefined,
       },
       include: {
         assignments: {
@@ -113,6 +122,13 @@ export async function POST(request: NextRequest) {
                 email: true,
               },
             },
+          },
+        },
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
       },
@@ -163,10 +179,24 @@ export async function PATCH(request: NextRequest) {
         ? new Date(updateData.dueDate) 
         : null
     }
+    if (updateData.assignedTo !== undefined) {
+      dataToUpdate.assignedTo = updateData.assignedTo && updateData.assignedTo !== '' 
+        ? updateData.assignedTo 
+        : null
+    }
 
     const task = await prisma.task.update({
       where: { id },
       data: dataToUpdate,
+      include: {
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
     })
 
     return NextResponse.json(task)
