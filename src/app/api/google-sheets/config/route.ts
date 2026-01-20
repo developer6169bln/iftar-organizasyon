@@ -11,6 +11,62 @@ const configSchema = z.object({
   columnMapping: z.record(z.string(), z.string()).optional(), // Mapping: DB-Feld -> Sheet-Spaltenname
 })
 
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const eventId = searchParams.get('eventId')
+
+    if (!eventId) {
+      return NextResponse.json(
+        { error: 'eventId ist erforderlich' },
+        { status: 400 }
+      )
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        id: true,
+        googleSheetsId: true,
+        googleSheetsSheetName: true,
+        googleSheetsEnabled: true,
+        googleSheetsLastSync: true,
+        googleSheetsColumnMapping: true,
+      },
+    })
+
+    if (!event) {
+      return NextResponse.json(
+        { error: 'Event nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
+    let columnMapping: Record<string, string> | null = null
+    if (event.googleSheetsColumnMapping) {
+      try {
+        columnMapping = JSON.parse(event.googleSheetsColumnMapping)
+      } catch (e) {
+        console.error('Fehler beim Parsen des Column Mappings:', e)
+      }
+    }
+
+    return NextResponse.json({
+      spreadsheetId: event.googleSheetsId || '',
+      sheetName: event.googleSheetsSheetName || 'Gästeliste',
+      enabled: event.googleSheetsEnabled,
+      lastSync: event.googleSheetsLastSync,
+      columnMapping: columnMapping || {},
+    })
+  } catch (error) {
+    console.error('Google Sheets Config GET Fehler:', error)
+    return NextResponse.json(
+      { error: 'Konfiguration konnte nicht geladen werden' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()

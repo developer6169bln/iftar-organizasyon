@@ -78,25 +78,47 @@ export default function GuestsPage() {
       const eventResponse = await fetch('/api/events')
       if (eventResponse.ok) {
         const event = await eventResponse.json()
-        const statusResponse = await fetch(`/api/google-sheets/sync?eventId=${event.id}&action=status`)
-        if (statusResponse.ok) {
-          const status = await statusResponse.json()
+        // Lade Konfiguration direkt von der Config-Route
+        const configResponse = await fetch(`/api/google-sheets/config?eventId=${event.id}`)
+        if (configResponse.ok) {
+          const config = await configResponse.json()
           setGoogleSheetsConfig({
-            spreadsheetId: status.spreadsheetId || '',
-            sheetName: status.sheetName || 'Gästeliste',
-            enabled: status.enabled || false,
-            columnMapping: status.columnMapping || {},
+            spreadsheetId: config.spreadsheetId || '',
+            sheetName: config.sheetName || 'Gästeliste',
+            enabled: config.enabled || false,
+            columnMapping: config.columnMapping || {},
           })
-          setSyncStatus(status)
           
-          // Lade Sheet-Header wenn konfiguriert
-          if (status.spreadsheetId && status.connected) {
-            setSheetHeaders(status.headers || [])
+          // Lade auch Status für Sync-Informationen
+          const statusResponse = await fetch(`/api/google-sheets/sync?eventId=${event.id}&action=status`)
+          if (statusResponse.ok) {
+            const status = await statusResponse.json()
+            setSyncStatus(status)
+            
+            // Lade Sheet-Header wenn konfiguriert und verbunden
+            if (config.spreadsheetId && status.connected) {
+              setSheetHeaders(status.headers || [])
+            }
           }
+        } else {
+          // Wenn keine Konfiguration vorhanden, setze Standardwerte
+          setGoogleSheetsConfig({
+            spreadsheetId: '',
+            sheetName: 'Gästeliste',
+            enabled: false,
+            columnMapping: {},
+          })
         }
       }
     } catch (error) {
       console.error('Google Sheets Config yükleme hatası:', error)
+      // Setze Standardwerte bei Fehler
+      setGoogleSheetsConfig({
+        spreadsheetId: '',
+        sheetName: 'Gästeliste',
+        enabled: false,
+        columnMapping: {},
+      })
     }
   }
 
