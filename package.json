@@ -12,7 +12,9 @@
     "build:with-migration": "prisma generate && prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
