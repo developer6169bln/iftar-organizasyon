@@ -29,6 +29,7 @@ export default function CategoryPage() {
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [showChecklistModal, setShowChecklistModal] = useState(false)
   const [editingTask, setEditingTask] = useState<string | null>(null)
+  const [editingChecklist, setEditingChecklist] = useState<string | null>(null)
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
