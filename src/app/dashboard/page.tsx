@@ -87,6 +87,14 @@ export default function DashboardPage() {
     checklistItems: 0,
   })
   const [loadingStats, setLoadingStats] = useState(true)
+  const [customCategories, setCustomCategories] = useState<any[]>([])
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false)
+  const [newCategory, setNewCategory] = useState({
+    name: '',
+    icon: '📌',
+    color: 'bg-slate-500',
+    description: '',
+  })
 
   useEffect(() => {
     // Token kontrolü - Cookie veya localStorage'dan oku
@@ -121,6 +129,16 @@ export default function DashboardPage() {
 
     checkAuth()
     loadStatistics()
+    
+    // Lade gespeicherte benutzerdefinierte Kategorien
+    const savedCategories = localStorage.getItem('customCategories')
+    if (savedCategories) {
+      try {
+        setCustomCategories(JSON.parse(savedCategories))
+      } catch (e) {
+        console.error('Fehler beim Laden der Kategorien:', e)
+      }
+    }
   }, [router])
 
   const loadStatistics = async () => {
@@ -180,6 +198,31 @@ export default function DashboardPage() {
     window.location.href = '/login'
   }
 
+  const handleAddCategory = () => {
+    if (!newCategory.name.trim()) {
+      alert('Bitte geben Sie einen Namen ein')
+      return
+    }
+
+    const categoryId = `CUSTOM_${Date.now()}`
+    const newCat = {
+      id: categoryId,
+      name: newCategory.name,
+      icon: newCategory.icon,
+      color: newCategory.color,
+      description: newCategory.description || '',
+    }
+
+    const updated = [...customCategories, newCat]
+    setCustomCategories(updated)
+    localStorage.setItem('customCategories', JSON.stringify(updated))
+    
+    setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '' })
+    setShowAddCategoryModal(false)
+  }
+
+  const allCategories = [...categories, ...customCategories]
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -225,13 +268,15 @@ export default function DashboardPage() {
         <div className="mb-8">
           <h2 className="mb-4 text-xl font-semibold text-gray-900">Organizasyon Alanları</h2>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category) => {
+            {allCategories.map((category) => {
               // Özel links
               let href = `/dashboard/${category.id.toLowerCase()}`
               if (category.id === 'GUEST_LIST') {
                 href = '/dashboard/guests'
               } else if (category.id === 'PROGRAM_FLOW') {
                 href = '/dashboard/program_flow'
+              } else if (category.id.startsWith('CUSTOM_')) {
+                href = `/dashboard/${category.id.toLowerCase()}`
               }
               
               return (
@@ -254,8 +299,111 @@ export default function DashboardPage() {
               </Link>
               )
             })}
+            
+            {/* Plus-Zeichen zum Hinzufügen */}
+            <button
+              onClick={() => setShowAddCategoryModal(true)}
+              className="group flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white p-6 transition-all hover:border-indigo-500 hover:bg-indigo-50"
+            >
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-3xl text-gray-400 group-hover:bg-indigo-100 group-hover:text-indigo-600">
+                +
+              </div>
+              <p className="text-sm font-medium text-gray-600 group-hover:text-indigo-600">
+                Yeni Alan Ekle
+              </p>
+            </button>
           </div>
         </div>
+
+        {/* Modal zum Hinzufügen neuer Kategorie */}
+        {showAddCategoryModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h2 className="mb-4 text-xl font-semibold">Yeni Organizasyon Alanı Ekle</h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  handleAddCategory()
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newCategory.name}
+                    onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. Catering, Transport, etc."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Icon</label>
+                  <input
+                    type="text"
+                    value={newCategory.icon}
+                    onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="📌"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Emoji oder Unicode-Zeichen</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Farbe</label>
+                  <select
+                    value={newCategory.color}
+                    onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="bg-slate-500">Grau</option>
+                    <option value="bg-blue-500">Blau</option>
+                    <option value="bg-green-500">Grün</option>
+                    <option value="bg-purple-500">Lila</option>
+                    <option value="bg-red-500">Rot</option>
+                    <option value="bg-yellow-500">Gelb</option>
+                    <option value="bg-indigo-500">Indigo</option>
+                    <option value="bg-pink-500">Rosa</option>
+                    <option value="bg-teal-500">Türkis</option>
+                    <option value="bg-orange-500">Orange</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Beschreibung</label>
+                  <textarea
+                    value={newCategory.description}
+                    onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="Kurze Beschreibung des Bereichs..."
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                  >
+                    Hinzufügen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddCategoryModal(false)
+                      setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '' })
+                    }}
+                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
