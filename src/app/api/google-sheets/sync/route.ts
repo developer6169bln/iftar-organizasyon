@@ -171,16 +171,27 @@ export async function GET(request: NextRequest) {
     if (action === 'test' && event.googleSheetsId) {
       // Teste Verbindung
       const sheetName = event.googleSheetsSheetName || 'Gästeliste'
-      const isConnected = await testGoogleSheetsConnection(event.googleSheetsId, sheetName)
-      
-      // Lese Header für Mapping-Vorschau
+      let isConnected = false
+      let connectionError: string | null = null
       let headers: string[] = []
-      if (isConnected) {
-        try {
-          headers = await getSheetHeaders(event.googleSheetsId, sheetName)
-        } catch (e) {
-          console.error('Fehler beim Lesen der Header:', e)
+      
+      try {
+        isConnected = await testGoogleSheetsConnection(event.googleSheetsId, sheetName)
+        
+        // Wenn verbunden, lese Header
+        if (isConnected) {
+          try {
+            headers = await getSheetHeaders(event.googleSheetsId, sheetName)
+          } catch (e) {
+            console.error('Fehler beim Lesen der Header:', e)
+            connectionError = e instanceof Error ? e.message : 'Fehler beim Lesen der Header'
+          }
         }
+      } catch (error) {
+        // Fehler beim Verbindungstest
+        console.error('Google Sheets Verbindungstest Fehler:', error)
+        isConnected = false
+        connectionError = error instanceof Error ? error.message : 'Unbekannter Fehler beim Verbindungstest'
       }
       
       return NextResponse.json({
@@ -189,6 +200,7 @@ export async function GET(request: NextRequest) {
         enabled: event.googleSheetsEnabled,
         lastSync: event.googleSheetsLastSync,
         headers,
+        error: connectionError,
       })
     }
 

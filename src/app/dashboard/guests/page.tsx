@@ -123,12 +123,20 @@ export default function GuestsPage() {
   }
 
   const loadSheetHeaders = async () => {
-    if (!eventId || !googleSheetsConfig.spreadsheetId) return
+    if (!eventId || !googleSheetsConfig.spreadsheetId) {
+      alert('Bitte zuerst Spreadsheet ID eingeben')
+      return
+    }
 
     try {
       const response = await fetch(`/api/google-sheets/sync?eventId=${eventId}&action=test`)
+      const result = await response.json()
+      
       if (response.ok) {
-        const result = await response.json()
+        if (result.error) {
+          alert(`⚠️ Warnung: ${result.error}`)
+        }
+        
         if (result.headers && result.headers.length > 0) {
           setSheetHeaders(result.headers)
           
@@ -169,10 +177,21 @@ export default function GuestsPage() {
             
             setGoogleSheetsConfig({ ...googleSheetsConfig, columnMapping: autoMapping })
           }
+          
+          if (!result.connected) {
+            alert('⚠️ Verbindung fehlgeschlagen, aber Header konnten geladen werden. Prüfe die Berechtigungen.')
+          }
+        } else if (result.connected) {
+          alert('⚠️ Verbindung erfolgreich, aber keine Header gefunden. Stelle sicher, dass das Sheet Daten enthält.')
+        } else {
+          alert(`❌ Verbindung fehlgeschlagen: ${result.error || 'Unbekannter Fehler'}`)
         }
+      } else {
+        alert(`❌ Fehler beim Laden: ${result.error || 'Unbekannter Fehler'}`)
       }
     } catch (error) {
       console.error('Fehler beim Laden der Header:', error)
+      alert(`❌ Fehler beim Laden der Header: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`)
     }
   }
 
