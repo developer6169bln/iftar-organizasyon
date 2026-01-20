@@ -24,30 +24,37 @@ export default function CategoryPage() {
   
   // Lade benutzerdefinierte Kategorien aus localStorage
   const [customCategories, setCustomCategories] = useState<any[]>([])
+  const [categoryInfo, setCategoryInfo] = useState<any>(null)
+  
   useEffect(() => {
+    // Lade customCategories aus localStorage
     const saved = localStorage.getItem('customCategories')
+    let parsed: any[] = []
     if (saved) {
       try {
-        setCustomCategories(JSON.parse(saved))
+        parsed = JSON.parse(saved)
+        setCustomCategories(parsed)
       } catch (e) {
         console.error('Fehler beim Laden der Kategorien:', e)
       }
     }
-  }, [])
-  
-  // Erweitere categoryMap mit benutzerdefinierten Kategorien
-  const extendedCategoryMap = { ...categoryMap }
-  customCategories.forEach(cat => {
-    const key = cat.id.toLowerCase()
-    extendedCategoryMap[key] = {
-      name: cat.name,
-      icon: cat.icon,
-      color: cat.color,
-      dbCategory: cat.id
-    }
-  })
-  
-  const categoryInfo = extendedCategoryMap[category]
+    
+    // Erweitere categoryMap mit benutzerdefinierten Kategorien
+    const extendedCategoryMap = { ...categoryMap }
+    parsed.forEach(cat => {
+      const key = cat.id.toLowerCase()
+      extendedCategoryMap[key] = {
+        name: cat.name,
+        icon: cat.icon,
+        color: cat.color,
+        dbCategory: cat.id
+      }
+    })
+    
+    // Setze categoryInfo
+    const info = extendedCategoryMap[category]
+    setCategoryInfo(info)
+  }, [category])
   const [checklistItems, setChecklistItems] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
