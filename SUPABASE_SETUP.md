@@ -20,19 +20,28 @@
 
 ### Schritt 2: PostgreSQL Connection String kopieren
 
+**⚠️ WICHTIG für Vercel: Verwende Connection Pooling URL (Port 6543)!**
+
 1. In deinem Supabase Projekt, gehe zu **"Settings"** (⚙️ im linken Menü)
 2. Klicke auf **"Database"**
 3. Scrolle nach unten zu **"Connection string"**
-4. Wähle **"URI"** Tab
-5. Kopiere die Connection String (sieht so aus):
+4. Wähle den Tab **"Connection pooling"** (nicht "URI"!)
+5. Wähle **"Session mode"**
+6. Kopiere die Connection String (sieht so aus):
    ```
-   postgresql://postgres:[YOUR-PASSWORD]@db.xxxxx.supabase.co:5432/postgres
+   postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
    ```
-6. **Ersetze `[YOUR-PASSWORD]`** mit dem Passwort, das du bei der Projekt-Erstellung gewählt hast
-7. Beispiel:
+   **Wichtig:** Port ist **6543** (nicht 5432) und Host ist **pooler.supabase.com**
+7. **Ersetze `[YOUR-PASSWORD]`** mit dem Passwort, das du bei der Projekt-Erstellung gewählt hast
+8. Beispiel:
    ```
-   postgresql://postgres:mein-sicheres-passwort-123@db.abcdefghijklmnop.supabase.co:5432/postgres
+   postgresql://postgres.civjhriuzgstodqgapxq:mein-passwort-123@aws-0-eu-central-1.pooler.supabase.com:6543/postgres
    ```
+
+**Warum Connection Pooling?**
+- Optimiert für Serverless-Umgebungen (Vercel, AWS Lambda)
+- Besser für Produktion
+- Funktioniert zuverlässiger mit Vercel
 
 ---
 
