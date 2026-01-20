@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Iftar Organizasyon - Event Management System
 
-## Getting Started
+Web-Anwendung zur Koordination und Verwaltung einer Iftar-Veranstaltung am 27.02.2026 im Titanic Hotel.
 
-First, run the development server:
+## 🎯 Features
+
+- **Benutzerverwaltung**: Registrierung und Login
+- **9 Organisationsbereiche**:
+  1. Protokol
+  2. Davet Listesi (Gästeliste)
+  3. Misafir Karşılama (Gästeempfang)
+  4. Güvenlik (Sicherheit)
+  5. Otel Koordinasyon (Hotel-Koordination)
+  6. Sahur Koordinasyon
+  7. Müzik Ekibi (Musik-Team)
+  8. Konuşmacı (Sprecher)
+  9. Genel Merkez Koordinasyon (Hauptquartier-Koordination)
+  10. Program Akışı (Programmablauf)
+
+- **Gästeverwaltung**: 
+  - VIP-Markierung
+  - Besonderer Empfang
+  - Anreisedatum & Uhrzeit
+  - Inline-Bearbeitung
+  - Suche
+
+- **Aufgabenverwaltung**: Tasks mit Status, Priorität, Fälligkeitsdatum
+- **Checklisten**: Für jeden Bereich
+- **Programmplanung**: Zeitplanung mit Konuşmacı, Müzik, Ezan, Kuran, Hitabet, Iftar Start, Sunucu
+
+## 🛠️ Technologie-Stack
+
+- **Next.js 16** - React Framework
+- **TypeScript** - Type Safety
+- **Prisma 6** - ORM für Datenbank
+- **SQLite** (Development) / **PostgreSQL** (Production)
+- **Tailwind CSS** - Styling
+- **Zod** - Schema Validation
+- **JWT** (jose) - Authentication
+
+## 📦 Installation
 
 ```bash
+# Dependencies installieren
+npm install
+
+# Datenbank migrieren
+npx prisma migrate dev
+
+# Development Server starten
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Die Anwendung läuft dann auf http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔧 Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Erstelle eine `.env` Datei:
 
-## Learn More
+```env
+DATABASE_URL="file:./dev.db"
+JWT_SECRET="dein-sehr-langer-geheimer-schluessel"
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 📝 Datenbank
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Development (SQLite)
+```bash
+npx prisma migrate dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Production (PostgreSQL)
+Siehe `DEPLOYMENT.md` für Anleitung zur Migration auf PostgreSQL.
 
-## Deploy on Vercel
+## 🚀 Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Siehe `DEPLOYMENT.md` für detaillierte Anleitung zu:
+- Railway
+- Render
+- Vercel
+- Fly.io
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 Lizenz
+
+Privat
