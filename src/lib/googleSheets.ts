@@ -318,14 +318,48 @@ export async function syncGuestsFromGoogleSheets(
 
 export async function testGoogleSheetsConnection(spreadsheetId: string, sheetName: string): Promise<boolean> {
   try {
+    // Prüfe zuerst, ob die API konfiguriert ist
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT && !process.env.GOOGLE_API_KEY) {
+      console.error('Google Sheets API nicht konfiguriert: GOOGLE_SERVICE_ACCOUNT oder GOOGLE_API_KEY fehlt')
+      throw new Error('Google Sheets API nicht konfiguriert. Setze GOOGLE_SERVICE_ACCOUNT oder GOOGLE_API_KEY in den Umgebungsvariablen.')
+    }
+
     const sheets = await getGoogleSheetsClient()
-    await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!A1:Z1`,
-    })
+    
+    // Versuche zuerst, das Spreadsheet zu lesen
+    try {
+      await sheets.spreadsheets.get({
+        spreadsheetId,
+      })
+    } catch (error: any) {
+      if (error?.code === 404) {
+        throw new Error(`Spreadsheet mit ID "${spreadsheetId}" nicht gefunden. Prüfe die Spreadsheet ID.`)
+      }
+      if (error?.code === 403) {
+        throw new Error(`Zugriff verweigert. Stelle sicher, dass die Service Account E-Mail Zugriff auf das Spreadsheet hat.`)
+      }
+      throw error
+    }
+
+    // Versuche dann, die Sheet-Tabelle zu lesen
+    try {
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${sheetName}!A1:Z1`,
+      })
+    } catch (error: any) {
+      if (error?.code === 400) {
+        throw new Error(`Sheet "${sheetName}" nicht gefunden. Prüfe den Sheet-Namen.`)
+      }
+      throw error
+    }
+
     return true
   } catch (error) {
     console.error('Google Sheets Verbindungstest fehlgeschlagen:', error)
+    if (error instanceof Error) {
+      throw error // Wirf den Fehler weiter, damit detaillierte Meldungen angezeigt werden können
+    }
     return false
   }
 }

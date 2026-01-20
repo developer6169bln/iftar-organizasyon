@@ -354,9 +354,15 @@ export default function GuestsPage() {
       })
 
       if (response.ok) {
+        const result = await response.json()
         await loadGoogleSheetsConfig()
         setShowGoogleSheetsModal(false)
-        alert('Google Sheets Konfiguration gespeichert')
+        
+        if (result.warning) {
+          alert(`Google Sheets Konfiguration gespeichert.\n\n⚠️ Warnung: ${result.warning}`)
+        } else {
+          alert('Google Sheets Konfiguration gespeichert')
+        }
       } else {
         const error = await response.json()
         alert(error.error || 'Konfiguration konnte nicht gespeichert werden')

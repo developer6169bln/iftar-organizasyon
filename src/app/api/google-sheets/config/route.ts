@@ -100,22 +100,28 @@ export async function POST(request: NextRequest) {
         : null
     }
 
-    // Wenn Spreadsheet ID gesetzt wird, teste die Verbindung
+    // Wenn Spreadsheet ID gesetzt wird, teste die Verbindung (optional - Fehler werden nur gewarnt, nicht blockiert)
     if (validatedData.spreadsheetId && validatedData.spreadsheetId !== event.googleSheetsId) {
       const sheetName = validatedData.sheetName || 'Gästeliste'
       try {
-        const isConnected = await testGoogleSheetsConnection(validatedData.spreadsheetId, sheetName)
-        if (!isConnected) {
-          return NextResponse.json(
-            { error: 'Verbindung zu Google Sheets fehlgeschlagen. Prüfe die Spreadsheet ID und Berechtigungen.' },
-            { status: 400 }
-          )
+        // Prüfe zuerst, ob Google Sheets konfiguriert ist
+        if (!process.env.GOOGLE_SERVICE_ACCOUNT && !process.env.GOOGLE_API_KEY) {
+          console.warn('Google Sheets API nicht konfiguriert - GOOGLE_SERVICE_ACCOUNT oder GOOGLE_API_KEY fehlt')
+          // Erlaube trotzdem das Speichern, damit die Konfiguration gesetzt werden kann
+        } else {
+          const isConnected = await testGoogleSheetsConnection(validatedData.spreadsheetId, sheetName)
+          if (!isConnected) {
+            // Warnung loggen, aber nicht blockieren - Benutzer kann später testen
+            console.warn('Google Sheets Verbindungstest fehlgeschlagen für:', validatedData.spreadsheetId)
+            // Erlaube trotzdem das Speichern - der Benutzer kann die Verbindung später testen
+          }
         }
       } catch (error) {
-        return NextResponse.json(
-          { error: 'Fehler beim Testen der Google Sheets Verbindung', details: error instanceof Error ? error.message : 'Unbekannter Fehler' },
-          { status: 400 }
-        )
+        // Logge den Fehler, aber blockiere nicht das Speichern
+        console.error('Fehler beim Testen der Google Sheets Verbindung:', error)
+        const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
+        // Erlaube das Speichern trotzdem, aber füge eine Warnung hinzu
+        console.warn('Konfiguration wird trotz Verbindungsfehler gespeichert:', errorMessage)
       }
     }
 
@@ -133,6 +139,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Prüfe nach dem Speichern, ob die Verbindung funktioniert (optional)
+    let connectionWarning: string | null = null
+    if (updated.googleSheetsId) {
+      try {
+        if (!process.env.GOOGLE_SERVICE_ACCOUNT && !process.env.GOOGLE_API_KEY) {
+          connectionWarning = 'Google Sheets API nicht konfiguriert. Setze GOOGLE_SERVICE_ACCOUNT oder GOOGLE_API_KEY in den Umgebungsvariablen.'
+        } else {
+          const sheetName = updated.googleSheetsSheetName || 'Gästeliste'
+          const isConnected = await testGoogleSheetsConnection(updated.googleSheetsId, sheetName)
+          if (!isConnected) {
+            connectionWarning = 'Verbindung zu Google Sheets fehlgeschlagen. Prüfe die Spreadsheet ID, Sheet-Name und Berechtigungen. Die Konfiguration wurde trotzdem gespeichert.'
+          }
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
+        connectionWarning = `Verbindungstest fehlgeschlagen: ${errorMessage}. Die Konfiguration wurde trotzdem gespeichert.`
+      }
+    }
+
     return NextResponse.json({
       success: true,
       event: {
@@ -141,6 +166,7 @@ export async function POST(request: NextRequest) {
         googleSheetsEnabled: updated.googleSheetsEnabled,
         columnMapping,
       },
+      warning: connectionWarning,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
