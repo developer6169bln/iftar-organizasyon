@@ -40,6 +40,11 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        attachments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',

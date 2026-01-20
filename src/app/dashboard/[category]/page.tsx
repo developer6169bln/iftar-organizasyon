@@ -82,6 +82,7 @@ export default function CategoryPage() {
   const [guestEditData, setGuestEditData] = useState<any>({})
   const [editingReceptionGuest, setEditingReceptionGuest] = useState<string | null>(null)
   const [receptionGuestEditData, setReceptionGuestEditData] = useState<any>({})
+  const [uploadingFile, setUploadingFile] = useState<{ taskId?: string; checklistItemId?: string } | null>(null)
 
   useEffect(() => {
     // Lade customCategories aus localStorage
@@ -869,6 +870,74 @@ export default function CategoryPage() {
     }
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, taskId?: string, checklistItemId?: string) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingFile({ taskId, checklistItemId })
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      if (taskId) formData.append('taskId', taskId)
+      if (checklistItemId) formData.append('checklistItemId', checklistItemId)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        // Lade Daten neu, um die neuen Anhänge zu sehen
+        if (taskId) {
+          loadEventAndData()
+        } else if (checklistItemId) {
+          loadEventAndData()
+        }
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Datei-Upload fehlgeschlagen')
+      }
+    } catch (error) {
+      console.error('File upload error:', error)
+      alert('Datei-Upload fehlgeschlagen')
+    } finally {
+      setUploadingFile(null)
+      e.target.value = '' // Reset input
+    }
+  }
+
+  const handleDeleteAttachment = async (attachmentId: string, taskId?: string, checklistItemId?: string) => {
+    if (!confirm('Diese Datei wirklich löschen?')) return
+
+    try {
+      const response = await fetch(`/api/upload?id=${attachmentId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        // Lade Daten neu
+        if (taskId) {
+          loadEventAndData()
+        } else if (checklistItemId) {
+          loadEventAndData()
+        }
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Fehler beim Löschen')
+      }
+    } catch (error) {
+      console.error('Delete attachment error:', error)
+      alert('Fehler beim Löschen der Datei')
+    }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  }
+
   const handleAddChecklist = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!eventId) return
@@ -1194,36 +1263,97 @@ export default function CategoryPage() {
                 </div>
               ) : (
                 checklistItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
-                    <input 
-                      type="checkbox" 
-                      className="h-5 w-5" 
-                      checked={item.status === 'COMPLETED'}
-                      onChange={() => handleToggleChecklist(item.id, item.status)}
-                    />
-                    <div className="flex-1">
-                      <p className={`font-medium ${item.status === 'COMPLETED' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
-                        {item.title}
-                      </p>
-                      {item.description && (
-                        <p className="text-sm text-gray-500">{item.description}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleStartEditChecklist(item)}
-                        className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
-                        title="Bearbeiten"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        onClick={() => handleDeleteChecklist(item.id)}
-                        className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
-                        title="Löschen"
-                      >
-                        🗑
-                      </button>
+                  <div key={item.id} className="rounded-lg border border-gray-200 p-3">
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox" 
+                        className="h-5 w-5" 
+                        checked={item.status === 'COMPLETED'}
+                        onChange={() => handleToggleChecklist(item.id, item.status)}
+                      />
+                      <div className="flex-1">
+                        <p className={`font-medium ${item.status === 'COMPLETED' ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                          {item.title}
+                        </p>
+                        {item.description && (
+                          <p className="text-sm text-gray-500">{item.description}</p>
+                        )}
+                        
+                        {/* Dateianhänge */}
+                        {item.attachments && item.attachments.length > 0 && (
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs font-medium text-gray-700">📎 Anhänge:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {item.attachments.map((attachment: any) => (
+                                <div
+                                  key={attachment.id}
+                                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-xs"
+                                >
+                                  {attachment.fileType.startsWith('image/') ? (
+                                    <img
+                                      src={attachment.filePath}
+                                      alt={attachment.fileName}
+                                      className="h-6 w-6 rounded object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-sm">📄</span>
+                                  )}
+                                  <a
+                                    href={attachment.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    {attachment.fileName}
+                                  </a>
+                                  <span className="text-gray-500">
+                                    ({formatFileSize(attachment.fileSize)})
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteAttachment(attachment.id, undefined, item.id)}
+                                    className="ml-1 text-red-600 hover:text-red-800"
+                                    title="Löschen"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Upload-Button */}
+                        <div className="mt-2">
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => handleFileUpload(e, undefined, item.id)}
+                              className="hidden"
+                              disabled={uploadingFile?.checklistItemId === item.id}
+                            />
+                            <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200">
+                              {uploadingFile?.checklistItemId === item.id ? '⏳ Hochladen...' : '📎 Datei hinzufügen'}
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleStartEditChecklist(item)}
+                          className="rounded bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-700"
+                          title="Bearbeiten"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => handleDeleteChecklist(item.id)}
+                          className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700"
+                          title="Löschen"
+                        >
+                          🗑
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -1280,6 +1410,65 @@ export default function CategoryPage() {
                           {task.dueDate && (
                             <span>Bitiş: {new Date(task.dueDate).toLocaleDateString('tr-TR')}</span>
                           )}
+                        </div>
+                        
+                        {/* Dateianhänge */}
+                        {task.attachments && task.attachments.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs font-medium text-gray-700">📎 Anhänge:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {task.attachments.map((attachment: any) => (
+                                <div
+                                  key={attachment.id}
+                                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-xs"
+                                >
+                                  {attachment.fileType.startsWith('image/') ? (
+                                    <img
+                                      src={attachment.filePath}
+                                      alt={attachment.fileName}
+                                      className="h-8 w-8 rounded object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-lg">📄</span>
+                                  )}
+                                  <a
+                                    href={attachment.filePath}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    {attachment.fileName}
+                                  </a>
+                                  <span className="text-gray-500">
+                                    ({formatFileSize(attachment.fileSize)})
+                                  </span>
+                                  <button
+                                    onClick={() => handleDeleteAttachment(attachment.id, task.id)}
+                                    className="ml-1 text-red-600 hover:text-red-800"
+                                    title="Löschen"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Upload-Button */}
+                        <div className="mt-3">
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={(e) => handleFileUpload(e, task.id)}
+                              className="hidden"
+                              disabled={uploadingFile?.taskId === task.id}
+                            />
+                            <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200">
+                              {uploadingFile?.taskId === task.id ? '⏳ Hochladen...' : '📎 Datei hinzufügen'}
+                            </span>
+                          </label>
                         </div>
                       </div>
                       <div className="ml-4 flex gap-2">

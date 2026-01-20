@@ -89,6 +89,7 @@ model Task {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   assignments TaskAssignment[]
   checklistItems ChecklistItem[]
+  attachments Attachment[]
   
   @@map("tasks")
 }
@@ -127,6 +128,7 @@ model ChecklistItem {
   event       Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   assignedUser User?   @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  attachments Attachment[]
   
   @@map("checklist_items")
 }
@@ -179,4 +181,22 @@ model ProgramItem {
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   
   @@map("program_items")
+}
+
+// Dateianhänge für Tasks und ChecklistItems
+model Attachment {
+  id            String   @id @default(cuid())
+  taskId        String?
+  checklistItemId String?
+  fileName      String
+  filePath      String   // Pfad zur Datei im public/uploads Ordner
+  fileType      String   // MIME-Type (image/png, application/pdf, etc.)
+  fileSize      Int      // Größe in Bytes
+  uploadedBy    String?
+  createdAt     DateTime @default(now())
+  
+  task          Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  checklistItem ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  
+  @@map("attachments")
 }

@@ -37,6 +37,11 @@ export async function GET(request: NextRequest) {
             email: true,
           },
         },
+        attachments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
