@@ -10,6 +10,15 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Prüfe DATABASE_URL
+    if (!process.env.DATABASE_URL) {
+      console.error('DATABASE_URL is not set!')
+      return NextResponse.json(
+        { error: 'Datenbankverbindung nicht konfiguriert. DATABASE_URL fehlt.' },
+        { status: 500 }
+      )
+    }
+    
     const body = await request.json()
     const validatedData = registerSchema.parse(body)
 
