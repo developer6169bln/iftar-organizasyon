@@ -8,6 +8,7 @@ const configSchema = z.object({
   spreadsheetId: z.string().optional(),
   sheetName: z.string().optional(),
   enabled: z.boolean().optional(),
+  columnMapping: z.record(z.string(), z.string()).optional(), // Mapping: DB-Feld -> Sheet-Spaltenname
 })
 
 export async function POST(request: NextRequest) {
@@ -37,6 +38,11 @@ export async function POST(request: NextRequest) {
     if (validatedData.enabled !== undefined) {
       updateData.googleSheetsEnabled = validatedData.enabled
     }
+    if (validatedData.columnMapping !== undefined) {
+      updateData.googleSheetsColumnMapping = validatedData.columnMapping 
+        ? JSON.stringify(validatedData.columnMapping) 
+        : null
+    }
 
     // Wenn Spreadsheet ID gesetzt wird, teste die Verbindung
     if (validatedData.spreadsheetId && validatedData.spreadsheetId !== event.googleSheetsId) {
@@ -62,12 +68,22 @@ export async function POST(request: NextRequest) {
       data: updateData,
     })
 
+    let columnMapping: Record<string, string> | null = null
+    if (updated.googleSheetsColumnMapping) {
+      try {
+        columnMapping = JSON.parse(updated.googleSheetsColumnMapping)
+      } catch (e) {
+        console.error('Fehler beim Parsen des Column Mappings:', e)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       event: {
         googleSheetsId: updated.googleSheetsId,
         googleSheetsSheetName: updated.googleSheetsSheetName,
         googleSheetsEnabled: updated.googleSheetsEnabled,
+        columnMapping,
       },
     })
   } catch (error) {

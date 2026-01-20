@@ -41,6 +41,7 @@ model Event {
   googleSheetsSheetName String?  // Sheet Name (default: 'Gästeliste')
   googleSheetsEnabled Boolean @default(false)  // Synchronisation aktiviert
   googleSheetsLastSync DateTime?  // Letzte Synchronisation
+  googleSheetsColumnMapping String?  // JSON: Mapping von Sheet-Spalten zu DB-Feldern
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   

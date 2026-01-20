@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { syncGuestsToGoogleSheets, syncGuestsFromGoogleSheets, testGoogleSheetsConnection } from '@/lib/googleSheets'
+import { syncGuestsToGoogleSheets, syncGuestsFromGoogleSheets, testGoogleSheetsConnection, getSheetHeaders } from '@/lib/googleSheets'
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +35,16 @@ export async function POST(request: NextRequest) {
 
     const spreadsheetId = event.googleSheetsId
     const sheetName = event.googleSheetsSheetName || 'Gästeliste'
+    
+    // Parse Column Mapping
+    let columnMapping: Record<string, string> | undefined
+    if (event.googleSheetsColumnMapping) {
+      try {
+        columnMapping = JSON.parse(event.googleSheetsColumnMapping)
+      } catch (e) {
+        console.error('Fehler beim Parsen des Column Mappings:', e)
+      }
+    }
 
     if (direction === 'to') {
       // Synchronisiere von DB zu Google Sheets
@@ -43,7 +53,7 @@ export async function POST(request: NextRequest) {
         orderBy: { name: 'asc' },
       })
 
-      await syncGuestsToGoogleSheets(spreadsheetId, sheetName, guests)
+      await syncGuestsToGoogleSheets(spreadsheetId, sheetName, guests, columnMapping)
 
       // Aktualisiere letzte Synchronisation
       await prisma.event.update({
@@ -58,7 +68,7 @@ export async function POST(request: NextRequest) {
       })
     } else if (direction === 'from') {
       // Synchronisiere von Google Sheets zu DB
-      const guestsFromSheets = await syncGuestsFromGoogleSheets(spreadsheetId, sheetName)
+      const guestsFromSheets = await syncGuestsFromGoogleSheets(spreadsheetId, sheetName, columnMapping)
 
       // Aktualisiere oder erstelle Gäste
       let created = 0
@@ -162,12 +172,33 @@ export async function GET(request: NextRequest) {
       const sheetName = event.googleSheetsSheetName || 'Gästeliste'
       const isConnected = await testGoogleSheetsConnection(event.googleSheetsId, sheetName)
       
+      // Lese Header für Mapping-Vorschau
+      let headers: string[] = []
+      if (isConnected) {
+        try {
+          headers = await getSheetHeaders(event.googleSheetsId, sheetName)
+        } catch (e) {
+          console.error('Fehler beim Lesen der Header:', e)
+        }
+      }
+      
       return NextResponse.json({
         connected: isConnected,
         configured: !!event.googleSheetsId,
         enabled: event.googleSheetsEnabled,
         lastSync: event.googleSheetsLastSync,
+        headers,
       })
+    }
+
+    // Parse Column Mapping
+    let columnMapping: Record<string, string> | null = null
+    if (event.googleSheetsColumnMapping) {
+      try {
+        columnMapping = JSON.parse(event.googleSheetsColumnMapping)
+      } catch (e) {
+        console.error('Fehler beim Parsen des Column Mappings:', e)
+      }
     }
 
     return NextResponse.json({
@@ -176,6 +207,7 @@ export async function GET(request: NextRequest) {
       lastSync: event.googleSheetsLastSync,
       spreadsheetId: event.googleSheetsId,
       sheetName: event.googleSheetsSheetName || 'Gästeliste',
+      columnMapping,
     })
   } catch (error) {
     console.error('Google Sheets Status Fehler:', error)

@@ -30,10 +30,29 @@ export default function GuestsPage() {
     spreadsheetId: '',
     sheetName: 'Gästeliste',
     enabled: false,
+    columnMapping: {} as Record<string, string>,
   })
   const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<any>(null)
+  const [sheetHeaders, setSheetHeaders] = useState<string[]>([])
+  const [showColumnMapping, setShowColumnMapping] = useState(false)
+  
+  // Verfügbare Datenbankfelder
+  const dbFields = [
+    { key: 'name', label: 'Name', required: true },
+    { key: 'email', label: 'E-Mail', required: false },
+    { key: 'phone', label: 'Telefon', required: false },
+    { key: 'title', label: 'Titel', required: false },
+    { key: 'organization', label: 'Organisation', required: false },
+    { key: 'tableNumber', label: 'Tischnummer', required: false },
+    { key: 'isVip', label: 'VIP', required: false },
+    { key: 'status', label: 'Status', required: false },
+    { key: 'needsSpecialReception', label: 'Benötigt Empfang', required: false },
+    { key: 'receptionBy', label: 'Empfang von', required: false },
+    { key: 'arrivalDate', label: 'Anreisedatum', required: false },
+    { key: 'notes', label: 'Notizen', required: false },
+  ]
 
   useEffect(() => {
     loadEventAndGuests()
@@ -66,12 +85,72 @@ export default function GuestsPage() {
             spreadsheetId: status.spreadsheetId || '',
             sheetName: status.sheetName || 'Gästeliste',
             enabled: status.enabled || false,
+            columnMapping: status.columnMapping || {},
           })
           setSyncStatus(status)
+          
+          // Lade Sheet-Header wenn konfiguriert
+          if (status.spreadsheetId && status.connected) {
+            setSheetHeaders(status.headers || [])
+          }
         }
       }
     } catch (error) {
       console.error('Google Sheets Config yükleme hatası:', error)
+    }
+  }
+
+  const loadSheetHeaders = async () => {
+    if (!eventId || !googleSheetsConfig.spreadsheetId) return
+
+    try {
+      const response = await fetch(`/api/google-sheets/sync?eventId=${eventId}&action=test`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.headers && result.headers.length > 0) {
+          setSheetHeaders(result.headers)
+          
+          // Auto-Mapping: Versuche automatisch Spalten zuzuordnen
+          if (Object.keys(googleSheetsConfig.columnMapping).length === 0) {
+            const autoMapping: Record<string, string> = {}
+            const defaultMapping: Record<string, string> = {
+              name: 'Name',
+              email: 'E-Mail',
+              phone: 'Telefon',
+              title: 'Titel',
+              organization: 'Organisation',
+              tableNumber: 'Tischnummer',
+              isVip: 'VIP',
+              status: 'Status',
+              needsSpecialReception: 'Benötigt Empfang',
+              receptionBy: 'Empfang von',
+              arrivalDate: 'Anreisedatum',
+              notes: 'Notizen',
+            }
+
+            for (const [dbField, defaultColumn] of Object.entries(defaultMapping)) {
+              // Suche nach exakter Übereinstimmung
+              const exactMatch = result.headers.find(h => h === defaultColumn)
+              if (exactMatch) {
+                autoMapping[dbField] = exactMatch
+              } else {
+                // Suche nach ähnlichen Namen (case-insensitive)
+                const similarMatch = result.headers.find(h => 
+                  h.toLowerCase().includes(defaultColumn.toLowerCase()) ||
+                  defaultColumn.toLowerCase().includes(h.toLowerCase())
+                )
+                if (similarMatch) {
+                  autoMapping[dbField] = similarMatch
+                }
+              }
+            }
+            
+            setGoogleSheetsConfig({ ...googleSheetsConfig, columnMapping: autoMapping })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Header:', error)
     }
   }
 
@@ -248,6 +327,7 @@ export default function GuestsPage() {
           spreadsheetId: googleSheetsConfig.spreadsheetId,
           sheetName: googleSheetsConfig.sheetName,
           enabled: googleSheetsConfig.enabled,
+          columnMapping: googleSheetsConfig.columnMapping,
         }),
       })
 
@@ -879,8 +959,8 @@ export default function GuestsPage() {
 
         {/* Google Sheets Konfigurations-Modal */}
         {showGoogleSheetsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto">
+            <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto">
               <h2 className="mb-4 text-xl font-semibold">Google Sheets Synchronisation</h2>
               <div className="space-y-4">
                 <div>
@@ -890,13 +970,23 @@ export default function GuestsPage() {
                     <p className="mb-1 text-xs text-gray-500">
                       Aus der Google Sheets URL: https://docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit
                     </p>
-                  <input
-                    type="text"
-                    value={googleSheetsConfig.spreadsheetId}
-                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, spreadsheetId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                    placeholder="z.B. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={googleSheetsConfig.spreadsheetId}
+                      onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, spreadsheetId: e.target.value })}
+                      className="mt-1 flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                      placeholder="z.B. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                    />
+                    {googleSheetsConfig.spreadsheetId && (
+                      <button
+                        onClick={loadSheetHeaders}
+                        className="mt-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        Header laden
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -914,6 +1004,57 @@ export default function GuestsPage() {
                     Name des Tabs im Spreadsheet (Standard: "Gästeliste")
                   </p>
                 </div>
+
+                {/* Spaltenzuordnung */}
+                {sheetHeaders.length > 0 && (
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-700">Spaltenzuordnung</h3>
+                      <button
+                        onClick={() => setShowColumnMapping(!showColumnMapping)}
+                        className="text-xs text-indigo-600 hover:text-indigo-700"
+                      >
+                        {showColumnMapping ? 'Ausblenden' : 'Anzeigen'}
+                      </button>
+                    </div>
+                    {showColumnMapping && (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {dbFields.map((field) => (
+                          <div key={field.key} className="flex items-center gap-2">
+                            <label className="w-32 text-xs text-gray-600">
+                              {field.label}
+                              {field.required && <span className="text-red-500">*</span>}
+                            </label>
+                            <select
+                              value={googleSheetsConfig.columnMapping[field.key] || ''}
+                              onChange={(e) => {
+                                const newMapping = { ...googleSheetsConfig.columnMapping }
+                                if (e.target.value) {
+                                  newMapping[field.key] = e.target.value
+                                } else {
+                                  delete newMapping[field.key]
+                                }
+                                setGoogleSheetsConfig({ ...googleSheetsConfig, columnMapping: newMapping })
+                              }}
+                              className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                            >
+                              <option value="">-- Nicht zugeordnet --</option>
+                              {sheetHeaders.map((header) => (
+                                <option key={header} value={header}>
+                                  {header}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                        <p className="mt-2 text-xs text-gray-500">
+                          Ordne die Spalten aus deinem Google Sheet den Datenbankfeldern zu. 
+                          Nicht zugeordnete Felder werden bei der Synchronisation ignoriert.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <input
@@ -948,7 +1089,9 @@ export default function GuestsPage() {
                     <li>Erstelle ein Google Sheet oder öffne ein bestehendes</li>
                     <li>Teile das Sheet mit der Service Account E-Mail (siehe .env)</li>
                     <li>Kopiere die Spreadsheet ID aus der URL</li>
-                    <li>Füge die ID hier ein und aktiviere die Synchronisation</li>
+                    <li>Füge die ID hier ein und klicke auf "Header laden"</li>
+                    <li>Ordne die Spalten deines Sheets den Datenbankfeldern zu</li>
+                    <li>Aktiviere die Synchronisation und speichere</li>
                   </ol>
                 </div>
 
@@ -962,6 +1105,7 @@ export default function GuestsPage() {
                   <button
                     onClick={() => {
                       setShowGoogleSheetsModal(false)
+                      setShowColumnMapping(false)
                       loadGoogleSheetsConfig() // Reset auf gespeicherte Werte
                     }}
                     className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
