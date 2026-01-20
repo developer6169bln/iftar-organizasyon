@@ -130,12 +130,12 @@ export default function GuestsPage() {
 
             for (const [dbField, defaultColumn] of Object.entries(defaultMapping)) {
               // Suche nach exakter Übereinstimmung
-              const exactMatch = result.headers.find(h => h === defaultColumn)
+              const exactMatch = result.headers.find((h: string) => h === defaultColumn)
               if (exactMatch) {
                 autoMapping[dbField] = exactMatch
               } else {
                 // Suche nach ähnlichen Namen (case-insensitive)
-                const similarMatch = result.headers.find(h => 
+                const similarMatch = result.headers.find((h: string) => 
                   h.toLowerCase().includes(defaultColumn.toLowerCase()) ||
                   defaultColumn.toLowerCase().includes(h.toLowerCase())
                 )
