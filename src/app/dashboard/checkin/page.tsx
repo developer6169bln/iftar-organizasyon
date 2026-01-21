@@ -137,14 +137,52 @@ export default function CheckinPage() {
         
         // Zeige auch Gäste ohne CONFIRMED/ATTENDED Status für Debugging
         const otherGuests = allGuests.filter((guest: any) => {
-          const status = (guest.status || '').toUpperCase()
-          return status !== 'CONFIRMED' && status !== 'ATTENDED'
+          const status = getGuestStatus(guest)
+          const statusUpper = status.toUpperCase()
+          return statusUpper !== 'CONFIRMED' && 
+                 statusUpper !== 'BESTÄTIGT' && 
+                 statusUpper !== 'BESTAETIGT' &&
+                 statusUpper !== 'ATTENDED' &&
+                 statusUpper !== 'ANWESEND'
         })
         if (otherGuests.length > 0) {
-          console.log('Gäste mit anderen Status:', otherGuests.map((g: any) => ({ name: g.name, status: g.status })).slice(0, 5))
+          console.log('Gäste mit anderen Status:', otherGuests.slice(0, 10).map((g: any) => ({ 
+            name: g.name, 
+            statusField: g.status,
+            statusFromAdditionalData: g.additionalData ? (() => {
+              try {
+                const add = typeof g.additionalData === 'string' ? JSON.parse(g.additionalData) : g.additionalData
+                return add.Status || add.status || add.STATUS || '(nicht gefunden)'
+              } catch { return '(parse error)' }
+            })() : '(kein additionalData)',
+            fullStatus: getGuestStatus(g)
+          })))
         }
-        setGuests(confirmedGuests)
-        setFilteredGuests(confirmedGuests)
+        
+        // TEMPORÄR: Zeige ALLE Gäste, wenn keine bestätigten gefunden wurden (für Debugging)
+        if (confirmedGuests.length === 0 && allGuests.length > 0) {
+          console.warn('⚠️ KEINE BESTÄTIGTEN GÄSTE GEFUNDEN!')
+          console.warn('Zeige ALLE Gäste temporär für Debugging...')
+          console.log('Alle Gäste mit Status-Details:', allGuests.map((g: any) => ({
+            id: g.id,
+            name: g.name,
+            statusField: g.status || '(leer)',
+            additionalDataKeys: g.additionalData ? (() => {
+              try {
+                const add = typeof g.additionalData === 'string' ? JSON.parse(g.additionalData) : g.additionalData
+                return Object.keys(add).filter(k => k.toLowerCase().includes('status'))
+              } catch { return [] }
+            })() : [],
+            fullStatus: getGuestStatus(g)
+          })))
+          
+          // Setze temporär ALLE Gäste, damit der Benutzer sehen kann, was in der DB ist
+          setGuests(allGuests)
+          setFilteredGuests(allGuests)
+        } else {
+          setGuests(confirmedGuests)
+          setFilteredGuests(confirmedGuests)
+        }
       } else {
         console.error('Fehler beim Laden der Gäste')
       }
@@ -281,7 +319,10 @@ export default function CheckinPage() {
                 {searchQuery ? 'Keine Ergebnisse gefunden' : 'Keine bestätigten Gäste vorhanden'}
               </p>
               <p className="mt-2 text-xs text-gray-400">
-                Hinweis: Nur Gäste mit Status "CONFIRMED" oder "ATTENDED" werden angezeigt
+                Hinweis: Nur Gäste mit Status "CONFIRMED", "Bestätigt" oder "ATTENDED" werden angezeigt
+              </p>
+              <p className="mt-2 text-xs text-yellow-600">
+                ⚠️ Bitte öffne die Browser-Konsole (F12) für Debug-Informationen
               </p>
             </div>
           ) : (
@@ -291,6 +332,7 @@ export default function CheckinPage() {
                   <tr className="border-b border-gray-200">
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">VIP Begleiter (Name)</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Status (Debug)</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Anwesend</th>
                   </tr>
                 </thead>
@@ -324,6 +366,24 @@ export default function CheckinPage() {
                              return add['VIP Begleiter (Name)'] || add['VIP Begleiter'] || '-'
                            } catch { return '-' }
                          })() : '-')}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        <div className="flex flex-col">
+                          <span>DB: {guest.status || '(leer)'}</span>
+                          {guest.additionalData && (
+                            <span className="text-gray-400">
+                              AD: {(() => {
+                                try {
+                                  const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+                                  return add.Status || add.status || add.STATUS || '(nicht gefunden)'
+                                } catch { return '(parse error)' }
+                              })()}
+                            </span>
+                          )}
+                          <span className="font-semibold text-blue-600">
+                            → {getGuestStatus(guest) || '(kein Status)'}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <select
