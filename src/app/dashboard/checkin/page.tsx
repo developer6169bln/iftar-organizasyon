@@ -49,17 +49,24 @@ export default function CheckinPage() {
         console.log('Alle Status-Werte in DB:', allStatuses)
         console.log('Alle Gäste:', allGuests.length)
         
-        // Filtere Gäste mit Status CONFIRMED oder ATTENDED (case-insensitive)
-        // Zeige auch ATTENDED, damit bereits eingecheckte Gäste sichtbar bleiben
+        // Filtere Gäste mit Status CONFIRMED, "Bestätigt" oder ATTENDED (case-insensitive)
+        // Unterstütze sowohl englische als auch deutsche Status-Werte
         const confirmedGuests = allGuests.filter((guest: any) => {
-          const status = (guest.status || '').toUpperCase()
-          const isConfirmed = status === 'CONFIRMED'
-          const isAttended = status === 'ATTENDED'
+          const status = (guest.status || '').toString().trim()
+          const statusUpper = status.toUpperCase()
           
-          // Wenn kein Status gesetzt ist, zeige den Gast auch (kann sein, dass Status fehlt)
-          if (!status || status === '') {
-            console.log('Gast ohne Status:', guest.name)
-          }
+          // Prüfe auf verschiedene Varianten von "Bestätigt"
+          const isConfirmed = 
+            statusUpper === 'CONFIRMED' || 
+            statusUpper === 'BESTÄTIGT' ||
+            status === 'Bestätigt' ||
+            statusUpper === 'BESTAETIGT'
+          
+          // Prüfe auf "Anwesend" oder ATTENDED
+          const isAttended = 
+            statusUpper === 'ATTENDED' ||
+            statusUpper === 'ANWESEND' ||
+            status === 'Anwesend'
           
           return isConfirmed || isAttended
         })
