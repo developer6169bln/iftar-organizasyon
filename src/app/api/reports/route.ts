@@ -39,6 +39,22 @@ type NoteRow = {
   updatedAt: Date
 }
 
+type GuestRow = {
+  id: string
+  eventId: string
+  name: string
+  title: string | null
+  organization: string | null
+  phone: string | null
+  tableNumber: number | null
+  isVip: boolean
+  needsSpecialReception: boolean
+  receptionBy: string | null
+  arrivalDate: Date | null
+  arrivalTime: Date | null
+  notes: string | null
+}
+
 async function tableExists(tableName: string): Promise<boolean> {
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
@@ -319,6 +335,7 @@ export async function GET(request: NextRequest) {
     // Schema checks
     const taskCols = await getColumns('tasks')
     const checklistCols = await getColumns('checklist_items')
+    const guestCols = await getColumns('guests')
     const hasAssignedTo = taskCols.has('assignedTo') || taskCols.has('assignedto')
     const hasTaskCreatedAt = taskCols.has('createdAt') || taskCols.has('createdat')
     const hasTaskDescription = taskCols.has('description')
@@ -334,6 +351,7 @@ export async function GET(request: NextRequest) {
     const hasTaskAssignments = await tableExists('task_assignments')
     const hasCategories = await tableExists('categories')
     const hasNotes = await tableExists('notes')
+    const hasGuests = await tableExists('guests')
 
     const users = await prisma.user.findMany({ select: { id: true, name: true, email: true } }).catch(() => [])
     const userById = new Map(users.map((u) => [u.id, u]))
@@ -428,7 +446,93 @@ export async function GET(request: NextRequest) {
             .catch(() => [])) as any)
         : []
 
+    // Guests (schema tolerant)
+    const guests: GuestRow[] =
+      hasGuests
+        ? ((await prisma.guest
+            .findMany({
+              where: { eventId },
+              select: {
+                id: true,
+                eventId: true,
+                ...(guestCols.has('name') ? { name: true } : {}),
+                ...(guestCols.has('title') ? { title: true } : {}),
+                ...(guestCols.has('organization') ? { organization: true } : {}),
+                ...(guestCols.has('phone') ? { phone: true } : {}),
+                ...(guestCols.has('tableNumber') || guestCols.has('tablenumber') ? { tableNumber: true } : {}),
+                ...(guestCols.has('isVip') || guestCols.has('isvip') ? { isVip: true } : {}),
+                ...(guestCols.has('needsSpecialReception') || guestCols.has('needsspecialreception')
+                  ? { needsSpecialReception: true }
+                  : {}),
+                ...(guestCols.has('receptionBy') || guestCols.has('receptionby') ? { receptionBy: true } : {}),
+                ...(guestCols.has('arrivalDate') || guestCols.has('arrivaldate') ? { arrivalDate: true } : {}),
+                ...(guestCols.has('arrivalTime') || guestCols.has('arrivaltime') ? { arrivalTime: true } : {}),
+                ...(guestCols.has('notes') ? { notes: true } : {}),
+              },
+              orderBy: guestCols.has('name') ? ({ name: 'asc' as any } as any) : ({ id: 'asc' } as any),
+            })
+            .catch(async () => {
+              // fallback if orderBy column mismatch
+              return prisma.guest
+                .findMany({
+                  where: { eventId },
+                  orderBy: { id: 'asc' },
+                })
+                .catch(() => [])
+            })) as any)
+        : []
+
+    for (const g of guests as any[]) {
+      g.name = (g as any).name ?? ''
+      g.title = (g as any).title ?? null
+      g.organization = (g as any).organization ?? null
+      g.phone = (g as any).phone ?? null
+      g.tableNumber = (g as any).tableNumber ?? null
+      g.isVip = (g as any).isVip ?? false
+      g.needsSpecialReception = (g as any).needsSpecialReception ?? false
+      g.receptionBy = (g as any).receptionBy ?? null
+      g.arrivalDate = (g as any).arrivalDate ?? null
+      g.arrivalTime = (g as any).arrivalTime ?? null
+      g.notes = (g as any).notes ?? null
+    }
+
     const baseSubtitle = `${event?.title || 'Event'} — ${event?.date ? new Date(event.date).toLocaleDateString('de-DE') : ''}`
+
+    const guestSections = (() => {
+      if (!hasGuests) return []
+      const allRows = guests.map((g) => [
+        g.name || '',
+        [g.title, g.organization].filter(Boolean).join(' / '),
+        g.phone || '',
+        g.tableNumber !== null && g.tableNumber !== undefined ? String(g.tableNumber) : '',
+        [
+          g.needsSpecialReception ? `Empfang: ${g.receptionBy || 'Ja'}` : '',
+          g.arrivalDate ? `Anreise: ${formatDate(g.arrivalDate)}` : '',
+        ]
+          .filter(Boolean)
+          .join(' | '),
+      ])
+      const vipRows = guests
+        .filter((g) => g.isVip)
+        .map((g) => [
+          g.name || '',
+          [g.title, g.organization].filter(Boolean).join(' / '),
+          g.phone || '',
+          g.tableNumber !== null && g.tableNumber !== undefined ? String(g.tableNumber) : '',
+          g.notes || '',
+        ])
+
+      return [
+        {
+          heading: `Gästeliste (gesamt) (${allRows.length})`,
+          table: { headers: ['Name', 'Titel/Org.', 'Telefon', 'Tisch', 'Details'], rows: allRows },
+        },
+        {
+          heading: `Gästeliste (VIP) (${vipRows.length})`,
+          table: { headers: ['Name', 'Titel/Org.', 'Telefon', 'Tisch', 'Notizen'], rows: vipRows },
+        },
+      ]
+    })()
 
     // Build report sections
     if (type === 'all_by_user') {
@@ -453,6 +557,7 @@ export async function GET(request: NextRequest) {
             },
           }
         })
+        .concat(guestSections as any)
 
       const pdf = await buildPdf({
         title: 'Bericht: Alle Aufgaben (gruppiert nach Benutzer)',
@@ -503,6 +608,7 @@ export async function GET(request: NextRequest) {
                 ? ['Hinweis: Die Datenbank hat keine Zuweisungs-Spalten/Tabelle. Es können keine Aufgaben pro Benutzer gefiltert werden.']
                 : undefined,
           },
+          ...(guestSections as any),
         ],
       })
 
@@ -540,6 +646,7 @@ export async function GET(request: NextRequest) {
           ...(noteRows.length
             ? [{ heading: 'Notizen', paragraphs: noteRows }]
             : []),
+          ...(guestSections as any),
         ],
       })
 
@@ -585,7 +692,9 @@ export async function GET(request: NextRequest) {
       const pdf = await buildPdf({
         title: `Bericht: Hauptverantwortlicher — ${u?.name || 'Benutzer'}`,
         subtitle: baseSubtitle,
-        sections: sections.length ? sections : [{ heading: 'Hinweis', paragraphs: ['Keine Bereiche zugeordnet.'] }],
+        sections: (sections.length ? sections : [{ heading: 'Hinweis', paragraphs: ['Keine Bereiche zugeordnet.'] }]).concat(
+          guestSections as any
+        ),
       })
 
       return pdfDownloadResponse(pdf, 'berichte-hauptverantwortlicher.pdf')
