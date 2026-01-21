@@ -234,3 +234,30 @@ model Attachment {
   
   @@map("attachments")
 }
+
+// Audit-Log für alle Benutzeraktionen
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?  // User ID (null wenn nicht authentifiziert)
+  userEmail     String?  // User E-Mail (für bessere Lesbarkeit)
+  action        String   // CREATE, UPDATE, DELETE, VIEW, CLICK, LOGIN, LOGOUT, etc.
+  entityType    String?  // GUEST, TASK, CHECKLIST, NOTE, CATEGORY, USER, etc.
+  entityId      String?  // ID der betroffenen Entity
+  eventId       String?  // Event ID (falls relevant)
+  category      String?  // Kategorie (falls relevant)
+  description   String?  // Beschreibung der Aktion
+  oldValues     String?  // JSON: Vorherige Werte (bei Updates)
+  newValues     String?  // JSON: Neue Werte (bei Updates/Creates)
+  ipAddress     String?  // IP-Adresse des Benutzers
+  userAgent     String?  // User-Agent (Browser/Device Info)
+  url           String?  // URL/Route wo die Aktion stattfand
+  metadata      String?  // JSON: Zusätzliche Metadaten
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([eventId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

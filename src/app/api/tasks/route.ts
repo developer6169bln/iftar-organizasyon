@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -192,6 +193,9 @@ export async function POST(request: NextRequest) {
         : {}),
     }
 
+    // Hole User-Info für Logging
+    const userInfo = await getUserIdFromRequest(request)
+
     const task = await prisma.task.create({
       data: {
         eventId: validatedData.eventId,
@@ -255,6 +259,18 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    // Hole alten Task für Logging
+    const oldTask = await prisma.task.findUnique({
+      where: { id },
+    })
+
+    if (!oldTask) {
+      return NextResponse.json(
+        { error: 'Task nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
     const cols = await getTableColumns('tasks')
     const hasAssignedToColumn = cols.has('assignedTo') || cols.has('assignedto')
     const hasDescription = cols.has('description')
@@ -287,6 +303,9 @@ export async function PATCH(request: NextRequest) {
       dataToUpdate.assignedTo =
         updateData.assignedTo && updateData.assignedTo !== '' ? updateData.assignedTo : null
     }
+
+    // Hole User-Info für Logging
+    const userInfo = await getUserIdFromRequest(request)
 
     const task = await prisma.task.update({
       where: { id },
@@ -348,8 +367,30 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Prüfe ob Task existiert
+    const task = await prisma.task.findUnique({
+      where: { id },
+    })
+
+    if (!task) {
+      return NextResponse.json(
+        { error: 'Task nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
     await prisma.task.delete({
       where: { id },
+    })
+
+    // Log delete
+    const userInfo = await getUserIdFromRequest(request)
+    await logDelete('TASK', id, task, request, {
+      userId: userInfo.userId,
+      userEmail: userInfo.userEmail,
+      eventId: task.eventId,
+      category: task.category,
+      description: `Aufgabe "${task.title}" gelöscht`,
     })
 
     return NextResponse.json({ message: 'Görev silindi' })

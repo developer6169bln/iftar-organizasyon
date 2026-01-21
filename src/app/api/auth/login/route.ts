@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getUserByEmail, verifyPassword } from '@/lib/auth'
 import { SignJWT } from 'jose'
+import { logLogin } from '@/lib/auditLog'
 
 const loginSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi giriniz'),
@@ -54,11 +55,16 @@ export async function POST(request: NextRequest) {
 
     // Cookie'ye token ekle
     response.cookies.set('auth-token', token, {
-      httpOnly: false, // Client-side erişim için false
+      httpOnly: false, // Client-side erişim für false
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 gün
+    })
+
+    // Log login
+    await logLogin(user.id, user.email, request, {
+      description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
     })
 
     return response

@@ -447,6 +447,23 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          <Link
+            href="/dashboard/audit-logs"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-700 text-2xl text-white">
+                📋
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Audit-Logs</h3>
+                <p className="text-sm text-gray-600">
+                  Benutzeraktionen nachverfolgen und protokollieren
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
         </div>
 
         {/* Event Info Card */}

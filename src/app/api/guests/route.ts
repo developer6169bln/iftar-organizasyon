@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
 
 const guestSchema = z.object({
   eventId: z.string(),
@@ -42,6 +43,15 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Log view
+    const userInfo = await getUserIdFromRequest(request)
+    await logView('GUEST', 'LIST', request, {
+      userId: userInfo.userId,
+      userEmail: userInfo.userEmail,
+      eventId: eventId || undefined,
+      description: `Gästeliste angezeigt (${guests.length} Gäste)`,
+    })
+
     return NextResponse.json(guests)
   } catch (error) {
     console.error('Guests fetch error:', error)
@@ -81,6 +91,15 @@ export async function POST(request: NextRequest) {
         notes: validatedData.notes || null,
         status: 'INVITED',
       },
+    })
+
+    // Log create
+    const userInfo = await getUserIdFromRequest(request)
+    await logCreate('GUEST', guest.id, guest, request, {
+      userId: userInfo.userId,
+      userEmail: userInfo.userEmail,
+      eventId: validatedData.eventId,
+      description: `Gast "${guest.name}" erstellt`,
     })
 
     return NextResponse.json(guest, { status: 201 })
@@ -156,9 +175,23 @@ export async function PATCH(request: NextRequest) {
       dataToUpdate.receptionBy = updateData.receptionBy && updateData.receptionBy !== '' ? updateData.receptionBy : null
     }
 
+    // Hole alten Gast für Logging
+    const oldGuest = await prisma.guest.findUnique({
+      where: { id },
+    })
+
     const guest = await prisma.guest.update({
       where: { id },
       data: dataToUpdate,
+    })
+
+    // Log update
+    const userInfo = await getUserIdFromRequest(request)
+    await logUpdate('GUEST', id, oldGuest, guest, request, {
+      userId: userInfo.userId,
+      userEmail: userInfo.userEmail,
+      eventId: guest.eventId,
+      description: `Gast "${guest.name}" aktualisiert`,
     })
 
     return NextResponse.json(guest)
@@ -181,8 +214,22 @@ export async function DELETE(request: NextRequest) {
 
     // Wenn deleteAll=true, lösche alle Gäste für das Event
     if (deleteAll && eventId) {
+      // Hole alle Gäste für Logging
+      const guestsToDelete = await prisma.guest.findMany({
+        where: { eventId },
+      })
+
       const deletedCount = await prisma.guest.deleteMany({
         where: { eventId },
+      })
+
+      // Log delete all
+      const userInfo = await getUserIdFromRequest(request)
+      await logDelete('GUEST', 'ALL', { count: deletedCount.count, guests: guestsToDelete }, request, {
+        userId: userInfo.userId,
+        userEmail: userInfo.userEmail,
+        eventId,
+        description: `${deletedCount.count} Gäste gelöscht (Alle löschen)`,
       })
 
       return NextResponse.json({ 
@@ -215,6 +262,15 @@ export async function DELETE(request: NextRequest) {
     // Lösche Gast
     await prisma.guest.delete({
       where: { id },
+    })
+
+    // Log delete
+    const userInfo = await getUserIdFromRequest(request)
+    await logDelete('GUEST', id, guest, request, {
+      userId: userInfo.userId,
+      userEmail: userInfo.userEmail,
+      eventId: guest.eventId,
+      description: `Gast "${guest.name}" gelöscht`,
     })
 
     return NextResponse.json({ success: true, message: 'Gast erfolgreich gelöscht' })
