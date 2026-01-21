@@ -802,10 +802,6 @@ export default function CategoryPage() {
     return seedData
   }
 
-  const loadProtocolSeedData = async (eventId: string) => {
-    await loadCategorySeedData(eventId, 'PROTOCOL')
-  }
-
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!eventId) return
@@ -1447,14 +1443,6 @@ export default function CategoryPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900">Görevler</h2>
               <div className="flex gap-2">
-                {tasks.length === 0 && (
-                  <button 
-                    onClick={() => loadCategorySeedData(eventId!, categoryInfo.dbCategory)}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-                  >
-                    📋 {categoryInfo.name} Planını Yükle
-                  </button>
-                )}
                 <button 
                   onClick={() => setShowTaskModal(true)}
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
