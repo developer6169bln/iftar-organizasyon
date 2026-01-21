@@ -44,7 +44,32 @@ export async function GET(request: NextRequest) {
     }
 
     const includeOptions: any = {
-      assignments: {
+      assignedUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    }
+
+    // Prüfe ob task_assignments Tabelle existiert
+    let includeAssignments = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'task_assignments'
+        ) as exists
+      `
+      includeAssignments = result[0]?.exists === true
+    } catch (e) {
+      includeAssignments = false
+    }
+
+    if (includeAssignments) {
+      includeOptions.assignments = {
         include: {
           user: {
             select: {
@@ -54,14 +79,7 @@ export async function GET(request: NextRequest) {
             },
           },
         },
-      },
-      assignedUser: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
+      }
     }
 
     if (includeAttachments) {
@@ -80,17 +98,24 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Füge leeres attachments Array hinzu, falls nicht vorhanden
-    const tasksWithAttachments = tasks.map((task: any) => ({
+    // Füge leere Arrays hinzu, falls nicht vorhanden
+    const tasksWithDefaults = tasks.map((task: any) => ({
       ...task,
       attachments: task.attachments || [],
+      assignments: task.assignments || [],
     }))
 
-    return NextResponse.json(tasksWithAttachments)
+    return NextResponse.json(tasksWithDefaults)
   } catch (error) {
     console.error('Tasks fetch error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json(
-      { error: 'Görevler yüklenirken hata oluştu' },
+      { 
+        error: 'Görevler yüklenirken hata oluştu',
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     )
   }
