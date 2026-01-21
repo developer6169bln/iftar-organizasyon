@@ -818,7 +818,7 @@ export default function CategoryPage() {
           eventId,
           category: categoryInfo.dbCategory,
           title: taskForm.title,
-          description: taskForm.description !== undefined && taskForm.description !== '' ? taskForm.description : (taskForm.description === '' ? null : undefined),
+          description: taskForm.description || null,
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
