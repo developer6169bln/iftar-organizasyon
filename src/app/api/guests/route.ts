@@ -171,3 +171,43 @@ export async function PATCH(request: NextRequest) {
     )
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID gereklidir' },
+        { status: 400 }
+      )
+    }
+
+    // Prüfe ob Gast existiert
+    const guest = await prisma.guest.findUnique({
+      where: { id },
+    })
+
+    if (!guest) {
+      return NextResponse.json(
+        { error: 'Gast nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
+    // Lösche Gast
+    await prisma.guest.delete({
+      where: { id },
+    })
+
+    return NextResponse.json({ success: true, message: 'Gast erfolgreich gelöscht' })
+  } catch (error) {
+    console.error('Guest deletion error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata'
+    return NextResponse.json(
+      { error: 'Misafir silinirken hata oluştu', details: errorMessage },
+      { status: 500 }
+    )
+  }
+}

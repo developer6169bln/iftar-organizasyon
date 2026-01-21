@@ -474,6 +474,42 @@ export default function GuestsPage() {
     await handleUpdate(guestId, { status: newStatus })
   }
 
+  const handleDelete = async (guestId: string) => {
+    if (!confirm('Möchtest du diesen Gast wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/guests?id=${guestId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        // Entferne Gast aus der Liste
+        setGuests(guests.filter(g => g.id !== guestId))
+        setFilteredGuests(filteredGuests.filter(g => g.id !== guestId))
+        setEditingGuest(null)
+        
+        // Synchronisiere zu Google Sheets, falls aktiviert
+        if (googleSheetsConfig.enabled && eventId) {
+          try {
+            await syncToGoogleSheets()
+          } catch (syncError) {
+            console.error('Sync nach Löschen fehlgeschlagen:', syncError)
+          }
+        }
+        
+        alert('Gast erfolgreich gelöscht')
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Gast konnte nicht gelöscht werden')
+      }
+    } catch (error) {
+      console.error('Löschen Fehler:', error)
+      alert('Fehler beim Löschen des Gastes')
+    }
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
@@ -981,21 +1017,34 @@ export default function GuestsPage() {
                           </select>
                         </td>
                         <td className="px-4 py-3">
-                          {editingGuest === guest.id ? (
-                            <button
-                              onClick={() => setEditingGuest(null)}
-                              className="text-sm text-indigo-600 hover:text-indigo-800"
-                            >
-                              ✓
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setEditingGuest(guest.id)}
-                              className="text-sm text-gray-600 hover:text-indigo-600"
-                            >
-                              ✎
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {editingGuest === guest.id ? (
+                              <>
+                                <button
+                                  onClick={() => setEditingGuest(null)}
+                                  className="text-sm text-indigo-600 hover:text-indigo-800"
+                                  title="Bearbeitung beenden"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(guest.id)}
+                                  className="text-sm text-red-600 hover:text-red-800"
+                                  title="Gast löschen"
+                                >
+                                  🗑️
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setEditingGuest(guest.id)}
+                                className="text-sm text-gray-600 hover:text-indigo-600"
+                                title="Bearbeiten"
+                              >
+                                ✎
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
