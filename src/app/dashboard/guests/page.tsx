@@ -34,6 +34,26 @@ export default function GuestsPage() {
     'İşlemler'
   ]
   
+  // Spalten ohne Filter
+  const columnsWithoutFilter = [
+    'Kategorie',
+    'Partei / Organisation / Unternehmen',
+    'Funktion',
+    'Ebende',
+    'E-Mail',
+    'Status',
+    'VIP Begleitung benötigt?',
+    'VIP Begleiter (Name)',
+    'VIP Anreise (Uhrzeit)',
+    'Einladungspriorität',
+    'Wahrscheinlichkeit',
+    'Notiz',
+    'İşlemler',
+    'Telefon',
+    'Anwesend',
+    'VIP'
+  ]
+  
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
   const getColumnValue = (guest: any, columnName: string): string => {
     // ZUERST: Prüfe additionalData (hat Priorität, da es die importierten Daten enthält)
@@ -1135,33 +1155,40 @@ export default function GuestsPage() {
                     </tr>
                     {/* Filter Row */}
                     <tr className="border-b border-gray-200 bg-gray-50">
-                      {allColumns.map((column) => (
-                        <th key={column} className="px-4 py-2">
-                          {column === 'İşlemler' ? (
-                            <button
-                              onClick={() => {
-                                const newFilters: Record<string, string> = {}
-                                allColumns.forEach(col => {
-                                  if (col !== 'İşlemler') newFilters[col] = ''
-                                })
-                                setColumnFilters(newFilters)
-                              }}
-                              className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
-                              title="Alle Filter zurücksetzen"
-                            >
-                              🔄
-                            </button>
-                          ) : (
-                            <input
-                              type="text"
-                              placeholder={`${column} filtrele...`}
-                              value={columnFilters[column] || ''}
-                              onChange={(e) => setColumnFilters({ ...columnFilters, [column]: e.target.value })}
-                              className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                            />
-                          )}
-                        </th>
-                      ))}
+                      {allColumns.map((column) => {
+                        const hasNoFilter = columnsWithoutFilter.includes(column)
+                        return (
+                          <th key={column} className="px-4 py-2">
+                            {column === 'İşlemler' ? (
+                              <button
+                                onClick={() => {
+                                  const newFilters: Record<string, string> = {}
+                                  allColumns.forEach(col => {
+                                    if (col !== 'İşlemler' && !columnsWithoutFilter.includes(col)) {
+                                      newFilters[col] = ''
+                                    }
+                                  })
+                                  setColumnFilters(newFilters)
+                                }}
+                                className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                                title="Alle Filter zurücksetzen"
+                              >
+                                🔄
+                              </button>
+                            ) : hasNoFilter ? (
+                              <span className="text-xs text-gray-400">-</span>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder={`${column} filtrele...`}
+                                value={columnFilters[column] || ''}
+                                onChange={(e) => setColumnFilters({ ...columnFilters, [column]: e.target.value })}
+                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                              />
+                            )}
+                          </th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody>
