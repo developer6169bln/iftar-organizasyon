@@ -20,6 +20,20 @@ async function tableExists(tableName: string): Promise<boolean> {
   }
 }
 
+async function getColumns(tableName: string): Promise<Set<string>> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = ${tableName}
+    `
+    return new Set((rows || []).map((r) => r.column_name))
+  } catch {
+    return new Set()
+  }
+}
+
 async function getUserIdFromRequest(request: NextRequest): Promise<string | null> {
   // Authorization: Bearer <token>
   const authHeader = request.headers.get('authorization')
@@ -44,12 +58,14 @@ const createSchema = z.object({
   eventId: z.string().optional().nullable(),
   taskId: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
+  type: z.string().optional().nullable(),
   title: z.string().optional().nullable(),
   content: z.string().min(1),
 })
 
 const updateSchema = z.object({
   id: z.string(),
+  type: z.string().optional().nullable(),
   title: z.string().optional().nullable(),
   content: z.string().optional().nullable(),
 })
@@ -62,6 +78,20 @@ export async function GET(request: NextRequest) {
         notes: [],
         warning: 'DB-Tabelle "notes" fehlt. Bitte Migration/SQL ausführen, damit Notizen gespeichert werden können.',
       })
+    }
+
+    const cols = await getColumns('notes')
+    const select: any = {
+      id: true,
+      ...(cols.has('eventId') || cols.has('eventid') ? { eventId: true } : {}),
+      ...(cols.has('taskId') || cols.has('taskid') ? { taskId: true } : {}),
+      ...(cols.has('category') ? { category: true } : {}),
+      ...(cols.has('type') ? { type: true } : {}),
+      ...(cols.has('title') ? { title: true } : {}),
+      ...(cols.has('content') ? { content: true } : {}),
+      ...(cols.has('authorId') || cols.has('authorid') ? { authorId: true } : {}),
+      ...(cols.has('createdAt') || cols.has('createdat') ? { createdAt: true } : {}),
+      ...(cols.has('updatedAt') || cols.has('updatedat') ? { updatedAt: true } : {}),
     }
 
     const { searchParams } = new URL(request.url)
@@ -78,10 +108,24 @@ export async function GET(request: NextRequest) {
 
     const notes = await prisma.note.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      select,
+      orderBy: cols.has('updatedAt') || cols.has('updatedat') ? ({ updatedAt: 'desc' } as any) : ({ id: 'desc' } as any),
     })
 
-    return NextResponse.json({ notes })
+    const normalized = (notes as any[]).map((n) => ({
+      id: n.id,
+      eventId: n.eventId ?? null,
+      taskId: n.taskId ?? null,
+      category: n.category ?? null,
+      type: n.type ?? null,
+      title: n.title ?? 'Notiz',
+      content: n.content ?? '',
+      authorId: n.authorId ?? 'unknown',
+      createdAt: n.createdAt ?? null,
+      updatedAt: n.updatedAt ?? null,
+    }))
+
+    return NextResponse.json({ notes: normalized })
   } catch (error) {
     console.error('Notes fetch error:', error)
     return NextResponse.json(
@@ -103,19 +147,24 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const data = createSchema.parse(body)
+    const cols = await getColumns('notes')
 
     const authorId = (await getUserIdFromRequest(request)) || 'unknown'
     const title = (data.title && data.title.trim()) || 'Notiz'
 
+    // Prisma types assume latest schema. We build data dynamically to tolerate DB schema drift.
+    const createData: any = {
+      ...(cols.has('eventId') || cols.has('eventid') ? { eventId: data.eventId || null } : {}),
+      ...(cols.has('taskId') || cols.has('taskid') ? { taskId: data.taskId || null } : {}),
+      ...(cols.has('category') ? { category: data.category || null } : {}),
+      ...(cols.has('type') ? { type: data.type && data.type.trim() ? data.type : null } : {}),
+      ...(cols.has('title') ? { title } : {}),
+      ...(cols.has('content') ? { content: data.content } : {}),
+      ...(cols.has('authorId') || cols.has('authorid') ? { authorId } : {}),
+    }
+
     const note = await prisma.note.create({
-      data: {
-        eventId: data.eventId || null,
-        taskId: data.taskId || null,
-        category: data.category || null,
-        title,
-        content: data.content,
-        authorId,
-      },
+      data: createData as any,
     })
 
     return NextResponse.json(note, { status: 201 })
@@ -146,8 +195,10 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json()
     const data = updateSchema.parse(body)
+    const cols = await getColumns('notes')
 
     const updateData: any = {}
+    if (data.type !== undefined && (cols.has('type'))) updateData.type = data.type && data.type.trim() ? data.type : null
     if (data.title !== undefined) updateData.title = data.title && data.title.trim() ? data.title : 'Notiz'
     if (data.content !== undefined) updateData.content = data.content ?? ''
 

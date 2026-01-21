@@ -95,6 +95,18 @@ export default function CategoryPage() {
     role: 'COORDINATOR',
   })
 
+  // Bereichs-Notizen (separate notes table)
+  type CategoryNoteType = 'MEETING' | 'CALL' | 'APPOINTMENT'
+  const [categoryNotes, setCategoryNotes] = useState<any[]>([])
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [notesError, setNotesError] = useState<string | null>(null)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteForm, setNoteForm] = useState<{ type: CategoryNoteType; title: string; content: string }>({
+    type: 'MEETING',
+    title: '',
+    content: '',
+  })
+
   useEffect(() => {
     // Warte bis categoryInfo geprüft wurde, bevor wir weiterleiten
     if (!categoryChecked) {
@@ -190,6 +202,9 @@ export default function CategoryPage() {
         await loadReceptionGuests(eventId)
       }
 
+      // Bereichs-Notizen laden
+      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
+
       setLoading(false)
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
@@ -197,6 +212,95 @@ export default function CategoryPage() {
       // Setze leere Arrays als Fallback
       setTasks([])
       setChecklistItems([])
+    }
+  }
+
+  const loadCategoryNotes = async (eventId: string, dbCategory: string) => {
+    try {
+      setNotesLoading(true)
+      setNotesError(null)
+      const res = await fetch(
+        `/api/notes?eventId=${encodeURIComponent(eventId)}&category=${encodeURIComponent(dbCategory)}&scope=category`
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNotesError(json?.error || 'Notizen konnten nicht geladen werden')
+        setCategoryNotes([])
+        return
+      }
+      setCategoryNotes(json?.notes || [])
+    } catch (e) {
+      console.error('Notes load error:', e)
+      setNotesError('Notizen konnten nicht geladen werden')
+      setCategoryNotes([])
+    } finally {
+      setNotesLoading(false)
+    }
+  }
+
+  const startNewNote = () => {
+    setEditingNoteId(null)
+    setNoteForm({ type: 'MEETING', title: '', content: '' })
+    setNotesError(null)
+  }
+
+  const startEditNote = (note: any) => {
+    setEditingNoteId(note.id)
+    setNoteForm({
+      type: (note.type as CategoryNoteType) || 'MEETING',
+      title: note.title || '',
+      content: note.content || '',
+    })
+  }
+
+  const saveNote = async () => {
+    if (!eventId || !categoryInfo?.dbCategory) return
+    if (!noteForm.content.trim()) {
+      setNotesError('Inhalt ist erforderlich')
+      return
+    }
+    setNotesError(null)
+    try {
+      const res = await fetch('/api/notes', {
+        method: editingNoteId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          editingNoteId
+            ? { id: editingNoteId, type: noteForm.type, title: noteForm.title, content: noteForm.content }
+            : {
+                eventId,
+                category: categoryInfo.dbCategory,
+                taskId: null,
+                type: noteForm.type,
+                title: noteForm.title,
+                content: noteForm.content,
+              }
+        ),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNotesError(json?.error || 'Notiz konnte nicht gespeichert werden')
+        return
+      }
+      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
+      startNewNote()
+    } catch (e) {
+      console.error('Notes save error:', e)
+      setNotesError('Notiz konnte nicht gespeichert werden')
+    }
+  }
+
+  const deleteNote = async (id: string) => {
+    if (!confirm('Notiz wirklich löschen?')) return
+    try {
+      const res = await fetch(`/api/notes?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (!res.ok) return
+      if (eventId && categoryInfo?.dbCategory) {
+        await loadCategoryNotes(eventId, categoryInfo.dbCategory)
+      }
+      if (editingNoteId === id) startNewNote()
+    } catch (e) {
+      console.error('Notes delete error:', e)
     }
   }
 
@@ -1569,6 +1673,140 @@ export default function CategoryPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bereichs-Notizen */}
+        <div className="mt-8 rounded-xl bg-white p-6 shadow-md">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📝</span>
+              <h2 className="text-xl font-semibold text-gray-900">Notizen</h2>
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-700">
+                {(categoryNotes || []).length}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => eventId && categoryInfo?.dbCategory && loadCategoryNotes(eventId, categoryInfo.dbCategory)}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                🔄 Aktualisieren
+              </button>
+              <button
+                onClick={startNewNote}
+                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200"
+              >
+                + Neue Notiz
+              </button>
+            </div>
+          </div>
+
+          {notesError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {notesError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              {notesLoading ? (
+                <p className="text-gray-500">Lade Notizen...</p>
+              ) : (categoryNotes || []).length === 0 ? (
+                <div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center">
+                  <p className="text-gray-500">Noch keine Notizen in diesem Bereich</p>
+                </div>
+              ) : (
+                (categoryNotes || []).map((n: any) => (
+                  <button
+                    key={n.id}
+                    onClick={() => startEditNote(n)}
+                    className={`w-full rounded-lg border p-3 text-left hover:bg-gray-50 ${
+                      editingNoteId === n.id ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
+                            {(n.type || 'MEETING') === 'CALL'
+                              ? 'Telefon'
+                              : (n.type || 'MEETING') === 'APPOINTMENT'
+                                ? 'Randevu'
+                                : 'Toplantı'}
+                          </span>
+                          <p className="truncate font-medium text-gray-900">{n.title || 'Notiz'}</p>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-gray-600">{n.content}</p>
+                      </div>
+                      <span className="text-xs text-gray-400">✎</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">{editingNoteId ? 'Notiz bearbeiten' : 'Neue Notiz'}</h3>
+                {editingNoteId && (
+                  <button
+                    onClick={() => deleteNote(editingNoteId)}
+                    className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+                  >
+                    🗑 Löschen
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Typ</label>
+                  <select
+                    value={noteForm.type}
+                    onChange={(e) => setNoteForm({ ...noteForm, type: e.target.value as CategoryNoteType })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="MEETING">Toplantı</option>
+                    <option value="CALL">Telefon görüşmesi</option>
+                    <option value="APPOINTMENT">Randevu</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Titel</label>
+                  <input
+                    value={noteForm.title}
+                    onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. Gespräch mit Hotel / Termin mit Sicherheitsdienst"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Inhalt *</label>
+                  <textarea
+                    value={noteForm.content}
+                    onChange={(e) => setNoteForm({ ...noteForm, content: e.target.value })}
+                    rows={6}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="Notizdetails…"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveNote}
+                    className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                  >
+                    {editingNoteId ? 'Speichern' : 'Erstellen'}
+                  </button>
+                  <button
+                    onClick={startNewNote}
+                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Zurücksetzen
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -162,6 +162,7 @@ model Note {
   eventId     String?
   taskId      String?
   category    String?
+  type        String?  // MEETING, CALL, APPOINTMENT
   title       String
   content     String
   authorId    String
