@@ -94,6 +94,8 @@ export default function CategoryPage() {
     password: '',
     role: 'COORDINATOR',
   })
+  const [sharingTask, setSharingTask] = useState<any | null>(null)
+  const [shareRecipient, setShareRecipient] = useState<string>('')
 
   // Bereichs-Notizen (separate notes table)
   type CategoryNoteType = 'MEETING' | 'CALL' | 'APPOINTMENT'
@@ -1076,6 +1078,55 @@ export default function CategoryPage() {
     }
   }
 
+  const formatTaskForSharing = (task: any) => {
+    const categoryName = categoryInfo?.name || task.category || 'Unbekannt'
+    const assignedName = task.assignedUser?.name || (task.assignedTo ? 'Unbekannt' : 'Nicht zugewiesen')
+    const dueDateStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString('de-DE') : 'Nicht festgelegt'
+    const statusMap: Record<string, string> = {
+      PENDING: 'Ausstehend',
+      IN_PROGRESS: 'In Bearbeitung',
+      COMPLETED: 'Abgeschlossen',
+      BLOCKED: 'Blockiert',
+    }
+    const priorityMap: Record<string, string> = {
+      LOW: 'Niedrig',
+      MEDIUM: 'Mittel',
+      HIGH: 'Hoch',
+      URGENT: 'Dringend',
+    }
+
+    return `📋 Aufgabe: ${task.title}
+
+${task.description ? `Beschreibung: ${task.description}\n` : ''}Bereich: ${categoryName}
+Status: ${statusMap[task.status] || task.status}
+Priorität: ${priorityMap[task.priority] || task.priority}
+Verantwortlich: ${assignedName}
+Fälligkeitsdatum: ${dueDateStr}
+
+---`
+  }
+
+  const handleShareTask = (task: any) => {
+    setSharingTask(task)
+    setShareRecipient('')
+  }
+
+  const shareViaEmail = (task: any, recipientEmail?: string) => {
+    const subject = encodeURIComponent(`Aufgabe: ${task.title}`)
+    const body = encodeURIComponent(formatTaskForSharing(task))
+    const mailtoLink = recipientEmail
+      ? `mailto:${encodeURIComponent(recipientEmail)}?subject=${subject}&body=${body}`
+      : `mailto:?subject=${subject}&body=${body}`
+    window.open(mailtoLink, '_blank')
+    setSharingTask(null)
+  }
+
+  const shareViaWhatsApp = (task: any) => {
+    const text = encodeURIComponent(formatTaskForSharing(task))
+    window.open(`https://wa.me/?text=${text}`, '_blank')
+    setSharingTask(null)
+  }
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, taskId?: string, checklistItemId?: string) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -1691,6 +1742,13 @@ export default function CategoryPage() {
                         </div>
                       </div>
                       <div className="ml-4 flex gap-2">
+                        <button
+                          onClick={() => handleShareTask(task)}
+                          className="rounded bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+                          title="Teilen"
+                        >
+                          📤
+                        </button>
                         <button
                           onClick={() => handleStartEditTask(task)}
                           className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-700"
@@ -2600,6 +2658,60 @@ export default function CategoryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Share Task Modal */}
+      {sharingTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-xl font-semibold">Aufgabe teilen</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              <strong>{sharingTask.title}</strong>
+            </p>
+
+            <div className="mb-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Empfänger (optional - für E-Mail)
+                </label>
+                <select
+                  value={shareRecipient}
+                  onChange={(e) => setShareRecipient(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                >
+                  <option value="">— Keine Auswahl —</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.email}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => shareViaEmail(sharingTask, shareRecipient || undefined)}
+                className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 flex items-center justify-center gap-2"
+              >
+                📧 Per E-Mail teilen
+              </button>
+              <button
+                onClick={() => shareViaWhatsApp(sharingTask)}
+                className="w-full rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white hover:bg-green-700 flex items-center justify-center gap-2"
+              >
+                💬 Per WhatsApp teilen
+              </button>
+            </div>
+
+            <button
+              onClick={() => setSharingTask(null)}
+              className="mt-4 w-full rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+            >
+              Abbrechen
+            </button>
           </div>
         </div>
       )}
