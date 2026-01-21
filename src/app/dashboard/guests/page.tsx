@@ -1224,11 +1224,19 @@ export default function GuestsPage() {
                           if (column === 'Anwesend') {
                             return (
                               <td key={column} className="px-4 py-3">
-                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                  guest.status === 'ATTENDED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {guest.status === 'ATTENDED' ? 'Ja' : 'Nein'}
-                                </span>
+                                <select
+                                  value={guest.status === 'ATTENDED' ? 'Ja' : 'Nein'}
+                                  onChange={(e) => {
+                                    const newStatus = e.target.value === 'Ja' ? 'ATTENDED' : guest.status === 'ATTENDED' ? 'CONFIRMED' : guest.status
+                                    handleStatusChange(guest.id, newStatus)
+                                  }}
+                                  className={`rounded-full px-2 py-1 text-xs font-medium border-0 focus:ring-2 focus:ring-indigo-500 ${
+                                    guest.status === 'ATTENDED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                  }`}
+                                >
+                                  <option value="Nein">Nein</option>
+                                  <option value="Ja">Ja</option>
+                                </select>
                               </td>
                             )
                           }
