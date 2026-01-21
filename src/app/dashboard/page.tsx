@@ -401,12 +401,15 @@ export default function DashboardPage() {
       <header 
         className="relative bg-cover bg-center bg-no-repeat shadow-sm"
         style={{
-          backgroundImage: 'url(/header-bg.jpg)',
+          backgroundImage: 'url(/uid-berlin-logo.png)',
+          backgroundSize: 'contain',
+          backgroundPosition: 'center',
+          backgroundColor: '#215F7D',
           minHeight: '200px',
         }}
       >
-        {/* Overlay für bessere Lesbarkeit */}
-        <div className="absolute inset-0 bg-black bg-opacity-30"></div>
+        {/* Overlay für bessere Lesbarkeit (optional, da Bild bereits dunklen Hintergrund hat) */}
+        <div className="absolute inset-0 bg-black bg-opacity-10"></div>
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-48 items-center justify-between">
             <div>
