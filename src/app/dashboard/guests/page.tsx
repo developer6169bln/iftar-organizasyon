@@ -634,6 +634,39 @@ export default function GuestsPage() {
     await handleUpdate(guestId, { status: newStatus })
   }
 
+  const handleDeleteAll = async () => {
+    if (!eventId) return
+    
+    if (!confirm('⚠️ Möchten Sie wirklich ALLE Gäste löschen? Diese Aktion kann nicht rückgängig gemacht werden!')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/guests?eventId=${eventId}&deleteAll=true`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`)
+        return
+      }
+
+      const result = await response.json()
+      alert(`✅ ${result.deletedCount || 0} Gäste erfolgreich gelöscht`)
+      
+      // Lade Gäste neu
+      loadGuests()
+      
+      // Setze Spalten zurück
+      setAllColumns(standardColumns)
+      setColumnFilters({})
+    } catch (error) {
+      console.error('Fehler beim Löschen aller Gäste:', error)
+      alert('Fehler beim Löschen aller Gäste')
+    }
+  }
+
   const handleDelete = async (guestId: string) => {
     if (!confirm('Möchtest du diesen Gast wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
       return
@@ -907,6 +940,15 @@ export default function GuestsPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Misafir Listesi</h2>
               <div className="flex items-center gap-4">
+                {guests.length > 0 && (
+                  <button
+                    onClick={handleDeleteAll}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                    title="Alle Gäste löschen"
+                  >
+                    🗑️ Alle löschen
+                  </button>
+                )}
                 <div className="relative">
                   <input
                     type="text"

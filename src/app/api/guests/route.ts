@@ -176,7 +176,23 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
+    const eventId = searchParams.get('eventId')
+    const deleteAll = searchParams.get('deleteAll') === 'true'
 
+    // Wenn deleteAll=true, lösche alle Gäste für das Event
+    if (deleteAll && eventId) {
+      const deletedCount = await prisma.guest.deleteMany({
+        where: { eventId },
+      })
+
+      return NextResponse.json({ 
+        success: true, 
+        message: `${deletedCount.count} Gäste erfolgreich gelöscht`,
+        deletedCount: deletedCount.count
+      })
+    }
+
+    // Einzelnen Gast löschen
     if (!id) {
       return NextResponse.json(
         { error: 'ID gereklidir' },
