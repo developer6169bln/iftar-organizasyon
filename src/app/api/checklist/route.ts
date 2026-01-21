@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
+async function getTableColumns(tableName: string): Promise<Set<string>> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      AND table_name = ${tableName}
+    `
+    return new Set((rows || []).map((r) => r.column_name))
+  } catch {
+    return new Set()
+  }
+}
+
+async function tableExists(tableName: string): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = ${tableName}
+      ) as exists
+    `
+    return rows[0]?.exists === true
+  } catch {
+    return false
+  }
+}
+
 const checklistSchema = z.object({
   category: z.string(),
   title: z.string().min(1),
@@ -28,45 +57,42 @@ export async function GET(request: NextRequest) {
       where.eventId = eventId
     }
 
-    // Prüfe ob attachments Tabelle existiert
-    let includeAttachments = false
-    try {
-      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
-        SELECT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'attachments'
-        ) as exists
-      `
-      includeAttachments = result[0]?.exists === true
-    } catch (e) {
-      // Tabelle existiert nicht, ignoriere
-      includeAttachments = false
-    }
+    const cols = await getTableColumns('checklist_items')
+    const hasDescription = cols.has('description')
+    const hasStatus = cols.has('status')
+    const hasDueDate = cols.has('dueDate') || cols.has('duedate')
+    const hasCompletedAt = cols.has('completedAt') || cols.has('completedat')
+    const hasCreatedAt = cols.has('createdAt') || cols.has('createdat')
+    const hasUpdatedAt = cols.has('updatedAt') || cols.has('updatedat')
+    const hasAssignedToColumn = cols.has('assignedTo') || cols.has('assignedto')
 
-    const includeOptions: any = {
-      assignedUser: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    }
+    const includeAttachments = await tableExists('attachments')
 
-    if (includeAttachments) {
-      includeOptions.attachments = {
-        orderBy: {
-          createdAt: 'desc' as const,
-        },
-      }
+    const selectOptions: any = {
+      id: true,
+      category: true,
+      title: true,
+      ...(hasDescription ? { description: true } : {}),
+      ...(hasStatus ? { status: true } : {}),
+      ...(hasDueDate ? { dueDate: true } : {}),
+      ...(hasCompletedAt ? { completedAt: true } : {}),
+      ...(hasCreatedAt ? { createdAt: true } : {}),
+      ...(hasUpdatedAt ? { updatedAt: true } : {}),
+      // relations
+      ...(cols.has('eventId') ? { eventId: true } : {}),
+      ...(cols.has('taskId') ? { taskId: true } : {}),
+      ...(hasAssignedToColumn ? { assignedTo: true } : {}),
+      ...(hasAssignedToColumn
+        ? { assignedUser: { select: { id: true, name: true, email: true } } }
+        : {}),
+      ...(includeAttachments ? { attachments: { orderBy: { createdAt: 'desc' as const } } } : {}),
     }
 
     const items = await prisma.checklistItem.findMany({
       where,
-      include: includeOptions,
+      select: selectOptions,
       orderBy: {
-        createdAt: 'desc',
+        ...(hasCreatedAt ? { createdAt: 'desc' as const } : { id: 'desc' as const }),
       },
     })
 
@@ -74,6 +100,13 @@ export async function GET(request: NextRequest) {
     const itemsWithAttachments = items.map((item: any) => ({
       ...item,
       attachments: item.attachments || [],
+      description: item.description ?? null,
+      status: item.status ?? 'NOT_STARTED',
+      dueDate: item.dueDate ?? null,
+      completedAt: item.completedAt ?? null,
+      createdAt: item.createdAt ?? null,
+      updatedAt: item.updatedAt ?? null,
+      assignedTo: item.assignedTo ?? null,
     }))
 
     return NextResponse.json(itemsWithAttachments)
@@ -91,34 +124,71 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = checklistSchema.parse(body)
 
+    const cols = await getTableColumns('checklist_items')
+    const hasDescription = cols.has('description')
+    const hasStatus = cols.has('status')
+    const hasDueDate = cols.has('dueDate') || cols.has('duedate')
+    const hasCompletedAt = cols.has('completedAt') || cols.has('completedat')
+    const hasCreatedAt = cols.has('createdAt') || cols.has('createdat')
+    const hasUpdatedAt = cols.has('updatedAt') || cols.has('updatedat')
+    const hasAssignedToColumn = cols.has('assignedTo') || cols.has('assignedto')
+    const includeAttachments = await tableExists('attachments')
+
     const normalizedDescription =
       validatedData.description === null || validatedData.description === ''
         ? null
         : validatedData.description
 
+    const selectOptions: any = {
+      id: true,
+      category: true,
+      title: true,
+      ...(hasDescription ? { description: true } : {}),
+      ...(cols.has('eventId') ? { eventId: true } : {}),
+      ...(cols.has('taskId') ? { taskId: true } : {}),
+      ...(hasAssignedToColumn ? { assignedTo: true } : {}),
+      ...(hasAssignedToColumn
+        ? { assignedUser: { select: { id: true, name: true, email: true } } }
+        : {}),
+      ...(hasDueDate ? { dueDate: true } : {}),
+      ...(hasStatus ? { status: true } : {}),
+      ...(hasCompletedAt ? { completedAt: true } : {}),
+      ...(hasCreatedAt ? { createdAt: true } : {}),
+      ...(hasUpdatedAt ? { updatedAt: true } : {}),
+      ...(includeAttachments ? { attachments: { orderBy: { createdAt: 'desc' as const } } } : {}),
+    }
+
     const item = await prisma.checklistItem.create({
       data: {
         category: validatedData.category,
         title: validatedData.title,
-        description: normalizedDescription,
-        eventId: validatedData.eventId || undefined,
-        taskId: validatedData.taskId || undefined,
-        assignedTo: validatedData.assignedTo || undefined,
-        dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : undefined,
-        status: validatedData.status || 'NOT_STARTED',
+        ...(hasDescription ? { description: normalizedDescription } : {}),
+        ...(cols.has('eventId') ? { eventId: validatedData.eventId || undefined } : {}),
+        ...(cols.has('taskId') ? { taskId: validatedData.taskId || undefined } : {}),
+        ...(hasAssignedToColumn ? { assignedTo: validatedData.assignedTo || undefined } : {}),
+        ...(hasDueDate ? { dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : undefined } : {}),
+        ...(hasStatus ? { status: validatedData.status || 'NOT_STARTED' } : {}),
       },
-      include: {
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      select: selectOptions,
     })
 
-    return NextResponse.json(item, { status: 201 })
+    return NextResponse.json(
+      {
+        ...item,
+        attachments: (item as any).attachments || [],
+        description: (item as any).description ?? null,
+        status: (item as any).status ?? 'NOT_STARTED',
+        dueDate: (item as any).dueDate ?? null,
+        completedAt: (item as any).completedAt ?? null,
+        createdAt: (item as any).createdAt ?? null,
+        updatedAt: (item as any).updatedAt ?? null,
+        assignedTo: (item as any).assignedTo ?? null,
+        warning: !hasDescription
+          ? 'DB-Schema ist veraltet: Spalte checklist_items.description fehlt, Notizen können nicht gespeichert werden.'
+          : null,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -147,19 +217,28 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    const cols = await getTableColumns('checklist_items')
+    const hasDescription = cols.has('description')
+    const hasStatus = cols.has('status')
+    const hasDueDate = cols.has('dueDate') || cols.has('duedate')
+    const hasCompletedAt = cols.has('completedAt') || cols.has('completedat')
+    const hasCreatedAt = cols.has('createdAt') || cols.has('createdat')
+    const hasUpdatedAt = cols.has('updatedAt') || cols.has('updatedat')
+    const hasAssignedToColumn = cols.has('assignedTo') || cols.has('assignedto')
+
     const dataToUpdate: any = {}
     
     if (updateData.title !== undefined) dataToUpdate.title = updateData.title
-    if (updateData.description !== undefined) {
+    if (hasDescription && updateData.description !== undefined) {
       dataToUpdate.description = updateData.description === '' ? null : (updateData.description ?? null)
     }
-    if (updateData.status !== undefined) {
+    if (hasStatus && updateData.status !== undefined) {
       dataToUpdate.status = updateData.status
-      if (updateData.status === 'COMPLETED') {
+      if (updateData.status === 'COMPLETED' && hasCompletedAt) {
         dataToUpdate.completedAt = new Date()
       }
     }
-    if (updateData.dueDate !== undefined) {
+    if (hasDueDate && updateData.dueDate !== undefined) {
       dataToUpdate.dueDate = updateData.dueDate && updateData.dueDate !== '' 
         ? new Date(updateData.dueDate) 
         : null
@@ -168,9 +247,38 @@ export async function PATCH(request: NextRequest) {
     const item = await prisma.checklistItem.update({
       where: { id },
       data: dataToUpdate,
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        ...(hasDescription ? { description: true } : {}),
+        ...(cols.has('eventId') ? { eventId: true } : {}),
+        ...(cols.has('taskId') ? { taskId: true } : {}),
+        ...(hasAssignedToColumn ? { assignedTo: true } : {}),
+        ...(hasAssignedToColumn
+          ? { assignedUser: { select: { id: true, name: true, email: true } } }
+          : {}),
+        ...(hasDueDate ? { dueDate: true } : {}),
+        ...(hasStatus ? { status: true } : {}),
+        ...(hasCompletedAt ? { completedAt: true } : {}),
+        ...(hasCreatedAt ? { createdAt: true } : {}),
+        ...(hasUpdatedAt ? { updatedAt: true } : {}),
+      },
     })
 
-    return NextResponse.json(item)
+    return NextResponse.json({
+      ...item,
+      description: (item as any).description ?? null,
+      status: (item as any).status ?? 'NOT_STARTED',
+      dueDate: (item as any).dueDate ?? null,
+      completedAt: (item as any).completedAt ?? null,
+      createdAt: (item as any).createdAt ?? null,
+      updatedAt: (item as any).updatedAt ?? null,
+      assignedTo: (item as any).assignedTo ?? null,
+      warning: !hasDescription
+        ? 'DB-Schema ist veraltet: Spalte checklist_items.description fehlt, Notizen können nicht gespeichert werden.'
+        : null,
+    })
   } catch (error) {
     console.error('Checklist update error:', error)
     return NextResponse.json(
