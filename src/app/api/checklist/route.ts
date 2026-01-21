@@ -5,7 +5,8 @@ import { z } from 'zod'
 const checklistSchema = z.object({
   category: z.string(),
   title: z.string().min(1),
-  description: z.string().optional(),
+  // allow null/empty string from clients; normalize later
+  description: z.string().optional().nullable(),
   eventId: z.string().optional(),
   taskId: z.string().optional(),
   assignedTo: z.string().optional(),
@@ -90,11 +91,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = checklistSchema.parse(body)
 
+    const normalizedDescription =
+      validatedData.description === null || validatedData.description === ''
+        ? null
+        : validatedData.description
+
     const item = await prisma.checklistItem.create({
       data: {
         category: validatedData.category,
         title: validatedData.title,
-        description: validatedData.description,
+        description: normalizedDescription,
         eventId: validatedData.eventId || undefined,
         taskId: validatedData.taskId || undefined,
         assignedTo: validatedData.assignedTo || undefined,
@@ -144,7 +150,9 @@ export async function PATCH(request: NextRequest) {
     const dataToUpdate: any = {}
     
     if (updateData.title !== undefined) dataToUpdate.title = updateData.title
-    if (updateData.description !== undefined) dataToUpdate.description = updateData.description || null
+    if (updateData.description !== undefined) {
+      dataToUpdate.description = updateData.description === '' ? null : (updateData.description ?? null)
+    }
     if (updateData.status !== undefined) {
       dataToUpdate.status = updateData.status
       if (updateData.status === 'COMPLETED') {

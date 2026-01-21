@@ -6,7 +6,8 @@ const taskSchema = z.object({
   eventId: z.string(),
   category: z.string(),
   title: z.string().min(1),
-  description: z.string().optional(),
+  // allow null/empty string from clients; normalize later
+  description: z.string().optional().nullable(),
   status: z.string().optional(),
   priority: z.string().optional(),
   dueDate: z.string().optional(),
@@ -126,12 +127,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = taskSchema.parse(body)
 
+    const normalizedDescription =
+      validatedData.description === null || validatedData.description === ''
+        ? null
+        : validatedData.description
+
     const task = await prisma.task.create({
       data: {
         eventId: validatedData.eventId,
         category: validatedData.category,
         title: validatedData.title,
-        description: validatedData.description,
+        description: normalizedDescription,
         status: validatedData.status || 'PENDING',
         priority: validatedData.priority || 'MEDIUM',
         dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : undefined,
@@ -191,7 +197,9 @@ export async function PATCH(request: NextRequest) {
     const dataToUpdate: any = {}
     
     if (updateData.title !== undefined) dataToUpdate.title = updateData.title
-    if (updateData.description !== undefined) dataToUpdate.description = updateData.description || null
+    if (updateData.description !== undefined) {
+      dataToUpdate.description = updateData.description === '' ? null : (updateData.description ?? null)
+    }
     if (updateData.status !== undefined) {
       dataToUpdate.status = updateData.status
       if (updateData.status === 'COMPLETED') {

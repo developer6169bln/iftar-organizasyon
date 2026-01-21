@@ -814,7 +814,8 @@ export default function CategoryPage() {
           eventId,
           category: categoryInfo.dbCategory,
           title: taskForm.title,
-          description: taskForm.description || null,
+          // always send string; backend normalizes '' -> null
+          description: taskForm.description,
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
@@ -861,7 +862,8 @@ export default function CategoryPage() {
         body: JSON.stringify({
           id: editingTask,
           title: taskForm.title,
-          description: taskForm.description || null,
+          // always send string; backend normalizes '' -> null
+          description: taskForm.description,
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
@@ -1013,7 +1015,8 @@ export default function CategoryPage() {
           eventId,
           category: categoryInfo.dbCategory,
           title: checklistForm.title,
-          description: checklistForm.description || null,
+          // always send string; backend normalizes '' -> null
+          description: checklistForm.description,
           dueDate: checklistForm.dueDate || undefined,
           status: checklistForm.status,
         }),
@@ -1057,7 +1060,8 @@ export default function CategoryPage() {
         body: JSON.stringify({
           id: editingChecklist,
           title: checklistForm.title,
-          description: checklistForm.description || null,
+          // always send string; backend normalizes '' -> null
+          description: checklistForm.description,
           dueDate: checklistForm.dueDate || undefined,
           status: checklistForm.status,
         }),
