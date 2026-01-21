@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 
+// Prisma + PDF generation require Node.js runtime (not Edge).
+export const runtime = 'nodejs'
+
 type TaskRow = {
   id: string
   eventId: string
@@ -269,7 +272,7 @@ async function buildPdf(args: {
 }
 
 function pdfDownloadResponse(bytes: Uint8Array, filename: string) {
-  // NextResponse expects BodyInit; Buffer works in Node.
+  // NextResponse expects BodyInit; Buffer works in Node runtime.
   const body = Buffer.from(bytes)
   return new NextResponse(body, {
     status: 200,
