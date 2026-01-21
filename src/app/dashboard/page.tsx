@@ -194,6 +194,15 @@ export default function DashboardPage() {
     }
 
     try {
+      // Event holen für Standard-Inhalte
+      const eventResponse = await fetch('/api/events')
+      if (!eventResponse.ok) {
+        alert('Event konnte nicht geladen werden')
+        return
+      }
+      const event = await eventResponse.json()
+      const eventId = event.id
+
       const categoryId = `CUSTOM_${Date.now()}`
       const response = await fetch('/api/categories', {
         method: 'POST',
@@ -214,6 +223,9 @@ export default function DashboardPage() {
         setCategories([...categories, created])
         setNewCategory({ name: '', icon: '📌', color: 'bg-slate-500', description: '', responsibleUserId: '' })
         setShowAddCategoryModal(false)
+        
+        // Erstelle Standard-Inhalte für die neue Kategorie
+        await createDefaultContentForCategory(eventId, categoryId, newCategory.name)
       } else {
         const error = await response.json()
         alert(error.error || 'Kategorie konnte nicht erstellt werden')
@@ -259,6 +271,127 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Kategorie aktualisieren Fehler:', error)
       alert('Kategorie konnte nicht aktualisiert werden')
+    }
+  }
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (!confirm(`Möchten Sie den Bereich "${categories.find(c => c.id === categoryId)?.name}" wirklich löschen?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/categories?id=${categoryId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setCategories(categories.filter(cat => cat.id !== categoryId))
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Kategorie konnte nicht gelöscht werden')
+      }
+    } catch (error) {
+      console.error('Kategorie löschen Fehler:', error)
+      alert('Kategorie konnte nicht gelöscht werden')
+    }
+  }
+
+  const createDefaultContentForCategory = async (eventId: string, categoryId: string, categoryName: string) => {
+    try {
+      // Standard Checklist Items
+      const defaultChecklist = [
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Vorbereitung abgeschlossen`,
+          description: 'Alle Vorbereitungen für diesen Bereich sind abgeschlossen',
+          status: 'NOT_STARTED',
+        },
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Koordination mit Team`,
+          description: 'Team-Koordination und Aufgabenverteilung erfolgt',
+          status: 'NOT_STARTED',
+        },
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Finale Überprüfung`,
+          description: 'Finale Überprüfung aller Details vor dem Event',
+          status: 'NOT_STARTED',
+        },
+      ]
+
+      // Standard Tasks
+      const defaultTasks = [
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Planung und Koordination`,
+          description: 'Planung und Koordination für diesen Bereich durchführen',
+          priority: 'HIGH',
+          status: 'PENDING',
+        },
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Team-Zusammenstellung`,
+          description: 'Team für diesen Bereich zusammenstellen und Aufgaben zuweisen',
+          priority: 'MEDIUM',
+          status: 'PENDING',
+        },
+        {
+          eventId,
+          category: categoryId,
+          title: `${categoryName} - Ressourcen planen`,
+          description: 'Benötigte Ressourcen und Materialien planen',
+          priority: 'MEDIUM',
+          status: 'PENDING',
+        },
+      ]
+
+      // Standard Notes
+      const defaultNotes = [
+        {
+          eventId,
+          category: categoryId,
+          taskId: null,
+          type: 'MEETING',
+          title: `${categoryName} - Erstes Planungstreffen`,
+          content: 'Erstes Planungstreffen für diesen Bereich durchführen und Ziele definieren',
+        },
+      ]
+
+      // Erstelle Checklist Items
+      for (const item of defaultChecklist) {
+        await fetch('/api/checklist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item),
+        }).catch(() => {})
+      }
+
+      // Erstelle Tasks
+      for (const task of defaultTasks) {
+        await fetch('/api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        }).catch(() => {})
+      }
+
+      // Erstelle Notes
+      for (const note of defaultNotes) {
+        await fetch('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(note),
+        }).catch(() => {})
+      }
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Standard-Inhalte:', error)
+      // Nicht blockieren, wenn Standard-Inhalte fehlschlagen
     }
   }
 
@@ -342,13 +475,22 @@ export default function DashboardPage() {
                 
                 return (
                 <div key={category.id} className="group relative rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg">
-                  <button
-                    onClick={() => handleEditCategory(category)}
-                    className="absolute right-2 top-2 rounded bg-gray-100 p-1 text-gray-600 opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
-                    title="Bearbeiten"
-                  >
-                    ✎
-                  </button>
+                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => handleEditCategory(category)}
+                      className="rounded bg-gray-100 p-1 text-gray-600 hover:bg-gray-200"
+                      title="Bearbeiten"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(category.id)}
+                      className="rounded bg-red-100 p-1 text-red-600 hover:bg-red-200"
+                      title="Löschen"
+                    >
+                      🗑
+                    </button>
+                  </div>
                   <Link href={href} className="block">
                     <div className="mb-4 flex items-center gap-4">
                       <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${category.color} text-2xl text-white`}>
