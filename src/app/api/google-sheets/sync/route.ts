@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
             data: {
               ...guestData,
               arrivalDate: guestData.arrivalDate || undefined,
+              additionalData: guestData.additionalData || undefined,
             },
           })
           updated++
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
               eventId,
               ...guestData,
               arrivalDate: guestData.arrivalDate || undefined,
+              additionalData: guestData.additionalData || undefined,
             },
           })
           created++

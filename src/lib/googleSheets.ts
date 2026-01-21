@@ -205,58 +205,81 @@ export async function getSheetHeaders(
 export async function syncGuestsFromGoogleSheets(
   spreadsheetId: string,
   sheetName: string,
-  columnMapping?: Record<string, string> // Mapping: DB-Feld -> Sheet-Spaltenname
+  columnMapping?: Record<string, string> // Mapping: DB-Feld -> Sheet-Spaltenname (optional, wird ignoriert bei 1:1 Import)
 ): Promise<any[]> {
   try {
     const sheets = await getGoogleSheetsClient()
 
-    // Verwende Mapping oder Standard
-    const mapping = columnMapping || defaultFieldMapping
-
-    // Lese Header-Zeile
+    // Lese Header-Zeile (1:1 übernehmen)
     const headers = await getSheetHeaders(spreadsheetId, sheetName)
     if (headers.length === 0) {
       console.warn('Keine Header gefunden im Sheet')
       return []
     }
 
-    // Erstelle Reverse-Mapping: Sheet-Spaltenname -> DB-Feld
-    const reverseMapping: Record<string, string> = {}
-    for (const [dbField, sheetColumn] of Object.entries(mapping)) {
-      reverseMapping[sheetColumn] = dbField
-    }
-
-    // Finde Spalten-Indizes
-    const columnIndices: Record<string, number> = {}
-    for (const [dbField, sheetColumn] of Object.entries(mapping)) {
-      const index = headers.findIndex(h => h === sheetColumn)
-      if (index >= 0) {
-        columnIndices[dbField] = index
-      }
-    }
-
-    // Lese Daten aus Google Sheets
+    // Lese Daten aus Google Sheets (alle Spalten)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!A2:Z1000`, // Lese bis zu 1000 Zeilen
+      range: `${sheetName}!A2:ZZ1000`, // Lese bis zu 1000 Zeilen, bis Spalte ZZ
     })
 
     const rows = response.data.values || []
     const guests: any[] = []
 
-    // Parse Zeilen zu Gäste-Objekten basierend auf Mapping
+    // Standard-DB-Felder (für Rückwärtskompatibilität)
+    const standardFields: Record<string, string> = {
+      'Name': 'name',
+      'name': 'name',
+      'E-Mail': 'email',
+      'Email': 'email',
+      'email': 'email',
+      'Telefon': 'phone',
+      'Phone': 'phone',
+      'phone': 'phone',
+      'Titel': 'title',
+      'Title': 'title',
+      'title': 'title',
+      'Organisation': 'organization',
+      'Organization': 'organization',
+      'organization': 'organization',
+      'Tischnummer': 'tableNumber',
+      'Table Number': 'tableNumber',
+      'tableNumber': 'tableNumber',
+      'VIP': 'isVip',
+      'vip': 'isVip',
+      'Status': 'status',
+      'status': 'status',
+      'Benötigt Empfang': 'needsSpecialReception',
+      'Empfang von': 'receptionBy',
+      'Anreisedatum': 'arrivalDate',
+      'Notizen': 'notes',
+      'notes': 'notes',
+    }
+
+    // Finde Spalten-Indizes für Standard-Felder
+    const columnIndices: Record<string, number> = {}
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i]?.trim()
+      if (header && standardFields[header]) {
+        columnIndices[standardFields[header]] = i
+      }
+    }
+
+    // Parse Zeilen zu Gäste-Objekten (1:1 Import)
     for (const row of rows) {
       // Prüfe ob mindestens Name vorhanden ist
-      const nameIndex = columnIndices['name']
-      if (nameIndex === undefined || !row[nameIndex]?.trim()) {
+      const nameIndex = columnIndices['name'] ?? headers.findIndex(h => h?.toLowerCase().includes('name'))
+      if (nameIndex < 0 || !row[nameIndex]?.trim()) {
         continue
       }
 
       const guest: any = {}
 
-      // Mappe alle Felder
+      // Mappe Standard-Felder (falls vorhanden)
       if (columnIndices['name'] !== undefined) {
         guest.name = row[columnIndices['name']]?.trim() || ''
+      } else if (nameIndex >= 0) {
+        guest.name = row[nameIndex]?.trim() || ''
       }
       if (columnIndices['email'] !== undefined) {
         guest.email = row[columnIndices['email']]?.trim() || ''
@@ -276,7 +299,7 @@ export async function syncGuestsFromGoogleSheets(
       }
       if (columnIndices['isVip'] !== undefined) {
         const vipValue = row[columnIndices['isVip']]?.toLowerCase() || ''
-        guest.isVip = vipValue === 'ja' || vipValue === 'yes' || vipValue === '1' || vipValue === 'true'
+        guest.isVip = vipValue === 'ja' || vipValue === 'yes' || vipValue === '1' || vipValue === 'true' || vipValue === '★'
       }
       if (columnIndices['status'] !== undefined) {
         guest.status = row[columnIndices['status']]?.trim() || 'INVITED'
@@ -305,10 +328,21 @@ export async function syncGuestsFromGoogleSheets(
         guest.notes = row[columnIndices['notes']]?.trim() || ''
       }
 
+      // Speichere ALLE Spalten 1:1 in additionalData (inkl. Standard-Felder für Vollständigkeit)
+      const additionalData: Record<string, string> = {}
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i]?.trim()
+        if (header) {
+          const value = row[i]?.trim() || ''
+          additionalData[header] = value
+        }
+      }
+      guest.additionalData = JSON.stringify(additionalData)
+
       guests.push(guest)
     }
 
-    console.log(`✅ ${guests.length} Gäste aus Google Sheets geladen`)
+    console.log(`✅ ${guests.length} Gäste aus Google Sheets geladen (1:1 Import mit ${headers.length} Spalten)`)
     return guests
   } catch (error) {
     console.error('Google Sheets Read Fehler:', error)

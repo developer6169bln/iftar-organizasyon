@@ -12,19 +12,64 @@ export default function GuestsPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingGuest, setEditingGuest] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({
-    vip: '',
-    name: '',
-    title: '',
-    organization: '',
-    email: '',
-    phone: '',
-    tableNumber: '',
-    reception: '',
-    arrivalDate: '',
-    notes: '',
-    status: '',
-  })
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
+  const [allColumns, setAllColumns] = useState<string[]>([])
+  
+  // Standard-Spalten (immer vorhanden)
+  const standardColumns = ['VIP', 'İsim', 'Ünvan', 'Kurum', 'E-posta', 'Telefon', 'Masa', 'Empfang', 'Anreise & Uhrzeit', 'Notizen', 'Durum', 'İşlemler']
+  
+  // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
+  const getColumnValue = (guest: any, columnName: string): string => {
+    // Standard-Felder
+    if (columnName === 'VIP' || columnName === 'vip') {
+      return guest.isVip ? '★' : '☆'
+    }
+    if (columnName === 'İsim' || columnName === 'name' || columnName === 'Name') {
+      return guest.name || ''
+    }
+    if (columnName === 'Ünvan' || columnName === 'title' || columnName === 'Titel') {
+      return guest.title || ''
+    }
+    if (columnName === 'Kurum' || columnName === 'organization' || columnName === 'Organisation') {
+      return guest.organization || ''
+    }
+    if (columnName === 'E-posta' || columnName === 'email' || columnName === 'E-Mail') {
+      return guest.email || ''
+    }
+    if (columnName === 'Telefon' || columnName === 'phone' || columnName === 'Phone') {
+      return guest.phone || ''
+    }
+    if (columnName === 'Masa' || columnName === 'tableNumber' || columnName === 'Tischnummer') {
+      return guest.tableNumber?.toString() || ''
+    }
+    if (columnName === 'Empfang' || columnName === 'reception') {
+      return guest.receptionBy || (guest.needsSpecialReception ? 'Ja' : '')
+    }
+    if (columnName === 'Anreise & Uhrzeit' || columnName === 'arrivalDate' || columnName === 'Anreisedatum') {
+      return guest.arrivalDate ? new Date(guest.arrivalDate).toLocaleString('de-DE') : ''
+    }
+    if (columnName === 'Notizen' || columnName === 'notes' || columnName === 'Notizen') {
+      return guest.notes || ''
+    }
+    if (columnName === 'Durum' || columnName === 'status' || columnName === 'Status') {
+      return guest.status || ''
+    }
+    if (columnName === 'İşlemler') {
+      return '' // Aktionen-Spalte
+    }
+    
+    // Zusätzliche Spalten aus additionalData
+    if (guest.additionalData) {
+      try {
+        const additional = JSON.parse(guest.additionalData)
+        return additional[columnName] || ''
+      } catch (e) {
+        return ''
+      }
+    }
+    
+    return ''
+  }
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -215,6 +260,28 @@ export default function GuestsPage() {
     }
   }
 
+  // Sammle alle Spalten aus additionalData
+  useEffect(() => {
+    const columnsSet = new Set<string>(standardColumns)
+    
+    guests.forEach(guest => {
+      if (guest.additionalData) {
+        try {
+          const additional = JSON.parse(guest.additionalData)
+          Object.keys(additional).forEach(key => {
+            if (key && !standardColumns.includes(key)) {
+              columnsSet.add(key)
+            }
+          })
+        } catch (e) {
+          console.error('Fehler beim Parsen von additionalData:', e)
+        }
+      }
+    })
+    
+    setAllColumns(Array.from(columnsSet))
+  }, [guests])
+
   useEffect(() => {
     // Filter guests based on search query and column filters
     let filtered = guests
@@ -222,68 +289,92 @@ export default function GuestsPage() {
     // Apply search query filter
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(guest =>
-        guest.name.toLowerCase().includes(query) ||
-        guest.email?.toLowerCase().includes(query) ||
-        guest.title?.toLowerCase().includes(query) ||
-        guest.organization?.toLowerCase().includes(query)
-      )
-    }
-
-    // Apply column filters
-    if (columnFilters.vip) {
-      const isVip = columnFilters.vip.toLowerCase() === 'ja' || columnFilters.vip.toLowerCase() === 'yes' || columnFilters.vip.toLowerCase() === 'vip' || columnFilters.vip === '★'
-      filtered = filtered.filter(guest => (isVip && guest.isVip) || (!isVip && !guest.isVip))
-    }
-    if (columnFilters.name) {
-      const filter = columnFilters.name.toLowerCase()
-      filtered = filtered.filter(guest => guest.name?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.title) {
-      const filter = columnFilters.title.toLowerCase()
-      filtered = filtered.filter(guest => guest.title?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.organization) {
-      const filter = columnFilters.organization.toLowerCase()
-      filtered = filtered.filter(guest => guest.organization?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.email) {
-      const filter = columnFilters.email.toLowerCase()
-      filtered = filtered.filter(guest => guest.email?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.phone) {
-      const filter = columnFilters.phone.toLowerCase()
-      filtered = filtered.filter(guest => guest.phone?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.tableNumber) {
-      const filter = columnFilters.tableNumber.toLowerCase()
-      filtered = filtered.filter(guest => 
-        guest.tableNumber?.toString().toLowerCase().includes(filter)
-      )
-    }
-    if (columnFilters.reception) {
-      const filter = columnFilters.reception.toLowerCase()
-      filtered = filtered.filter(guest => 
-        guest.receptionBy?.toLowerCase().includes(filter) ||
-        (guest.needsSpecialReception && filter.includes('ja'))
-      )
-    }
-    if (columnFilters.arrivalDate) {
-      const filter = columnFilters.arrivalDate.toLowerCase()
       filtered = filtered.filter(guest => {
-        if (!guest.arrivalDate) return false
-        const dateStr = new Date(guest.arrivalDate).toLocaleDateString('de-DE').toLowerCase()
-        return dateStr.includes(filter)
+        const matchesStandard = 
+          guest.name?.toLowerCase().includes(query) ||
+          guest.email?.toLowerCase().includes(query) ||
+          guest.title?.toLowerCase().includes(query) ||
+          guest.organization?.toLowerCase().includes(query)
+        
+        // Suche auch in additionalData
+        let matchesAdditional = false
+        if (guest.additionalData) {
+          try {
+            const additional = JSON.parse(guest.additionalData)
+            matchesAdditional = Object.values(additional).some((val: any) => 
+              String(val).toLowerCase().includes(query)
+            )
+          } catch (e) {
+            // Ignoriere Parse-Fehler
+          }
+        }
+        
+        return matchesStandard || matchesAdditional
       })
     }
-    if (columnFilters.notes) {
-      const filter = columnFilters.notes.toLowerCase()
-      filtered = filtered.filter(guest => guest.notes?.toLowerCase().includes(filter))
-    }
-    if (columnFilters.status) {
-      const filter = columnFilters.status.toLowerCase()
-      filtered = filtered.filter(guest => guest.status?.toLowerCase().includes(filter))
-    }
+
+    // Apply column filters (dynamisch für alle Spalten)
+    Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
+      if (!filterValue) return
+      
+      const filter = filterValue.toLowerCase()
+      
+      filtered = filtered.filter(guest => {
+        // Standard-Felder
+        if (columnName === 'VIP' || columnName === 'vip') {
+          const isVip = filter === 'ja' || filter === 'yes' || filter === 'vip' || filter === '★'
+          return (isVip && guest.isVip) || (!isVip && !guest.isVip)
+        }
+        if (columnName === 'İsim' || columnName === 'name') {
+          return guest.name?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'Ünvan' || columnName === 'title') {
+          return guest.title?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'Kurum' || columnName === 'organization') {
+          return guest.organization?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'E-posta' || columnName === 'email') {
+          return guest.email?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'Telefon' || columnName === 'phone') {
+          return guest.phone?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'Masa' || columnName === 'tableNumber') {
+          return guest.tableNumber?.toString().toLowerCase().includes(filter)
+        }
+        if (columnName === 'Empfang' || columnName === 'reception') {
+          return guest.receptionBy?.toLowerCase().includes(filter) ||
+            (guest.needsSpecialReception && filter.includes('ja'))
+        }
+        if (columnName === 'Anreise & Uhrzeit' || columnName === 'arrivalDate') {
+          if (!guest.arrivalDate) return false
+          const dateStr = new Date(guest.arrivalDate).toLocaleDateString('de-DE').toLowerCase()
+          return dateStr.includes(filter)
+        }
+        if (columnName === 'Notizen' || columnName === 'notes') {
+          return guest.notes?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'Durum' || columnName === 'status') {
+          return guest.status?.toLowerCase().includes(filter)
+        }
+        
+        // Zusätzliche Spalten aus additionalData
+        if (guest.additionalData) {
+          try {
+            const additional = JSON.parse(guest.additionalData)
+            const value = additional[columnName]
+            if (value !== undefined) {
+              return String(value).toLowerCase().includes(filter)
+            }
+          } catch (e) {
+            // Ignoriere Parse-Fehler
+          }
+        }
+        
+        return true
+      })
+    })
 
     setFilteredGuests(filtered)
   }, [searchQuery, guests, columnFilters])
@@ -860,142 +951,43 @@ export default function GuestsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
+                    {/* Header Row */}
                     <tr className="border-b border-gray-200">
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">VIP</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">İsim</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Ünvan</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Kurum</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">E-posta</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Telefon</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Masa</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Empfang</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Anreise & Uhrzeit</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Notizen</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Durum</th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">İşlemler</th>
+                      {allColumns.map((column) => (
+                        <th key={column} className="px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
+                          {column}
+                        </th>
+                      ))}
                     </tr>
                     {/* Filter Row */}
                     <tr className="border-b border-gray-200 bg-gray-50">
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="VIP..."
-                          value={columnFilters.vip}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, vip: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="İsim filtrele..."
-                          value={columnFilters.name}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, name: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Ünvan filtrele..."
-                          value={columnFilters.title}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, title: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Kurum filtrele..."
-                          value={columnFilters.organization}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, organization: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="E-posta filtrele..."
-                          value={columnFilters.email}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, email: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Telefon filtrele..."
-                          value={columnFilters.phone}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, phone: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Masa filtrele..."
-                          value={columnFilters.tableNumber}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, tableNumber: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Empfang filtrele..."
-                          value={columnFilters.reception}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, reception: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Anreise filtrele..."
-                          value={columnFilters.arrivalDate}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, arrivalDate: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Notizen filtrele..."
-                          value={columnFilters.notes}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, notes: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <input
-                          type="text"
-                          placeholder="Durum filtrele..."
-                          value={columnFilters.status}
-                          onChange={(e) => setColumnFilters({ ...columnFilters, status: e.target.value })}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
-                        />
-                      </th>
-                      <th className="px-4 py-2">
-                        <button
-                          onClick={() => setColumnFilters({
-                            vip: '',
-                            name: '',
-                            title: '',
-                            organization: '',
-                            email: '',
-                            phone: '',
-                            tableNumber: '',
-                            reception: '',
-                            arrivalDate: '',
-                            notes: '',
-                            status: '',
-                          })}
-                          className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
-                          title="Alle Filter zurücksetzen"
-                        >
-                          🔄
-                        </button>
-                      </th>
+                      {allColumns.map((column) => (
+                        <th key={column} className="px-4 py-2">
+                          {column === 'İşlemler' ? (
+                            <button
+                              onClick={() => {
+                                const newFilters: Record<string, string> = {}
+                                allColumns.forEach(col => {
+                                  if (col !== 'İşlemler') newFilters[col] = ''
+                                })
+                                setColumnFilters(newFilters)
+                              }}
+                              className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                              title="Alle Filter zurücksetzen"
+                            >
+                              🔄
+                            </button>
+                          ) : (
+                            <input
+                              type="text"
+                              placeholder={`${column} filtrele...`}
+                              value={columnFilters[column] || ''}
+                              onChange={(e) => setColumnFilters({ ...columnFilters, [column]: e.target.value })}
+                              className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                            />
+                          )}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -1004,269 +996,120 @@ export default function GuestsPage() {
                         key={guest.id}
                         className={`border-b border-gray-100 hover:bg-gray-50 ${guest.isVip ? 'bg-yellow-50' : ''}`}
                       >
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleToggleVip(guest.id, guest.isVip || false)}
-                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                              guest.isVip
-                                ? 'bg-yellow-400 text-yellow-900'
-                                : 'bg-gray-200 text-gray-500'
-                            }`}
-                            title={guest.isVip ? 'VIP' : 'VIP Yap'}
-                          >
-                            {guest.isVip ? '★' : '☆'}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="text"
-                              defaultValue={guest.name}
-                              onBlur={(e) => {
-                                if (e.target.value !== guest.name) {
-                                  handleUpdate(guest.id, { name: e.target.value })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.currentTarget.blur()
-                                }
-                                if (e.key === 'Escape') {
-                                  setEditingGuest(null)
-                                }
-                              }}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer font-medium text-gray-900 hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.name}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="text"
-                              defaultValue={guest.title || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (guest.title || '')) {
-                                  handleUpdate(guest.id, { title: e.target.value || null })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                                if (e.key === 'Escape') setEditingGuest(null)
-                              }}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.title || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="text"
-                              defaultValue={guest.organization || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (guest.organization || '')) {
-                                  handleUpdate(guest.id, { organization: e.target.value || null })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                                if (e.key === 'Escape') setEditingGuest(null)
-                              }}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.organization || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="email"
-                              defaultValue={guest.email || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (guest.email || '')) {
-                                  handleUpdate(guest.id, { email: e.target.value || null })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                                if (e.key === 'Escape') setEditingGuest(null)
-                              }}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.email || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="tel"
-                              defaultValue={guest.phone || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (guest.phone || '')) {
-                                  handleUpdate(guest.id, { phone: e.target.value || null })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                                if (e.key === 'Escape') setEditingGuest(null)
-                              }}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.phone || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {editingGuest === guest.id ? (
-                            <input
-                              type="number"
-                              defaultValue={guest.tableNumber || ''}
-                              onBlur={(e) => {
-                                const value = e.target.value ? parseInt(e.target.value) : null
-                                if (value !== guest.tableNumber) {
-                                  handleUpdate(guest.id, { tableNumber: value })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') e.currentTarget.blur()
-                                if (e.key === 'Escape') setEditingGuest(null)
-                              }}
-                              className="w-20 rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600"
-                              onClick={() => setEditingGuest(guest.id)}
-                            >
-                              {guest.tableNumber || '-'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {guest.needsSpecialReception ? (
-                            <div className="flex flex-col gap-1">
-                              <span className="rounded-full bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800">
-                                ✓ Empfang
+                        {allColumns.map((column) => {
+                          // Spezialbehandlung für bestimmte Spalten
+                          if (column === 'VIP' || column === 'vip') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                <button
+                                  onClick={() => handleToggleVip(guest.id, guest.isVip || false)}
+                                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                                    guest.isVip
+                                      ? 'bg-yellow-400 text-yellow-900'
+                                      : 'bg-gray-200 text-gray-500'
+                                  }`}
+                                  title={guest.isVip ? 'VIP' : 'VIP Yap'}
+                                >
+                                  {guest.isVip ? '★' : '☆'}
+                                </button>
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'İsim' || column === 'name' || column === 'Name') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                {editingGuest === guest.id ? (
+                                  <input
+                                    type="text"
+                                    defaultValue={guest.name}
+                                    onBlur={(e) => {
+                                      if (e.target.value !== guest.name) {
+                                        handleUpdate(guest.id, { name: e.target.value })
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') e.currentTarget.blur()
+                                      if (e.key === 'Escape') setEditingGuest(null)
+                                    }}
+                                    className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
+                                    autoFocus
+                                  />
+                                ) : (
+                                  <span
+                                    className="cursor-pointer font-medium text-gray-900 hover:text-indigo-600"
+                                    onClick={() => setEditingGuest(guest.id)}
+                                  >
+                                    {guest.name}
+                                  </span>
+                                )}
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Durum' || column === 'status' || column === 'Status') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                <select
+                                  value={guest.status}
+                                  onChange={(e) => handleStatusChange(guest.id, e.target.value)}
+                                  className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(guest.status)} border-0 focus:ring-2 focus:ring-indigo-500`}
+                                >
+                                  <option value="INVITED">Davet Edildi</option>
+                                  <option value="CONFIRMED">Onaylandı</option>
+                                  <option value="ATTENDED">Katıldı</option>
+                                  <option value="CANCELLED">İptal Edildi</option>
+                                  <option value="NO_SHOW">Gelmedi</option>
+                                </select>
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'İşlemler') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  {editingGuest === guest.id ? (
+                                    <>
+                                      <button
+                                        onClick={() => setEditingGuest(null)}
+                                        className="text-sm text-indigo-600 hover:text-indigo-800"
+                                        title="Bearbeitung beenden"
+                                      >
+                                        ✓
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(guest.id)}
+                                        className="text-sm text-red-600 hover:text-red-800"
+                                        title="Gast löschen"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => setEditingGuest(guest.id)}
+                                      className="text-sm text-gray-600 hover:text-indigo-600"
+                                      title="Bearbeiten"
+                                    >
+                                      ✎
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            )
+                          }
+                          
+                          // Standard-Spalten und zusätzliche Spalten aus additionalData
+                          const value = getColumnValue(guest, column)
+                          return (
+                            <td key={column} className="px-4 py-3 text-sm text-gray-600">
+                              <span className="cursor-pointer hover:text-indigo-600" title={value || '-'}>
+                                {value || <span className="text-gray-400">-</span>}
                               </span>
-                              {guest.receptionBy && (
-                                <span className="text-xs text-gray-600">von: {guest.receptionBy}</span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {guest.arrivalDate ? (
-                            <span>
-                              {new Date(guest.arrivalDate).toLocaleDateString('de-DE')} {new Date(guest.arrivalDate).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
-                          {editingGuest === guest.id ? (
-                            <textarea
-                              defaultValue={guest.notes || ''}
-                              onBlur={(e) => {
-                                if (e.target.value !== (guest.notes || '')) {
-                                  handleUpdate(guest.id, { notes: e.target.value || null })
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Escape') {
-                                  setEditingGuest(null)
-                                }
-                              }}
-                              rows={2}
-                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none resize-none"
-                              placeholder="Notizen eingeben..."
-                            />
-                          ) : (
-                            <span
-                              className="cursor-pointer hover:text-indigo-600 block truncate"
-                              onClick={() => setEditingGuest(guest.id)}
-                              title={guest.notes || 'Klicken zum Bearbeiten'}
-                            >
-                              {guest.notes || <span className="text-gray-400">-</span>}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={guest.status}
-                            onChange={(e) => handleStatusChange(guest.id, e.target.value)}
-                            className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(guest.status)} border-0 focus:ring-2 focus:ring-indigo-500`}
-                          >
-                            <option value="INVITED">Davet Edildi</option>
-                            <option value="CONFIRMED">Onaylandı</option>
-                            <option value="ATTENDED">Katıldı</option>
-                            <option value="CANCELLED">İptal Edildi</option>
-                            <option value="NO_SHOW">Gelmedi</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {editingGuest === guest.id ? (
-                              <>
-                                <button
-                                  onClick={() => setEditingGuest(null)}
-                                  className="text-sm text-indigo-600 hover:text-indigo-800"
-                                  title="Bearbeitung beenden"
-                                >
-                                  ✓
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(guest.id)}
-                                  className="text-sm text-red-600 hover:text-red-800"
-                                  title="Gast löschen"
-                                >
-                                  🗑️
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => setEditingGuest(guest.id)}
-                                className="text-sm text-gray-600 hover:text-indigo-600"
-                                title="Bearbeiten"
-                              >
-                                ✎
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                   </tbody>
