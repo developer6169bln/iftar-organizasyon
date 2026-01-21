@@ -60,15 +60,25 @@ export async function GET(request: NextRequest) {
       hasAssignedToColumn = false
     }
 
-    const includeOptions: any = {}
+    // Build select/include dynamically so Prisma won't reference missing columns
+    const baseSelect: any = {
+      id: true,
+      eventId: true,
+      category: true,
+      title: true,
+      description: true,
+      status: true,
+      priority: true,
+      dueDate: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    }
 
     if (hasAssignedToColumn) {
-      includeOptions.assignedUser = {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
+      baseSelect.assignedTo = true
+      baseSelect.assignedUser = {
+        select: { id: true, name: true, email: true },
       }
     }
 
@@ -88,7 +98,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (includeAssignments) {
-      includeOptions.assignments = {
+      baseSelect.assignments = {
         include: {
           user: {
             select: {
@@ -102,7 +112,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (includeAttachments) {
-      includeOptions.attachments = {
+      baseSelect.attachments = {
         orderBy: {
           createdAt: 'desc' as const,
         },
@@ -111,7 +121,7 @@ export async function GET(request: NextRequest) {
 
     const tasks = await prisma.task.findMany({
       where,
-      include: includeOptions,
+      select: baseSelect,
       orderBy: {
         createdAt: 'desc',
       },
@@ -122,6 +132,7 @@ export async function GET(request: NextRequest) {
       ...task,
       attachments: task.attachments || [],
       assignments: task.assignments || [],
+      assignedTo: task.assignedTo ?? null,
     }))
 
     return NextResponse.json(tasksWithDefaults)
@@ -197,6 +208,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const selectOptions: any = {
+      id: true,
+      eventId: true,
+      category: true,
+      title: true,
+      description: true,
+      status: true,
+      priority: true,
+      dueDate: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      ...(includeAssignments ? { assignments: includeOptions.assignments } : {}),
+      ...(hasAssignedToColumn ? { assignedTo: true, assignedUser: includeOptions.assignedUser } : {}),
+    }
+
     const task = await prisma.task.create({
       data: {
         eventId: validatedData.eventId,
@@ -210,10 +237,17 @@ export async function POST(request: NextRequest) {
           ? { assignedTo: validatedData.assignedTo || undefined }
           : {}),
       },
-      include: includeOptions,
+      select: selectOptions,
     })
 
-    return NextResponse.json(task, { status: 201 })
+    return NextResponse.json(
+      {
+        ...task,
+        assignments: (task as any).assignments || [],
+        assignedTo: (task as any).assignedTo ?? null,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -282,20 +316,34 @@ export async function PATCH(request: NextRequest) {
         updateData.assignedTo && updateData.assignedTo !== '' ? updateData.assignedTo : null
     }
 
-    const includeOptions: any = {}
-    if (hasAssignedToColumn) {
-      includeOptions.assignedUser = {
-        select: { id: true, name: true, email: true },
-      }
-    }
-
     const task = await prisma.task.update({
       where: { id },
       data: dataToUpdate,
-      include: includeOptions,
+      select: {
+        id: true,
+        eventId: true,
+        category: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        dueDate: true,
+        completedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        ...(hasAssignedToColumn
+          ? {
+              assignedTo: true,
+              assignedUser: { select: { id: true, name: true, email: true } },
+            }
+          : {}),
+      },
     })
 
-    return NextResponse.json(task)
+    return NextResponse.json({
+      ...task,
+      assignedTo: (task as any).assignedTo ?? null,
+    })
   } catch (error) {
     console.error('Task update error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
