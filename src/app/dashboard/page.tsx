@@ -284,6 +284,27 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Quick Links */}
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Link
+            href="/dashboard/reports"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-700 text-2xl text-white">
+                📑
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Berichte</h3>
+                <p className="text-sm text-gray-600">
+                  Aufgaben nach Benutzer/Bereich als PDF exportieren
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+        </div>
+
         {/* Event Info Card */}
         <div className="mb-8 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shadow-lg">
           <h2 className="text-2xl font-bold">Etkinlik Bilgileri</h2>
