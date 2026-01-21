@@ -108,3 +108,38 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { action, description, entityType, entityId, eventId, category, url, metadata } = body
+
+    if (!action) {
+      return NextResponse.json(
+        { error: 'action ist erforderlich' },
+        { status: 400 }
+      )
+    }
+
+    // Erstelle Audit-Log
+    await createAuditLog({
+      action,
+      description: description || null,
+      entityType: entityType || null,
+      entityId: entityId || null,
+      eventId: eventId || null,
+      category: category || null,
+      url: url || null,
+      metadata: metadata || null,
+    }, request)
+
+    return NextResponse.json({ success: true, message: 'Audit-Log erstellt' })
+  } catch (error) {
+    console.error('Audit log creation error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
+    return NextResponse.json(
+      { error: 'Fehler beim Erstellen des Audit-Logs', details: errorMessage },
+      { status: 500 }
+    )
+  }
+}
