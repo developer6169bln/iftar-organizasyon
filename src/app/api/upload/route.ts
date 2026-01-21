@@ -9,6 +9,8 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File
     const taskId = formData.get('taskId') as string | null
     const checklistItemId = formData.get('checklistItemId') as string | null
+    const eventId = formData.get('eventId') as string | null
+    const category = formData.get('category') as string | null
 
     if (!file) {
       return NextResponse.json(
@@ -17,35 +19,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!taskId && !checklistItemId) {
+    // Erlaube Uploads auch ohne taskId/checklistItemId (für Galerie)
+    if (!taskId && !checklistItemId && (!eventId || !category)) {
       return NextResponse.json(
-        { error: 'taskId oder checklistItemId erforderlich' },
+        { error: 'taskId, checklistItemId oder (eventId + category) erforderlich' },
         { status: 400 }
       )
     }
 
-    // Validiere Dateityp (nur Bilder und PDFs)
+    // Validiere Dateityp (Bilder, Videos und PDFs)
     const allowedTypes = [
       'image/jpeg',
       'image/jpg',
       'image/png',
       'image/gif',
       'image/webp',
+      'video/mp4',
+      'video/mpeg',
+      'video/quicktime',
+      'video/x-msvideo',
+      'video/webm',
       'application/pdf'
     ]
 
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Nur Bilder (JPEG, PNG, GIF, WEBP) und PDFs sind erlaubt' },
+        { error: 'Nur Bilder (JPEG, PNG, GIF, WEBP), Videos (MP4, MOV, AVI, WEBM) und PDFs sind erlaubt' },
         { status: 400 }
       )
     }
 
-    // Validiere Dateigröße (max 10MB)
-    const maxSize = 10 * 1024 * 1024 // 10MB
+    // Validiere Dateigröße (max 50MB für Videos, 10MB für Bilder/PDFs)
+    const isVideo = file.type.startsWith('video/')
+    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024 // 50MB für Videos, 10MB für andere
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: 'Datei ist zu groß. Maximum: 10MB' },
+        { error: `Datei ist zu groß. Maximum: ${isVideo ? '50MB' : '10MB'}` },
         { status: 400 }
       )
     }
@@ -73,6 +82,8 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer)
 
     // Speichere Metadaten in der Datenbank
+    // Für Galerie-Uploads: speichere eventId und category in einem JSON-Feld oder erweitere das Schema
+    // Da das Schema keine eventId/category hat, speichern wir es als Teil des fileName oder verwenden ein separates Feld
     const attachment = await prisma.attachment.create({
       data: {
         taskId: taskId || undefined,
@@ -81,6 +92,9 @@ export async function POST(request: NextRequest) {
         filePath: `/uploads/${fileName}`,
         fileType: file.type,
         fileSize: file.size,
+        // Speichere eventId/category in uploadedBy als JSON (temporäre Lösung)
+        // Oder erweitere das Schema später
+        uploadedBy: (eventId && category) ? JSON.stringify({ eventId, category }) : undefined,
       },
     })
 
