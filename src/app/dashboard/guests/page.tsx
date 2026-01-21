@@ -671,6 +671,49 @@ export default function GuestsPage() {
     await handleUpdate(guestId, { status: newStatus })
   }
 
+  const handleDeleteColumn = async (columnName: string) => {
+    if (!eventId) return
+    
+    // Prüfe ob es eine Standard-Spalte ist (diese können nicht gelöscht werden)
+    if (standardColumns.includes(columnName)) {
+      alert('Standard-Spalten können nicht gelöscht werden')
+      return
+    }
+
+    if (!confirm(`Möchten Sie die Spalte "${columnName}" wirklich löschen? Diese Aktion entfernt die Spalte aus allen Gästen.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/guests/delete-column?eventId=${eventId}&columnName=${encodeURIComponent(columnName)}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Fehler beim Löschen der Spalte: ${error.error || 'Unbekannter Fehler'}`)
+        return
+      }
+
+      const result = await response.json()
+      alert(`✅ Spalte "${columnName}" erfolgreich gelöscht (${result.updatedCount} Gäste aktualisiert)`)
+      
+      // Lade Gäste neu
+      loadGuests()
+      
+      // Entferne Spalte aus allColumns
+      setAllColumns(allColumns.filter(col => col !== columnName))
+      
+      // Entferne Filter für diese Spalte
+      const newFilters = { ...columnFilters }
+      delete newFilters[columnName]
+      setColumnFilters(newFilters)
+    } catch (error) {
+      console.error('Fehler beim Löschen der Spalte:', error)
+      alert('Fehler beim Löschen der Spalte')
+    }
+  }
+
   const handleDeleteAll = async () => {
     if (!eventId) return
     
@@ -1032,11 +1075,25 @@ export default function GuestsPage() {
                   <thead>
                     {/* Header Row */}
                     <tr className="border-b border-gray-200">
-                      {allColumns.map((column) => (
-                        <th key={column} className="px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
-                          {column}
-                        </th>
-                      ))}
+                      {allColumns.map((column) => {
+                        const isStandardColumn = standardColumns.includes(column)
+                        return (
+                          <th key={column} className="px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span>{column}</span>
+                              {!isStandardColumn && (
+                                <button
+                                  onClick={() => handleDeleteColumn(column)}
+                                  className="text-red-500 hover:text-red-700"
+                                  title={`Spalte "${column}" löschen`}
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </th>
+                        )
+                      })}
                     </tr>
                     {/* Filter Row */}
                     <tr className="border-b border-gray-200 bg-gray-50">
