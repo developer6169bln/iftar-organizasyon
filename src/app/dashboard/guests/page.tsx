@@ -801,6 +801,7 @@ export default function GuestsPage() {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Masa</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Empfang</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Anreise & Uhrzeit</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Notizen</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Durum</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">İşlemler</th>
                     </tr>
@@ -1001,6 +1002,34 @@ export default function GuestsPage() {
                             </span>
                           ) : (
                             <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+                          {editingGuest === guest.id ? (
+                            <textarea
+                              defaultValue={guest.notes || ''}
+                              onBlur={(e) => {
+                                if (e.target.value !== (guest.notes || '')) {
+                                  handleUpdate(guest.id, { notes: e.target.value || null })
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                  setEditingGuest(null)
+                                }
+                              }}
+                              rows={2}
+                              className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none resize-none"
+                              placeholder="Notizen eingeben..."
+                            />
+                          ) : (
+                            <span
+                              className="cursor-pointer hover:text-indigo-600 block truncate"
+                              onClick={() => setEditingGuest(guest.id)}
+                              title={guest.notes || 'Klicken zum Bearbeiten'}
+                            >
+                              {guest.notes || <span className="text-gray-400">-</span>}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3">
