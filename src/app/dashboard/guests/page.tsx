@@ -25,7 +25,6 @@ export default function GuestsPage() {
     'E-Mail',
     'Status',
     'Tischnummer',
-    'Anwesend',
     'VIP Begleitung benötigt?',
     'VIP Begleiter (Name)',
     'VIP Anreise (Uhrzeit)',
