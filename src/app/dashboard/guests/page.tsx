@@ -445,8 +445,10 @@ export default function GuestsPage() {
       })
     })
 
-    // Prüfe ob keine Ergebnisse gefunden wurden
-    if (filtered.length === 0 && (searchQuery.trim() !== '' || Object.values(columnFilters).some(v => v.trim() !== ''))) {
+    // Prüfe ob keine Ergebnisse gefunden wurden (nur wenn Filter aktiv sind)
+    const hasActiveFilters = searchQuery.trim() !== '' || Object.values(columnFilters).some(v => v.trim() !== '')
+    
+    if (filtered.length === 0 && hasActiveFilters && guests.length > 0) {
       // Zeige Warnung und setze Filter zurück
       if (!showNoResultsWarning) {
         setShowNoResultsWarning(true)
