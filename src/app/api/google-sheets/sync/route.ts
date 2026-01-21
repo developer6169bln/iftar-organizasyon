@@ -68,45 +68,29 @@ export async function POST(request: NextRequest) {
       })
     } else if (direction === 'from') {
       // Synchronisiere von Google Sheets zu DB
+      // Lese zuerst die Header aus Google Sheets
+      const headers = await getSheetHeaders(spreadsheetId, sheetName)
+      
+      // Lösche ALLE vorhandenen Gäste für dieses Event (für 1:1 Import)
+      await prisma.guest.deleteMany({
+        where: { eventId },
+      })
+      
       const guestsFromSheets = await syncGuestsFromGoogleSheets(spreadsheetId, sheetName, columnMapping)
 
-      // Aktualisiere oder erstelle Gäste
+      // Erstelle alle Gäste neu
       let created = 0
-      let updated = 0
 
       for (const guestData of guestsFromSheets) {
-        // Suche nach existierendem Gast (nach Name und E-Mail)
-        const existing = await prisma.guest.findFirst({
-          where: {
+        await prisma.guest.create({
+          data: {
             eventId,
-            name: guestData.name,
-            email: guestData.email || undefined,
+            ...guestData,
+            arrivalDate: guestData.arrivalDate || undefined,
+            additionalData: guestData.additionalData || undefined,
           },
         })
-
-        if (existing) {
-          // Aktualisiere existierenden Gast
-          await prisma.guest.update({
-            where: { id: existing.id },
-            data: {
-              ...guestData,
-              arrivalDate: guestData.arrivalDate || undefined,
-              additionalData: guestData.additionalData || undefined,
-            },
-          })
-          updated++
-        } else {
-          // Erstelle neuen Gast
-          await prisma.guest.create({
-            data: {
-              eventId,
-              ...guestData,
-              arrivalDate: guestData.arrivalDate || undefined,
-              additionalData: guestData.additionalData || undefined,
-            },
-          })
-          created++
-        }
+        created++
       }
 
       // Aktualisiere letzte Synchronisation
@@ -117,10 +101,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Synchronisation abgeschlossen: ${created} erstellt, ${updated} aktualisiert`,
+        message: `Synchronisation abgeschlossen: ${created} Gäste importiert`,
         created,
-        updated,
+        updated: 0,
         lastSync: new Date().toISOString(),
+        headers, // Sende Spaltenüberschriften zurück
       })
     } else {
       return NextResponse.json(

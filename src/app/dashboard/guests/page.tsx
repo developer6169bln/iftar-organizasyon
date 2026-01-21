@@ -260,26 +260,38 @@ export default function GuestsPage() {
     }
   }
 
-  // Sammle alle Spalten aus additionalData
+  // Sammle Spalten nur aus importierten Daten (nicht aus allen Gästen)
+  // Die Spalten werden beim Import direkt aus Google Sheets gesetzt
   useEffect(() => {
-    const columnsSet = new Set<string>(standardColumns)
+    // Wenn keine Gäste vorhanden, setze Standard-Spalten
+    if (guests.length === 0) {
+      setAllColumns(standardColumns)
+      return
+    }
     
-    guests.forEach(guest => {
-      if (guest.additionalData) {
-        try {
-          const additional = JSON.parse(guest.additionalData)
-          Object.keys(additional).forEach(key => {
-            if (key && !standardColumns.includes(key)) {
-              columnsSet.add(key)
-            }
-          })
-        } catch (e) {
-          console.error('Fehler beim Parsen von additionalData:', e)
-        }
+    // Wenn Gäste vorhanden, verwende die Spalten aus dem ersten Gast (der sollte alle Spalten haben)
+    const firstGuest = guests[0]
+    if (firstGuest?.additionalData) {
+      try {
+        const additional = JSON.parse(firstGuest.additionalData)
+        const columnsSet = new Set<string>(standardColumns)
+        
+        // Füge alle Spalten aus additionalData hinzu
+        Object.keys(additional).forEach(key => {
+          if (key && !standardColumns.includes(key)) {
+            columnsSet.add(key)
+          }
+        })
+        
+        setAllColumns(Array.from(columnsSet))
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData:', e)
+        setAllColumns(standardColumns)
       }
-    })
-    
-    setAllColumns(Array.from(columnsSet))
+    } else {
+      // Wenn kein additionalData vorhanden, nur Standard-Spalten
+      setAllColumns(standardColumns)
+    }
   }, [guests])
 
   useEffect(() => {
@@ -505,9 +517,34 @@ export default function GuestsPage() {
 
       if (response.ok) {
         const result = await response.json()
+        
+        // Setze Spaltenüberschriften NUR aus Google Sheets (1:1 Übernahme)
+        if (result.headers && Array.isArray(result.headers) && result.headers.length > 0) {
+          // Verwende NUR die Spalten aus Google Sheets, plus Standard-Spalten für Funktionen
+          const importedColumns: string[] = []
+          
+          // Füge Standard-Spalten hinzu (für Funktionen wie VIP, Status, etc.)
+          importedColumns.push(...standardColumns.filter(col => col !== 'İşlemler'))
+          
+          // Füge alle Spalten aus Google Sheets hinzu (1:1)
+          result.headers.forEach((header: string) => {
+            if (header && header.trim() && !importedColumns.includes(header)) {
+              importedColumns.push(header)
+            }
+          })
+          
+          // Füge "İşlemler" am Ende hinzu
+          importedColumns.push('İşlemler')
+          
+          setAllColumns(importedColumns)
+        } else {
+          // Wenn keine Header, setze Standard-Spalten
+          setAllColumns(standardColumns)
+        }
+        
         await loadGuests()
         setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
-        alert(`Synchronisation abgeschlossen: ${result.created} erstellt, ${result.updated} aktualisiert`)
+        alert(`Synchronisation abgeschlossen: ${result.created} Gäste importiert`)
         return true
       } else {
         const error = await response.json()
