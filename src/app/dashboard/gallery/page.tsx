@@ -37,7 +37,11 @@ export default function GalleryPage() {
       const response = await fetch(`/api/gallery?eventId=${encodeURIComponent(eventId)}&category=GALLERY`)
       if (response.ok) {
         const data = await response.json()
+        console.log('Gallery items loaded:', data.items)
         setGalleryItems(data.items || [])
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Gallery load error:', response.status, errorData)
       }
     } catch (error) {
       console.error('Galerie yükleme hatası:', error)
@@ -122,12 +126,26 @@ export default function GalleryPage() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
+  const getFileUrl = (filePath: string) => {
+    // Verwende window.location.origin für die aktuelle Domain
+    // Falls nicht verfügbar (SSR), verwende einen Fallback
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin
+      // Stelle sicher, dass filePath mit / beginnt
+      const path = filePath.startsWith('/') ? filePath : `/${filePath}`
+      const fullUrl = `${origin}${path}`
+      console.log('Generated file URL:', fullUrl, 'from path:', filePath)
+      return fullUrl
+    }
+    // Fallback für SSR (wird beim Client-Side-Rendering überschrieben)
+    return filePath
+  }
+
   const shareViaEmail = (items: any[]) => {
     const subject = encodeURIComponent(`Fotos/Videos - Iftar Organizasyon`)
+    const fileUrls = items.map((item) => getFileUrl(item.filePath))
     const body = encodeURIComponent(
-      `Hallo,\n\nIch teile ${items.length} Foto(s)/Video(s) mit dir:\n\n${items
-        .map((item) => `${window.location.origin}${item.filePath}`)
-        .join('\n')}\n\n---\nIftar Organizasyon System`
+      `Hallo,\n\nIch teile ${items.length} Foto(s)/Video(s) mit dir:\n\n${fileUrls.join('\n')}\n\n---\nIftar Organizasyon System`
     )
     const mailtoLink = shareRecipient
       ? `mailto:${encodeURIComponent(shareRecipient)}?subject=${subject}&body=${body}`
@@ -138,10 +156,9 @@ export default function GalleryPage() {
   }
 
   const shareViaWhatsApp = (items: any[]) => {
+    const fileUrls = items.map((item) => getFileUrl(item.filePath))
     const text = encodeURIComponent(
-      `📸 Fotos/Videos - Iftar Organizasyon\n\n${items.length} Datei(en):\n\n${items
-        .map((item) => `${window.location.origin}${item.filePath}`)
-        .join('\n')}`
+      `📸 Fotos/Videos - Iftar Organizasyon\n\n${items.length} Datei(en):\n\n${fileUrls.join('\n')}`
     )
     window.open(`https://wa.me/?text=${text}`, '_blank')
     setShowShareModal(false)
@@ -270,22 +287,53 @@ export default function GalleryPage() {
                 </div>
 
                 {/* Preview */}
-                <div className="aspect-square w-full overflow-hidden bg-gray-100">
+                <div className="aspect-square w-full overflow-hidden bg-gray-900">
                   {item.isImage ? (
                     <img
                       src={item.filePath}
                       alt={item.fileName}
                       className="h-full w-full object-cover transition-transform group-hover:scale-110"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.error('Image load error for:', item.filePath, item)
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement
+                        if (parent) {
+                          parent.innerHTML = '<div class="flex h-full items-center justify-center text-white text-sm">❌ Bild konnte nicht geladen werden</div>'
+                        }
+                      }}
+                      onLoad={() => {
+                        console.log('Image loaded successfully:', item.filePath)
+                      }}
                     />
                   ) : item.isVideo ? (
-                    <video
-                      src={item.filePath}
-                      className="h-full w-full object-cover"
-                      controls={false}
-                      preload="metadata"
-                    />
+                    <div className="relative h-full w-full bg-black">
+                      <video
+                        src={item.filePath}
+                        className="h-full w-full object-contain"
+                        controls={true}
+                        preload="metadata"
+                        playsInline
+                        onError={(e) => {
+                          console.error('Video load error for:', item.filePath, item)
+                          const target = e.target as HTMLVideoElement
+                          target.style.display = 'none'
+                          const parent = target.parentElement
+                          if (parent) {
+                            parent.innerHTML = '<div class="flex h-full items-center justify-center text-white text-sm">❌ Video konnte nicht geladen werden</div>'
+                          }
+                        }}
+                        onLoadedMetadata={() => {
+                          console.log('Video metadata loaded:', item.filePath)
+                        }}
+                      />
+                      <div className="absolute bottom-2 right-2 rounded bg-black bg-opacity-70 px-2 py-1 text-xs text-white">
+                        ▶ Video
+                      </div>
+                    </div>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-4xl">📄</div>
+                    <div className="flex h-full items-center justify-center text-4xl text-white">📄</div>
                   )}
                 </div>
 
