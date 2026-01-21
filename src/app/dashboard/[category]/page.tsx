@@ -22,40 +22,46 @@ export default function CategoryPage() {
   const router = useRouter()
   const category = params.category as string
   
-  // Lade benutzerdefinierte Kategorien aus localStorage
-  const [customCategories, setCustomCategories] = useState<any[]>([])
   const [categoryInfo, setCategoryInfo] = useState<any>(null)
   const [categoryChecked, setCategoryChecked] = useState(false)
   
   useEffect(() => {
-    // Lade customCategories aus localStorage
-    const saved = localStorage.getItem('customCategories')
-    let parsed: any[] = []
-    if (saved) {
+    const loadCategoryInfo = async () => {
       try {
-        parsed = JSON.parse(saved)
-        setCustomCategories(parsed)
-      } catch (e) {
-        console.error('Fehler beim Laden der Kategorien:', e)
+        // Lade alle Kategorien aus der API
+        const response = await fetch('/api/categories')
+        if (!response.ok) {
+          console.error('Kategorien konnten nicht geladen werden')
+          setCategoryChecked(true)
+          return
+        }
+        
+        const allCategories = await response.json()
+        
+        // Erweitere categoryMap mit allen Kategorien aus der API
+        const extendedCategoryMap = { ...categoryMap }
+        allCategories.forEach((cat: any) => {
+          // Verwende categoryId als Key (lowercase für URL)
+          const key = cat.categoryId.toLowerCase()
+          extendedCategoryMap[key] = {
+            name: cat.name,
+            icon: cat.icon,
+            color: cat.color,
+            dbCategory: cat.categoryId
+          }
+        })
+        
+        // Setze categoryInfo basierend auf URL-Parameter
+        const info = extendedCategoryMap[category]
+        setCategoryInfo(info)
+        setCategoryChecked(true)
+      } catch (error) {
+        console.error('Fehler beim Laden der Kategorien:', error)
+        setCategoryChecked(true)
       }
     }
     
-    // Erweitere categoryMap mit benutzerdefinierten Kategorien
-    const extendedCategoryMap = { ...categoryMap }
-    parsed.forEach(cat => {
-      const key = cat.id.toLowerCase()
-      extendedCategoryMap[key] = {
-        name: cat.name,
-        icon: cat.icon,
-        color: cat.color,
-        dbCategory: cat.id
-      }
-    })
-    
-    // Setze categoryInfo
-    const info = extendedCategoryMap[category]
-    setCategoryInfo(info)
-    setCategoryChecked(true) // Markiere dass Prüfung abgeschlossen ist
+    loadCategoryInfo()
   }, [category])
   const [checklistItems, setChecklistItems] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
