@@ -16,43 +16,77 @@ export default function GuestsPage() {
   const [allColumns, setAllColumns] = useState<string[]>([])
   
   // Standard-Spalten (immer vorhanden)
-  const standardColumns = ['VIP', 'İsim', 'Ünvan', 'Kurum', 'E-posta', 'Telefon', 'Masa', 'Empfang', 'Anreise & Uhrzeit', 'Notizen', 'Durum', 'İşlemler']
+  const standardColumns = [
+    'Kategorie',
+    'Name',
+    'Partei / Organisation / Unternehmen',
+    'Funktion',
+    'Ebende',
+    'E-Mail',
+    'Status',
+    'Tischnummer',
+    'Anwesend',
+    'VIP Begleitung benötigt?',
+    'VIP Begleiter (Name)',
+    'VIP Anreise (Uhrzeit)',
+    'Einladungspriorität',
+    'Wahrscheinlichkeit',
+    'Notiz',
+    'İşlemler'
+  ]
   
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
   const getColumnValue = (guest: any, columnName: string): string => {
-    // Standard-Felder
-    if (columnName === 'VIP' || columnName === 'vip') {
-      return guest.isVip ? '★' : '☆'
+    // Standard-Felder - Mapping zu neuen Spaltennamen
+    if (columnName === 'Kategorie') {
+      // Kategorie könnte aus category oder additionalData kommen
+      return guest.category || ''
     }
-    if (columnName === 'İsim' || columnName === 'name' || columnName === 'Name') {
+    if (columnName === 'Name' || columnName === 'name') {
       return guest.name || ''
     }
-    if (columnName === 'Ünvan' || columnName === 'title' || columnName === 'Titel') {
-      return guest.title || ''
-    }
-    if (columnName === 'Kurum' || columnName === 'organization' || columnName === 'Organisation') {
+    if (columnName === 'Partei / Organisation / Unternehmen') {
       return guest.organization || ''
     }
-    if (columnName === 'E-posta' || columnName === 'email' || columnName === 'E-Mail') {
+    if (columnName === 'Funktion') {
+      return guest.title || ''
+    }
+    if (columnName === 'Ebende') {
+      // Ebene - könnte aus additionalData kommen
+      return ''
+    }
+    if (columnName === 'E-Mail' || columnName === 'email' || columnName === 'E-Mail') {
       return guest.email || ''
     }
-    if (columnName === 'Telefon' || columnName === 'phone' || columnName === 'Phone') {
-      return guest.phone || ''
+    if (columnName === 'Status' || columnName === 'status') {
+      return guest.status || ''
     }
-    if (columnName === 'Masa' || columnName === 'tableNumber' || columnName === 'Tischnummer') {
+    if (columnName === 'Tischnummer' || columnName === 'tableNumber') {
       return guest.tableNumber?.toString() || ''
     }
-    if (columnName === 'Empfang' || columnName === 'reception') {
-      return guest.receptionBy || (guest.needsSpecialReception ? 'Ja' : '')
+    if (columnName === 'Anwesend') {
+      // Anwesend - könnte aus status oder additionalData kommen
+      return guest.status === 'ATTENDED' ? 'Ja' : 'Nein'
     }
-    if (columnName === 'Anreise & Uhrzeit' || columnName === 'arrivalDate' || columnName === 'Anreisedatum') {
+    if (columnName === 'VIP Begleitung benötigt?') {
+      return guest.needsSpecialReception ? 'Ja' : 'Nein'
+    }
+    if (columnName === 'VIP Begleiter (Name)') {
+      return guest.receptionBy || ''
+    }
+    if (columnName === 'VIP Anreise (Uhrzeit)') {
       return guest.arrivalDate ? new Date(guest.arrivalDate).toLocaleString('de-DE') : ''
     }
-    if (columnName === 'Notizen' || columnName === 'notes' || columnName === 'Notizen') {
-      return guest.notes || ''
+    if (columnName === 'Einladungspriorität') {
+      // Priorität - könnte aus additionalData kommen
+      return ''
     }
-    if (columnName === 'Durum' || columnName === 'status' || columnName === 'Status') {
-      return guest.status || ''
+    if (columnName === 'Wahrscheinlichkeit') {
+      // Wahrscheinlichkeit - könnte aus additionalData kommen
+      return ''
+    }
+    if (columnName === 'Notiz' || columnName === 'notes') {
+      return guest.notes || ''
     }
     if (columnName === 'İşlemler') {
       return '' // Aktionen-Spalte
@@ -332,43 +366,47 @@ export default function GuestsPage() {
       const filter = filterValue.toLowerCase()
       
       filtered = filtered.filter(guest => {
-        // Standard-Felder
-        if (columnName === 'VIP' || columnName === 'vip') {
-          const isVip = filter === 'ja' || filter === 'yes' || filter === 'vip' || filter === '★'
-          return (isVip && guest.isVip) || (!isVip && !guest.isVip)
-        }
-        if (columnName === 'İsim' || columnName === 'name') {
+        // Standard-Felder - neue Spaltennamen
+        if (columnName === 'Name') {
           return guest.name?.toLowerCase().includes(filter)
         }
-        if (columnName === 'Ünvan' || columnName === 'title') {
-          return guest.title?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Kurum' || columnName === 'organization') {
+        if (columnName === 'Partei / Organisation / Unternehmen') {
           return guest.organization?.toLowerCase().includes(filter)
         }
-        if (columnName === 'E-posta' || columnName === 'email') {
+        if (columnName === 'Funktion') {
+          return guest.title?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'E-Mail') {
           return guest.email?.toLowerCase().includes(filter)
         }
-        if (columnName === 'Telefon' || columnName === 'phone') {
-          return guest.phone?.toLowerCase().includes(filter)
+        if (columnName === 'Status') {
+          return guest.status?.toLowerCase().includes(filter)
         }
-        if (columnName === 'Masa' || columnName === 'tableNumber') {
+        if (columnName === 'Tischnummer') {
           return guest.tableNumber?.toString().toLowerCase().includes(filter)
         }
-        if (columnName === 'Empfang' || columnName === 'reception') {
-          return guest.receptionBy?.toLowerCase().includes(filter) ||
-            (guest.needsSpecialReception && filter.includes('ja'))
+        if (columnName === 'Anwesend') {
+          const isAttended = guest.status === 'ATTENDED'
+          const filterLower = filter.toLowerCase()
+          return (isAttended && (filterLower === 'ja' || filterLower === 'yes')) ||
+            (!isAttended && (filterLower === 'nein' || filterLower === 'no'))
         }
-        if (columnName === 'Anreise & Uhrzeit' || columnName === 'arrivalDate') {
+        if (columnName === 'VIP Begleitung benötigt?') {
+          const needsReception = guest.needsSpecialReception
+          const filterLower = filter.toLowerCase()
+          return (needsReception && (filterLower === 'ja' || filterLower === 'yes')) ||
+            (!needsReception && (filterLower === 'nein' || filterLower === 'no'))
+        }
+        if (columnName === 'VIP Begleiter (Name)') {
+          return guest.receptionBy?.toLowerCase().includes(filter)
+        }
+        if (columnName === 'VIP Anreise (Uhrzeit)') {
           if (!guest.arrivalDate) return false
-          const dateStr = new Date(guest.arrivalDate).toLocaleDateString('de-DE').toLowerCase()
+          const dateStr = new Date(guest.arrivalDate).toLocaleString('de-DE').toLowerCase()
           return dateStr.includes(filter)
         }
-        if (columnName === 'Notizen' || columnName === 'notes') {
+        if (columnName === 'Notiz') {
           return guest.notes?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Durum' || columnName === 'status') {
-          return guest.status?.toLowerCase().includes(filter)
         }
         
         // Zusätzliche Spalten aus additionalData
@@ -1134,25 +1172,7 @@ export default function GuestsPage() {
                       >
                         {allColumns.map((column) => {
                           // Spezialbehandlung für bestimmte Spalten
-                          if (column === 'VIP' || column === 'vip') {
-                            return (
-                              <td key={column} className="px-4 py-3">
-                                <button
-                                  onClick={() => handleToggleVip(guest.id, guest.isVip || false)}
-                                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                                    guest.isVip
-                                      ? 'bg-yellow-400 text-yellow-900'
-                                      : 'bg-gray-200 text-gray-500'
-                                  }`}
-                                  title={guest.isVip ? 'VIP' : 'VIP Yap'}
-                                >
-                                  {guest.isVip ? '★' : '☆'}
-                                </button>
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'İsim' || column === 'name' || column === 'Name') {
+                          if (column === 'Name') {
                             return (
                               <td key={column} className="px-4 py-3">
                                 {editingGuest === guest.id ? (
@@ -1183,7 +1203,7 @@ export default function GuestsPage() {
                             )
                           }
                           
-                          if (column === 'Durum' || column === 'status' || column === 'Status') {
+                          if (column === 'Status') {
                             return (
                               <td key={column} className="px-4 py-3">
                                 <select
@@ -1191,12 +1211,36 @@ export default function GuestsPage() {
                                   onChange={(e) => handleStatusChange(guest.id, e.target.value)}
                                   className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(guest.status)} border-0 focus:ring-2 focus:ring-indigo-500`}
                                 >
-                                  <option value="INVITED">Davet Edildi</option>
-                                  <option value="CONFIRMED">Onaylandı</option>
-                                  <option value="ATTENDED">Katıldı</option>
-                                  <option value="CANCELLED">İptal Edildi</option>
-                                  <option value="NO_SHOW">Gelmedi</option>
+                                  <option value="INVITED">Eingeladen</option>
+                                  <option value="CONFIRMED">Bestätigt</option>
+                                  <option value="ATTENDED">Anwesend</option>
+                                  <option value="CANCELLED">Abgesagt</option>
+                                  <option value="NO_SHOW">Nicht erschienen</option>
                                 </select>
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Anwesend') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                  guest.status === 'ATTENDED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {guest.status === 'ATTENDED' ? 'Ja' : 'Nein'}
+                                </span>
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'VIP Begleitung benötigt?') {
+                            return (
+                              <td key={column} className="px-4 py-3">
+                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                  guest.needsSpecialReception ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {guest.needsSpecialReception ? 'Ja' : 'Nein'}
+                                </span>
                               </td>
                             )
                           }
