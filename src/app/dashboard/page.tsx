@@ -398,16 +398,24 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
+      <header 
+        className="relative bg-cover bg-center bg-no-repeat shadow-sm"
+        style={{
+          backgroundImage: 'url(/header-bg.jpg)',
+          minHeight: '200px',
+        }}
+      >
+        {/* Overlay für bessere Lesbarkeit */}
+        <div className="absolute inset-0 bg-black bg-opacity-30"></div>
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-48 items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Iftar Organizasyon Sistemi</h1>
-              <p className="text-sm text-gray-500">Titanic Hotel - 27 Şubat 2026</p>
+              <h1 className="text-3xl font-bold text-white drop-shadow-lg">Iftar Organizasyon Sistemi</h1>
+              <p className="mt-2 text-lg text-white drop-shadow-md">Titanic Hotel - 27 Şubat 2026</p>
             </div>
             <button
               onClick={handleLogout}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 shadow-lg"
             >
               Çıkış Yap
             </button>
