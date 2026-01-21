@@ -128,8 +128,15 @@ export default function GuestsPage() {
       return
     }
 
+    if (!googleSheetsConfig.sheetName || googleSheetsConfig.sheetName.trim() === '') {
+      alert('Bitte zuerst Sheet-Name eingeben')
+      return
+    }
+
     try {
-      const response = await fetch(`/api/google-sheets/sync?eventId=${eventId}&action=test`)
+      // Verwende den Sheet-Namen aus dem Formular, nicht aus der DB
+      const sheetName = encodeURIComponent(googleSheetsConfig.sheetName)
+      const response = await fetch(`/api/google-sheets/sync?eventId=${eventId}&action=test&sheetName=${sheetName}`)
       const result = await response.json()
       
       if (response.ok) {

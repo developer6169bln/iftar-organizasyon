@@ -170,7 +170,9 @@ export async function GET(request: NextRequest) {
 
     if (action === 'test' && event.googleSheetsId) {
       // Teste Verbindung
-      const sheetName = event.googleSheetsSheetName || 'Gästeliste'
+      // Verwende Sheet-Namen aus Query-Parameter, falls vorhanden, sonst aus DB
+      const sheetNameParam = searchParams.get('sheetName')
+      const sheetName = sheetNameParam ? decodeURIComponent(sheetNameParam) : (event.googleSheetsSheetName || 'Gästeliste')
       let isConnected = false
       let connectionError: string | null = null
       let headers: string[] = []
