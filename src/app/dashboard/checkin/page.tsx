@@ -217,7 +217,7 @@ export default function CheckinPage() {
                     <tr
                       key={guest.id}
                       className={`border-b border-gray-100 hover:bg-gray-50 ${
-                        guest.status === 'ATTENDED' ? 'bg-green-50' : ''
+                        (guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND' ? 'bg-green-50' : ''
                       }`}
                     >
                       <td className="px-4 py-3">
@@ -228,13 +228,13 @@ export default function CheckinPage() {
                       </td>
                       <td className="px-4 py-3">
                         <select
-                          value={guest.status === 'ATTENDED' ? 'Ja' : 'Nein'}
+                          value={(guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND' ? 'Ja' : 'Nein'}
                           onChange={(e) => {
                             const isAnwesend = e.target.value === 'Ja'
                             handleAnwesendChange(guest.id, isAnwesend)
                           }}
                           className={`rounded-full px-3 py-1 text-xs font-medium border-0 focus:ring-2 focus:ring-indigo-500 ${
-                            guest.status === 'ATTENDED'
+                            (guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND'
                               ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-800'
                           }`}
@@ -253,9 +253,15 @@ export default function CheckinPage() {
           {!loading && filteredGuests.length > 0 && (
             <div className="mt-4 text-sm text-gray-600">
               {filteredGuests.length} von {guests.length} bestätigten Gästen
-              {filteredGuests.filter(g => g.status === 'ATTENDED').length > 0 && (
+              {filteredGuests.filter(g => {
+                const status = (g.status || '').toUpperCase()
+                return status === 'ATTENDED' || status === 'ANWESEND'
+              }).length > 0 && (
                 <span className="ml-2 text-green-600">
-                  ({filteredGuests.filter(g => g.status === 'ATTENDED').length} anwesend)
+                  ({filteredGuests.filter(g => {
+                    const status = (g.status || '').toUpperCase()
+                    return status === 'ATTENDED' || status === 'ANWESEND'
+                  }).length} anwesend)
                 </span>
               )}
             </div>
