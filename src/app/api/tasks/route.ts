@@ -44,14 +44,32 @@ export async function GET(request: NextRequest) {
       includeAttachments = false
     }
 
-    const includeOptions: any = {
-      assignedUser: {
+    // Prüfe ob assignedTo Spalte existiert (für assignedUser Relation)
+    let hasAssignedToColumn = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+          AND table_name = 'tasks'
+          AND column_name IN ('assignedTo', 'assignedto')
+        ) as exists
+      `
+      hasAssignedToColumn = result[0]?.exists === true
+    } catch (e) {
+      hasAssignedToColumn = false
+    }
+
+    const includeOptions: any = {}
+
+    if (hasAssignedToColumn) {
+      includeOptions.assignedUser = {
         select: {
           id: true,
           name: true,
           email: true,
         },
-      },
+      }
     }
 
     // Prüfe ob task_assignments Tabelle existiert
@@ -127,10 +145,57 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = taskSchema.parse(body)
 
+    // Prüfe ob assignedTo Spalte existiert (Railway kann ohne Migration laufen)
+    let hasAssignedToColumn = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+          AND table_name = 'tasks'
+          AND column_name IN ('assignedTo', 'assignedto')
+        ) as exists
+      `
+      hasAssignedToColumn = result[0]?.exists === true
+    } catch (e) {
+      hasAssignedToColumn = false
+    }
+
+    // Prüfe ob task_assignments Tabelle existiert (für include)
+    let includeAssignments = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'task_assignments'
+        ) as exists
+      `
+      includeAssignments = result[0]?.exists === true
+    } catch (e) {
+      includeAssignments = false
+    }
+
     const normalizedDescription =
       validatedData.description === null || validatedData.description === ''
         ? null
         : validatedData.description
+
+    const includeOptions: any = {}
+    if (includeAssignments) {
+      includeOptions.assignments = {
+        include: {
+          user: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      }
+    }
+    if (hasAssignedToColumn) {
+      includeOptions.assignedUser = {
+        select: { id: true, name: true, email: true },
+      }
+    }
 
     const task = await prisma.task.create({
       data: {
@@ -141,28 +206,11 @@ export async function POST(request: NextRequest) {
         status: validatedData.status || 'PENDING',
         priority: validatedData.priority || 'MEDIUM',
         dueDate: validatedData.dueDate ? new Date(validatedData.dueDate) : undefined,
-        assignedTo: validatedData.assignedTo || undefined,
+        ...(hasAssignedToColumn
+          ? { assignedTo: validatedData.assignedTo || undefined }
+          : {}),
       },
-      include: {
-        assignments: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      include: includeOptions,
     })
 
     return NextResponse.json(task, { status: 201 })
@@ -175,8 +223,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.error('Task creation error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Görev oluşturulurken hata oluştu' },
+      { error: 'Görev oluşturulurken hata oluştu', details: errorMessage },
       { status: 500 }
     )
   }
@@ -192,6 +241,22 @@ export async function PATCH(request: NextRequest) {
         { error: 'ID gereklidir' },
         { status: 400 }
       )
+    }
+
+    // Prüfe ob assignedTo Spalte existiert (Railway kann ohne Migration laufen)
+    let hasAssignedToColumn = false
+    try {
+      const result = await prisma.$queryRaw<Array<{exists: boolean}>>`
+        SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'public'
+          AND table_name = 'tasks'
+          AND column_name IN ('assignedTo', 'assignedto')
+        ) as exists
+      `
+      hasAssignedToColumn = result[0]?.exists === true
+    } catch (e) {
+      hasAssignedToColumn = false
     }
 
     const dataToUpdate: any = {}
@@ -212,31 +277,30 @@ export async function PATCH(request: NextRequest) {
         ? new Date(updateData.dueDate) 
         : null
     }
-    if (updateData.assignedTo !== undefined) {
-      dataToUpdate.assignedTo = updateData.assignedTo && updateData.assignedTo !== '' 
-        ? updateData.assignedTo 
-        : null
+    if (hasAssignedToColumn && updateData.assignedTo !== undefined) {
+      dataToUpdate.assignedTo =
+        updateData.assignedTo && updateData.assignedTo !== '' ? updateData.assignedTo : null
+    }
+
+    const includeOptions: any = {}
+    if (hasAssignedToColumn) {
+      includeOptions.assignedUser = {
+        select: { id: true, name: true, email: true },
+      }
     }
 
     const task = await prisma.task.update({
       where: { id },
       data: dataToUpdate,
-      include: {
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      include: includeOptions,
     })
 
     return NextResponse.json(task)
   } catch (error) {
     console.error('Task update error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Görev güncellenirken hata oluştu' },
+      { error: 'Görev güncellenirken hata oluştu', details: errorMessage },
       { status: 500 }
     )
   }
