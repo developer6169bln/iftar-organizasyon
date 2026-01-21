@@ -163,6 +163,10 @@ model Note {
   taskId      String?
   category    String?
   type        String?  // MEETING, CALL, APPOINTMENT
+  responsibleUserId String? // Verantwortlicher (User ID)
+  participantsUserIds String? // JSON Array von User IDs (TEXT)
+  calledWithUserId String? // Für CALL: mit welchem User telefoniert
+  calledWithText  String? // Für CALL: Freitext falls kein User
   title       String
   content     String
   authorId    String

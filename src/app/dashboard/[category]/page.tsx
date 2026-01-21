@@ -101,10 +101,22 @@ export default function CategoryPage() {
   const [notesLoading, setNotesLoading] = useState(false)
   const [notesError, setNotesError] = useState<string | null>(null)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
-  const [noteForm, setNoteForm] = useState<{ type: CategoryNoteType; title: string; content: string }>({
+  const [noteForm, setNoteForm] = useState<{
+    type: CategoryNoteType
+    title: string
+    content: string
+    responsibleUserId: string
+    participantsUserIds: string[]
+    calledWithUserId: string
+    calledWithText: string
+  }>({
     type: 'MEETING',
     title: '',
     content: '',
+    responsibleUserId: '',
+    participantsUserIds: [],
+    calledWithUserId: '',
+    calledWithText: '',
   })
 
   useEffect(() => {
@@ -240,7 +252,15 @@ export default function CategoryPage() {
 
   const startNewNote = () => {
     setEditingNoteId(null)
-    setNoteForm({ type: 'MEETING', title: '', content: '' })
+    setNoteForm({
+      type: 'MEETING',
+      title: '',
+      content: '',
+      responsibleUserId: '',
+      participantsUserIds: [],
+      calledWithUserId: '',
+      calledWithText: '',
+    })
     setNotesError(null)
   }
 
@@ -250,6 +270,10 @@ export default function CategoryPage() {
       type: (note.type as CategoryNoteType) || 'MEETING',
       title: note.title || '',
       content: note.content || '',
+      responsibleUserId: note.responsibleUserId || '',
+      participantsUserIds: Array.isArray(note.participantsUserIds) ? note.participantsUserIds : [],
+      calledWithUserId: note.calledWithUserId || '',
+      calledWithText: note.calledWithText || '',
     })
   }
 
@@ -266,12 +290,25 @@ export default function CategoryPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           editingNoteId
-            ? { id: editingNoteId, type: noteForm.type, title: noteForm.title, content: noteForm.content }
+            ? {
+                id: editingNoteId,
+                type: noteForm.type,
+                responsibleUserId: noteForm.responsibleUserId || null,
+                participantsUserIds: noteForm.participantsUserIds || [],
+                calledWithUserId: noteForm.type === 'CALL' ? noteForm.calledWithUserId || null : null,
+                calledWithText: noteForm.type === 'CALL' ? noteForm.calledWithText || null : null,
+                title: noteForm.title,
+                content: noteForm.content,
+              }
             : {
                 eventId,
                 category: categoryInfo.dbCategory,
                 taskId: null,
                 type: noteForm.type,
+                responsibleUserId: noteForm.responsibleUserId || null,
+                participantsUserIds: noteForm.participantsUserIds || [],
+                calledWithUserId: noteForm.type === 'CALL' ? noteForm.calledWithUserId || null : null,
+                calledWithText: noteForm.type === 'CALL' ? noteForm.calledWithText || null : null,
                 title: noteForm.title,
                 content: noteForm.content,
               }
@@ -1738,6 +1775,25 @@ export default function CategoryPage() {
                           </span>
                           <p className="truncate font-medium text-gray-900">{n.title || 'Notiz'}</p>
                         </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          {n.responsibleUserId ? (
+                            <span>
+                              Verantwortlich:{' '}
+                              {users.find((u) => u.id === n.responsibleUserId)?.name || 'Unbekannt'}
+                            </span>
+                          ) : null}
+                          {Array.isArray(n.participantsUserIds) && n.participantsUserIds.length ? (
+                            <span>Teilnehmer: {n.participantsUserIds.length}</span>
+                          ) : null}
+                          {(n.type || 'MEETING') === 'CALL' && (n.calledWithUserId || n.calledWithText) ? (
+                            <span>
+                              Telefoniert mit:{' '}
+                              {n.calledWithUserId
+                                ? users.find((u) => u.id === n.calledWithUserId)?.name || 'Unbekannt'
+                                : n.calledWithText}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 line-clamp-2 text-sm text-gray-600">{n.content}</p>
                       </div>
                       <span className="text-xs text-gray-400">✎</span>
@@ -1773,6 +1829,75 @@ export default function CategoryPage() {
                     <option value="APPOINTMENT">Randevu</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Verantwortlich</label>
+                  <select
+                    value={noteForm.responsibleUserId}
+                    onChange={(e) => setNoteForm({ ...noteForm, responsibleUserId: e.target.value })}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">—</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Teilnehmer (Mehrfachauswahl)</label>
+                  <select
+                    multiple
+                    value={noteForm.participantsUserIds}
+                    onChange={(e) => {
+                      const selected = Array.from(e.currentTarget.selectedOptions).map((o) => o.value)
+                      setNoteForm({ ...noteForm, participantsUserIds: selected })
+                    }}
+                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                    size={Math.min(6, Math.max(3, users.length))}
+                  >
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Tipp: Cmd (Mac) gedrückt halten für Mehrfachauswahl.</p>
+                </div>
+                {noteForm.type === 'CALL' && (
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <p className="mb-2 text-sm font-medium text-gray-800">Telefoniert mit</p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600">Aus Benutzer auswählen</label>
+                        <select
+                          value={noteForm.calledWithUserId}
+                          onChange={(e) => setNoteForm({ ...noteForm, calledWithUserId: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                        >
+                          <option value="">—</option>
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600">Oder frei eingeben</label>
+                        <input
+                          value={noteForm.calledWithText}
+                          onChange={(e) => setNoteForm({ ...noteForm, calledWithText: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="z.B. Hotel Rezeption / Fahrer / externe Person"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Wenn Freitext gesetzt ist, wird er bevorzugt angezeigt.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Titel</label>
                   <input

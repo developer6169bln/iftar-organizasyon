@@ -59,6 +59,10 @@ const createSchema = z.object({
   taskId: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
+  responsibleUserId: z.string().optional().nullable(),
+  participantsUserIds: z.array(z.string()).optional().nullable(),
+  calledWithUserId: z.string().optional().nullable(),
+  calledWithText: z.string().optional().nullable(),
   title: z.string().optional().nullable(),
   content: z.string().min(1),
 })
@@ -66,6 +70,10 @@ const createSchema = z.object({
 const updateSchema = z.object({
   id: z.string(),
   type: z.string().optional().nullable(),
+  responsibleUserId: z.string().optional().nullable(),
+  participantsUserIds: z.array(z.string()).optional().nullable(),
+  calledWithUserId: z.string().optional().nullable(),
+  calledWithText: z.string().optional().nullable(),
   title: z.string().optional().nullable(),
   content: z.string().optional().nullable(),
 })
@@ -87,6 +95,10 @@ export async function GET(request: NextRequest) {
       ...(cols.has('taskId') || cols.has('taskid') ? { taskId: true } : {}),
       ...(cols.has('category') ? { category: true } : {}),
       ...(cols.has('type') ? { type: true } : {}),
+      ...(cols.has('responsibleUserId') || cols.has('responsibleuserid') ? { responsibleUserId: true } : {}),
+      ...(cols.has('participantsUserIds') || cols.has('participantsuserids') ? { participantsUserIds: true } : {}),
+      ...(cols.has('calledWithUserId') || cols.has('calledwithuserid') ? { calledWithUserId: true } : {}),
+      ...(cols.has('calledWithText') || cols.has('calledwithtext') ? { calledWithText: true } : {}),
       ...(cols.has('title') ? { title: true } : {}),
       ...(cols.has('content') ? { content: true } : {}),
       ...(cols.has('authorId') || cols.has('authorid') ? { authorId: true } : {}),
@@ -112,18 +124,34 @@ export async function GET(request: NextRequest) {
       orderBy: cols.has('updatedAt') || cols.has('updatedat') ? ({ updatedAt: 'desc' } as any) : ({ id: 'desc' } as any),
     })
 
-    const normalized = (notes as any[]).map((n) => ({
+    const normalized = (notes as any[]).map((n) => {
+      let participants: string[] = []
+      const raw = (n as any).participantsUserIds
+      if (typeof raw === 'string' && raw.trim()) {
+        try {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) participants = parsed.filter((x) => typeof x === 'string')
+        } catch {
+          participants = []
+        }
+      }
+      return {
       id: n.id,
       eventId: n.eventId ?? null,
       taskId: n.taskId ?? null,
       category: n.category ?? null,
       type: n.type ?? null,
+      responsibleUserId: (n as any).responsibleUserId ?? null,
+      participantsUserIds: participants,
+      calledWithUserId: (n as any).calledWithUserId ?? null,
+      calledWithText: (n as any).calledWithText ?? null,
       title: n.title ?? 'Notiz',
       content: n.content ?? '',
       authorId: n.authorId ?? 'unknown',
       createdAt: n.createdAt ?? null,
       updatedAt: n.updatedAt ?? null,
-    }))
+      }
+    })
 
     return NextResponse.json({ notes: normalized })
   } catch (error) {
@@ -153,11 +181,26 @@ export async function POST(request: NextRequest) {
     const title = (data.title && data.title.trim()) || 'Notiz'
 
     // Prisma types assume latest schema. We build data dynamically to tolerate DB schema drift.
+    const participantsJson =
+      data.participantsUserIds && Array.isArray(data.participantsUserIds)
+        ? JSON.stringify(data.participantsUserIds.filter((x) => typeof x === 'string'))
+        : null
+
     const createData: any = {
       ...(cols.has('eventId') || cols.has('eventid') ? { eventId: data.eventId || null } : {}),
       ...(cols.has('taskId') || cols.has('taskid') ? { taskId: data.taskId || null } : {}),
       ...(cols.has('category') ? { category: data.category || null } : {}),
       ...(cols.has('type') ? { type: data.type && data.type.trim() ? data.type : null } : {}),
+      ...(cols.has('responsibleUserId') || cols.has('responsibleuserid')
+        ? { responsibleUserId: data.responsibleUserId && data.responsibleUserId.trim() ? data.responsibleUserId : null }
+        : {}),
+      ...(cols.has('participantsUserIds') || cols.has('participantsuserids') ? { participantsUserIds: participantsJson } : {}),
+      ...(cols.has('calledWithUserId') || cols.has('calledwithuserid')
+        ? { calledWithUserId: data.calledWithUserId && data.calledWithUserId.trim() ? data.calledWithUserId : null }
+        : {}),
+      ...(cols.has('calledWithText') || cols.has('calledwithtext')
+        ? { calledWithText: data.calledWithText && data.calledWithText.trim() ? data.calledWithText : null }
+        : {}),
       ...(cols.has('title') ? { title } : {}),
       ...(cols.has('content') ? { content: data.content } : {}),
       ...(cols.has('authorId') || cols.has('authorid') ? { authorId } : {}),
@@ -199,6 +242,21 @@ export async function PATCH(request: NextRequest) {
 
     const updateData: any = {}
     if (data.type !== undefined && (cols.has('type'))) updateData.type = data.type && data.type.trim() ? data.type : null
+    if (data.responsibleUserId !== undefined && (cols.has('responsibleUserId') || cols.has('responsibleuserid'))) {
+      updateData.responsibleUserId = data.responsibleUserId && data.responsibleUserId.trim() ? data.responsibleUserId : null
+    }
+    if (data.participantsUserIds !== undefined && (cols.has('participantsUserIds') || cols.has('participantsuserids'))) {
+      updateData.participantsUserIds =
+        data.participantsUserIds && Array.isArray(data.participantsUserIds)
+          ? JSON.stringify(data.participantsUserIds.filter((x) => typeof x === 'string'))
+          : null
+    }
+    if (data.calledWithUserId !== undefined && (cols.has('calledWithUserId') || cols.has('calledwithuserid'))) {
+      updateData.calledWithUserId = data.calledWithUserId && data.calledWithUserId.trim() ? data.calledWithUserId : null
+    }
+    if (data.calledWithText !== undefined && (cols.has('calledWithText') || cols.has('calledwithtext'))) {
+      updateData.calledWithText = data.calledWithText && data.calledWithText.trim() ? data.calledWithText : null
+    }
     if (data.title !== undefined) updateData.title = data.title && data.title.trim() ? data.title : 'Notiz'
     if (data.content !== undefined) updateData.content = data.content ?? ''
 
