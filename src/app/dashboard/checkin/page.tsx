@@ -43,13 +43,21 @@ export default function CheckinPage() {
       const response = await fetch(`/api/guests?eventId=${eventId}`)
       if (response.ok) {
         const allGuests = await response.json()
-        // Filtere nur Gäste mit Status CONFIRMED oder ATTENDED (für Check-in)
+        
+        // Debug: Zeige alle Status-Werte
+        const allStatuses = [...new Set(allGuests.map((g: any) => g.status))]
+        console.log('Alle Status-Werte in DB:', allStatuses)
+        console.log('Alle Gäste:', allGuests.length)
+        
+        // Filtere Gäste mit Status CONFIRMED oder ATTENDED (case-insensitive)
         // Zeige auch ATTENDED, damit bereits eingecheckte Gäste sichtbar bleiben
-        const confirmedGuests = allGuests.filter((guest: any) => 
-          guest.status === 'CONFIRMED' || guest.status === 'ATTENDED'
-        )
-        console.log('Alle Gäste:', allGuests.length, 'Bestätigte:', confirmedGuests.length)
-        console.log('Status-Beispiele:', allGuests.map((g: any) => ({ name: g.name, status: g.status })).slice(0, 5))
+        const confirmedGuests = allGuests.filter((guest: any) => {
+          const status = (guest.status || '').toUpperCase()
+          return status === 'CONFIRMED' || status === 'ATTENDED'
+        })
+        
+        console.log('Bestätigte/Anwesend:', confirmedGuests.length)
+        console.log('Status-Beispiele:', allGuests.map((g: any) => ({ name: g.name, status: g.status })).slice(0, 10))
         setGuests(confirmedGuests)
         setFilteredGuests(confirmedGuests)
       } else {
