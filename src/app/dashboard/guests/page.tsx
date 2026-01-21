@@ -14,6 +14,7 @@ export default function GuestsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
   const [allColumns, setAllColumns] = useState<string[]>([])
+  const [showNoResultsWarning, setShowNoResultsWarning] = useState(false)
   
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
@@ -444,8 +445,23 @@ export default function GuestsPage() {
       })
     })
 
+    // Prüfe ob keine Ergebnisse gefunden wurden
+    if (filtered.length === 0 && (searchQuery.trim() !== '' || Object.values(columnFilters).some(v => v.trim() !== ''))) {
+      // Zeige Warnung und setze Filter zurück
+      if (!showNoResultsWarning) {
+        setShowNoResultsWarning(true)
+        setTimeout(() => {
+          setSearchQuery('')
+          setColumnFilters({})
+          setShowNoResultsWarning(false)
+        }, 2000) // Nach 2 Sekunden Filter zurücksetzen
+      }
+    } else {
+      setShowNoResultsWarning(false)
+    }
+
     setFilteredGuests(filtered)
-  }, [searchQuery, guests, columnFilters])
+  }, [searchQuery, guests, columnFilters, showNoResultsWarning])
 
   const loadGuests = async () => {
     try {
@@ -1121,6 +1137,15 @@ export default function GuestsPage() {
             </div>
             {loading ? (
               <p className="text-gray-500">Yükleniyor...</p>
+            ) : showNoResultsWarning ? (
+              <div className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-8 text-center">
+                <p className="text-yellow-800 font-medium">
+                  ⚠️ Keine Ergebnisse gefunden
+                </p>
+                <p className="text-yellow-600 text-sm mt-2">
+                  Filter werden zurückgesetzt...
+                </p>
+              </div>
             ) : filteredGuests.length === 0 ? (
               <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
                 <p className="text-gray-500">
