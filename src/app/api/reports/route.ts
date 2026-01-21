@@ -298,7 +298,19 @@ export async function GET(request: NextRequest) {
 
     // Schema checks
     const taskCols = await getColumns('tasks')
+    const checklistCols = await getColumns('checklist_items')
     const hasAssignedTo = taskCols.has('assignedTo') || taskCols.has('assignedto')
+    const hasTaskCreatedAt = taskCols.has('createdAt') || taskCols.has('createdat')
+    const hasTaskDescription = taskCols.has('description')
+    const hasTaskStatus = taskCols.has('status')
+    const hasTaskPriority = taskCols.has('priority')
+    const hasTaskDueDate = taskCols.has('dueDate') || taskCols.has('duedate')
+
+    const hasChecklistCreatedAt = checklistCols.has('createdAt') || checklistCols.has('createdat')
+    const hasChecklistDescription = checklistCols.has('description')
+    const hasChecklistStatus = checklistCols.has('status')
+    const hasChecklistDueDate = checklistCols.has('dueDate') || checklistCols.has('duedate')
+
     const hasTaskAssignments = await tableExists('task_assignments')
     const hasCategories = await tableExists('categories')
     const hasNotes = await tableExists('notes')
@@ -307,10 +319,17 @@ export async function GET(request: NextRequest) {
     const userById = new Map(users.map((u) => [u.id, u]))
 
     const categories = hasCategories
-      ? await prisma.category.findMany({
-          select: { categoryId: true, name: true, responsibleUserId: true },
-          orderBy: { order: 'asc' },
-        })
+      ? await prisma.category
+          .findMany({
+            select: { categoryId: true, name: true, responsibleUserId: true },
+            orderBy: { order: 'asc' },
+          })
+          .catch(async () => {
+            // fallback if "order" column doesn't exist yet
+            return prisma.category
+              .findMany({ select: { categoryId: true, name: true, responsibleUserId: true } })
+              .catch(() => [])
+          })
       : []
     const categoryNameById = new Map(categories.map((c) => [c.categoryId, c.name]))
 
@@ -320,30 +339,39 @@ export async function GET(request: NextRequest) {
       eventId: true,
       category: true,
       title: true,
-      description: true,
-      status: true,
-      priority: true,
-      dueDate: true,
+      ...(hasTaskDescription ? { description: true } : {}),
+      ...(hasTaskStatus ? { status: true } : {}),
+      ...(hasTaskPriority ? { priority: true } : {}),
+      ...(hasTaskDueDate ? { dueDate: true } : {}),
+      ...(hasAssignedTo ? { assignedTo: true } : {}),
     }
-    if (hasAssignedTo) taskSelect.assignedTo = true
 
     const checklistSelect: any = {
       id: true,
       eventId: true,
       category: true,
       title: true,
-      description: true,
-      status: true,
-      dueDate: true,
+      ...(hasChecklistDescription ? { description: true } : {}),
+      ...(hasChecklistStatus ? { status: true } : {}),
+      ...(hasChecklistDueDate ? { dueDate: true } : {}),
     }
 
     const tasks: TaskRow[] = (await prisma.task
       .findMany({
         where: { eventId, ...(categoryId ? { category: categoryId } : {}) },
         select: taskSelect,
-        orderBy: { createdAt: 'desc' as any },
+        orderBy: hasTaskCreatedAt ? ({ createdAt: 'desc' as any } as any) : ({ id: 'desc' } as any),
       })
       .catch(() => [])) as any
+
+    // Normalize missing fields (when DB columns are missing)
+    for (const t of tasks as any[]) {
+      t.description = (t as any).description ?? null
+      t.status = (t as any).status ?? 'PENDING'
+      t.priority = (t as any).priority ?? 'MEDIUM'
+      t.dueDate = (t as any).dueDate ?? null
+      t.assignedTo = (t as any).assignedTo ?? null
+    }
 
     // map assignedUser if possible
     if (hasAssignedTo) {
@@ -357,9 +385,15 @@ export async function GET(request: NextRequest) {
       .findMany({
         where: { eventId, ...(categoryId ? { category: categoryId } : {}) },
         select: checklistSelect,
-        orderBy: { createdAt: 'desc' as any },
+        orderBy: hasChecklistCreatedAt ? ({ createdAt: 'desc' as any } as any) : ({ id: 'desc' } as any),
       })
       .catch(() => [])) as any
+
+    for (const c of checklist as any[]) {
+      c.description = (c as any).description ?? null
+      c.status = (c as any).status ?? 'NOT_STARTED'
+      c.dueDate = (c as any).dueDate ?? null
+    }
 
     const notes: NoteRow[] =
       hasNotes
