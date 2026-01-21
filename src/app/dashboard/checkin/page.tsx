@@ -53,11 +53,27 @@ export default function CheckinPage() {
         // Zeige auch ATTENDED, damit bereits eingecheckte Gäste sichtbar bleiben
         const confirmedGuests = allGuests.filter((guest: any) => {
           const status = (guest.status || '').toUpperCase()
-          return status === 'CONFIRMED' || status === 'ATTENDED'
+          const isConfirmed = status === 'CONFIRMED'
+          const isAttended = status === 'ATTENDED'
+          
+          // Wenn kein Status gesetzt ist, zeige den Gast auch (kann sein, dass Status fehlt)
+          if (!status || status === '') {
+            console.log('Gast ohne Status:', guest.name)
+          }
+          
+          return isConfirmed || isAttended
         })
         
         console.log('Bestätigte/Anwesend:', confirmedGuests.length)
-        console.log('Status-Beispiele:', allGuests.map((g: any) => ({ name: g.name, status: g.status })).slice(0, 10))
+        
+        // Zeige auch Gäste ohne CONFIRMED/ATTENDED Status für Debugging
+        const otherGuests = allGuests.filter((guest: any) => {
+          const status = (guest.status || '').toUpperCase()
+          return status !== 'CONFIRMED' && status !== 'ATTENDED'
+        })
+        if (otherGuests.length > 0) {
+          console.log('Gäste mit anderen Status:', otherGuests.map((g: any) => ({ name: g.name, status: g.status })).slice(0, 5))
+        }
         setGuests(confirmedGuests)
         setFilteredGuests(confirmedGuests)
       } else {
