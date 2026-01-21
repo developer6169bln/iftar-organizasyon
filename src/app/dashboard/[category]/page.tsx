@@ -65,6 +65,11 @@ export default function CategoryPage() {
   const [showChecklistModal, setShowChecklistModal] = useState(false)
   const [editingTask, setEditingTask] = useState<string | null>(null)
   const [editingChecklist, setEditingChecklist] = useState<string | null>(null)
+  // Category-level notes (stored in notes table)
+  const [categoryNoteId, setCategoryNoteId] = useState<string | null>(null)
+  const [categoryNoteContent, setCategoryNoteContent] = useState('')
+  const [notesWarning, setNotesWarning] = useState<string | null>(null)
+  const [savingNotes, setSavingNotes] = useState(false)
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -190,6 +195,9 @@ export default function CategoryPage() {
         await loadReceptionGuests(eventId)
       }
 
+      // Category Notes laden (für alle Bereiche)
+      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
+
       setLoading(false)
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
@@ -197,6 +205,82 @@ export default function CategoryPage() {
       // Setze leere Arrays als Fallback
       setTasks([])
       setChecklistItems([])
+    }
+  }
+
+  const loadCategoryNotes = async (eventId: string, category: string) => {
+    try {
+      setNotesWarning(null)
+      const res = await fetch(
+        `/api/notes?eventId=${encodeURIComponent(eventId)}&category=${encodeURIComponent(category)}&scope=category`
+      )
+      if (!res.ok) {
+        return
+      }
+      const data = await res.json()
+      if (data.warning) {
+        setNotesWarning(data.warning)
+      }
+      const notes = data.notes || []
+      const latest = notes[0]
+      if (latest) {
+        setCategoryNoteId(latest.id)
+        setCategoryNoteContent(latest.content || '')
+      } else {
+        setCategoryNoteId(null)
+        setCategoryNoteContent('')
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  const saveCategoryNotes = async () => {
+    if (!eventId || !categoryInfo?.dbCategory) return
+    try {
+      setSavingNotes(true)
+      setNotesWarning(null)
+
+      // If note exists -> update; else -> create
+      if (categoryNoteId) {
+        const res = await fetch('/api/notes', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: categoryNoteId,
+            title: `${categoryInfo.dbCategory}-NOTES`,
+            content: categoryNoteContent,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          alert(data.error || 'Notizen konnten nicht gespeichert werden')
+          return
+        }
+      } else {
+        const res = await fetch('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventId,
+            category: categoryInfo.dbCategory,
+            taskId: null,
+            title: `${categoryInfo.dbCategory}-NOTES`,
+            content: categoryNoteContent,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          alert(data.error || 'Notizen konnten nicht gespeichert werden')
+          return
+        }
+        setCategoryNoteId(data.id)
+      }
+
+      // Reload notes
+      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -1317,6 +1401,35 @@ export default function CategoryPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Category Notes */}
+        <div className="mb-8 rounded-xl bg-white p-6 shadow-md">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Notizen</h2>
+            <button
+              onClick={saveCategoryNotes}
+              disabled={savingNotes}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {savingNotes ? 'Speichern…' : 'Speichern'}
+            </button>
+          </div>
+          {notesWarning && (
+            <div className="mb-3 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800">
+              {notesWarning}
+            </div>
+          )}
+          <textarea
+            value={categoryNoteContent}
+            onChange={(e) => setCategoryNoteContent(e.target.value)}
+            rows={4}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            placeholder="Notizen für diesen Organisationsbereich…"
+          />
+          <p className="mt-2 text-xs text-gray-500">
+            Diese Notizen werden in der Datenbank-Tabelle <code>notes</code> gespeichert (Scope: Bereich).
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Checklist Section */}
           <div className="rounded-xl bg-white p-6 shadow-md">
