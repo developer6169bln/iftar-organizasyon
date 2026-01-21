@@ -65,13 +65,6 @@ export default function CategoryPage() {
   const [showChecklistModal, setShowChecklistModal] = useState(false)
   const [editingTask, setEditingTask] = useState<string | null>(null)
   const [editingChecklist, setEditingChecklist] = useState<string | null>(null)
-  // Category-level notes (stored in notes table)
-  const [categoryNotes, setCategoryNotes] = useState<any[]>([])
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const [noteTitle, setNoteTitle] = useState('')
-  const [noteContent, setNoteContent] = useState('')
-  const [notesWarning, setNotesWarning] = useState<string | null>(null)
-  const [savingNotes, setSavingNotes] = useState(false)
   const [taskForm, setTaskForm] = useState({
     title: '',
     description: '',
@@ -197,9 +190,6 @@ export default function CategoryPage() {
         await loadReceptionGuests(eventId)
       }
 
-      // Category Notes laden (für alle Bereiche)
-      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
-
       setLoading(false)
     } catch (error) {
       console.error('Veri yükleme hatası:', error)
@@ -207,123 +197,6 @@ export default function CategoryPage() {
       // Setze leere Arrays als Fallback
       setTasks([])
       setChecklistItems([])
-    }
-  }
-
-  const loadCategoryNotes = async (eventId: string, category: string) => {
-    try {
-      setNotesWarning(null)
-      const res = await fetch(
-        `/api/notes?eventId=${encodeURIComponent(eventId)}&category=${encodeURIComponent(category)}&scope=category`
-      )
-      if (!res.ok) {
-        return
-      }
-      const data = await res.json()
-      if (data.warning) {
-        setNotesWarning(data.warning)
-      }
-      const notes = data.notes || []
-      setCategoryNotes(notes)
-
-      // Keep selection if possible, otherwise select newest note
-      const stillSelected = selectedNoteId ? notes.find((n: any) => n.id === selectedNoteId) : null
-      const active = stillSelected || notes[0] || null
-
-      if (active) {
-        setSelectedNoteId(active.id)
-        setNoteTitle(active.title || 'Notiz')
-        setNoteContent(active.content || '')
-      } else {
-        setSelectedNoteId(null)
-        setNoteTitle('')
-        setNoteContent('')
-      }
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  const saveCategoryNotes = async () => {
-    if (!eventId || !categoryInfo?.dbCategory) return
-    try {
-      setSavingNotes(true)
-      setNotesWarning(null)
-
-      const titleToSave = (noteTitle && noteTitle.trim()) ? noteTitle.trim() : `${categoryInfo.dbCategory}-NOTES`
-
-      // If selected note exists -> update; else -> create new
-      if (selectedNoteId) {
-        const res = await fetch('/api/notes', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: selectedNoteId,
-            title: titleToSave,
-            content: noteContent,
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          alert(data.error || 'Notizen konnten nicht gespeichert werden')
-          return
-        }
-      } else {
-        const res = await fetch('/api/notes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventId,
-            category: categoryInfo.dbCategory,
-            taskId: null,
-            title: titleToSave,
-            content: noteContent,
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          alert(data.error || 'Notizen konnten nicht gespeichert werden')
-          return
-        }
-        setSelectedNoteId(data.id)
-      }
-
-      // Reload notes
-      await loadCategoryNotes(eventId, categoryInfo.dbCategory)
-    } finally {
-      setSavingNotes(false)
-    }
-  }
-
-  const startNewNote = () => {
-    setSelectedNoteId(null)
-    setNoteTitle('')
-    setNoteContent('')
-  }
-
-  const selectNote = (note: any) => {
-    setSelectedNoteId(note.id)
-    setNoteTitle(note.title || 'Notiz')
-    setNoteContent(note.content || '')
-  }
-
-  const deleteNote = async (noteId: string) => {
-    if (!confirm('Notiz wirklich löschen?')) return
-    try {
-      const res = await fetch(`/api/notes?id=${encodeURIComponent(noteId)}`, { method: 'DELETE' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(data.error || 'Notiz konnte nicht gelöscht werden')
-        return
-      }
-      if (selectedNoteId === noteId) {
-        startNewNote()
-      }
-      if (eventId && categoryInfo?.dbCategory) {
-        await loadCategoryNotes(eventId, categoryInfo.dbCategory)
-      }
-    } catch (e) {
-      alert('Notiz konnte nicht gelöscht werden')
     }
   }
 
@@ -1444,112 +1317,6 @@ export default function CategoryPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Category Notes */}
-        <div className="mb-8 rounded-xl bg-white p-6 shadow-md">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Notizen</h2>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={startNewNote}
-                className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
-              >
-                + Neu
-              </button>
-              {selectedNoteId && (
-                <button
-                  onClick={() => deleteNote(selectedNoteId)}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-                >
-                  Löschen
-                </button>
-              )}
-              <button
-                onClick={saveCategoryNotes}
-                disabled={savingNotes}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-              >
-                {savingNotes ? 'Speichern…' : 'Speichern'}
-              </button>
-            </div>
-          </div>
-          {notesWarning && (
-            <div className="mb-3 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800">
-              {notesWarning}
-            </div>
-          )}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-1">
-              <div className="mb-2 text-sm font-medium text-gray-700">Gespeicherte Notizen</div>
-              {categoryNotes.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                  Noch keine Notizen gespeichert.
-                </div>
-              ) : (
-                <div className="max-h-64 space-y-2 overflow-auto pr-1">
-                  {categoryNotes.map((n: any) => (
-                    <div
-                      key={n.id}
-                      className={`rounded-lg border p-3 text-sm cursor-pointer ${
-                        selectedNoteId === n.id ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                      onClick={() => selectNote(n)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-gray-900">{n.title || 'Notiz'}</div>
-                          <div className="mt-1 line-clamp-2 text-xs text-gray-600">{n.content || ''}</div>
-                          {n.updatedAt && (
-                            <div className="mt-1 text-[11px] text-gray-500">
-                              {new Date(n.updatedAt).toLocaleString('de-DE')}
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteNote(n.id)
-                          }}
-                          className="shrink-0 rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
-                          title="Löschen"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="lg:col-span-2">
-              <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-medium text-gray-700">Titel</label>
-                  <input
-                    value={noteTitle}
-                    onChange={(e) => setNoteTitle(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="z.B. ToDos / Ansprechpartner / Infos"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-gray-700">Inhalt</label>
-                  <textarea
-                    value={noteContent}
-                    onChange={(e) => setNoteContent(e.target.value)}
-                    rows={4}
-                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Notiz für diesen Organisationsbereich…"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Diese Notizen werden in der Datenbank-Tabelle <code>notes</code> gespeichert (Scope: Bereich).
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Checklist Section */}
           <div className="rounded-xl bg-white p-6 shadow-md">
@@ -2214,18 +1981,6 @@ export default function CategoryPage() {
           </div>
         )}
 
-        {/* Notes Section */}
-        <div className="mt-8 rounded-xl bg-white p-6 shadow-md">
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">Notlar</h2>
-          <textarea
-            className="w-full rounded-lg border border-gray-300 p-4 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            rows={4}
-            placeholder="Bu alan için notlarınızı buraya yazabilirsiniz..."
-          />
-          <button className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-            Notu Kaydet
-          </button>
-        </div>
       </main>
 
       {/* Task Modal */}
