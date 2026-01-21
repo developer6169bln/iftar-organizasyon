@@ -91,8 +91,9 @@ export default function CheckinPage() {
 
       if (response.ok) {
         // Aktualisiere lokalen State
-        setGuests(guests.map(g => g.id === guestId ? { ...g, status: newStatus } : g))
-        setFilteredGuests(filteredGuests.map(g => g.id === guestId ? { ...g, status: newStatus } : g))
+        const updatedGuest = { ...guests.find(g => g.id === guestId), status: newStatus }
+        setGuests(guests.map(g => g.id === guestId ? updatedGuest : g))
+        setFilteredGuests(filteredGuests.map(g => g.id === guestId ? updatedGuest : g))
       } else {
         const error = await response.json()
         alert(error.error || 'Fehler beim Aktualisieren')
