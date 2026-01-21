@@ -44,15 +44,70 @@ export default function CheckinPage() {
       if (response.ok) {
         const allGuests = await response.json()
         
-        // Debug: Zeige alle Status-Werte
-        const allStatuses = [...new Set(allGuests.map((g: any) => g.status))]
-        console.log('Alle Status-Werte in DB:', allStatuses)
+        // Helper-Funktion: Hole Status aus guest.status oder additionalData
+        const getStatusForDebug = (guest: any): string => {
+          if (guest.status) return guest.status.toString().trim()
+          if (guest.additionalData) {
+            try {
+              const additional = typeof guest.additionalData === 'string' 
+                ? JSON.parse(guest.additionalData) 
+                : guest.additionalData
+              if (additional.Status) return additional.Status.toString().trim()
+              if (additional.status) return additional.status.toString().trim()
+              if (additional.STATUS) return additional.STATUS.toString().trim()
+            } catch (e) {}
+          }
+          return '(kein Status)'
+        }
+        
+        // Debug: Zeige alle Status-Werte (aus status-Feld UND additionalData)
+        const allStatuses = [...new Set(allGuests.map((g: any) => getStatusForDebug(g)))]
+        console.log('Alle Status-Werte in DB (status + additionalData):', allStatuses)
         console.log('Alle Gäste:', allGuests.length)
+        
+        // Zeige erste 5 Gäste mit ihren Status-Werten für Debugging
+        console.log('Erste 5 Gäste mit Status:', allGuests.slice(0, 5).map((g: any) => ({
+          name: g.name,
+          statusField: g.status,
+          additionalDataStatus: g.additionalData ? (() => {
+            try {
+              const add = typeof g.additionalData === 'string' ? JSON.parse(g.additionalData) : g.additionalData
+              return add.Status || add.status || add.STATUS || '(nicht gefunden)'
+            } catch { return '(parse error)' }
+          })() : '(kein additionalData)',
+          fullAdditionalData: g.additionalData
+        })))
+        
+        // Helper-Funktion: Hole Status aus guest.status oder additionalData
+        const getGuestStatus = (guest: any): string => {
+          // Zuerst prüfe das status-Feld
+          if (guest.status) {
+            return guest.status.toString().trim()
+          }
+          
+          // Dann prüfe additionalData für "Status" Spalte
+          if (guest.additionalData) {
+            try {
+              const additional = typeof guest.additionalData === 'string' 
+                ? JSON.parse(guest.additionalData) 
+                : guest.additionalData
+              
+              // Suche nach "Status" in verschiedenen Schreibweisen
+              if (additional.Status) return additional.Status.toString().trim()
+              if (additional.status) return additional.status.toString().trim()
+              if (additional.STATUS) return additional.STATUS.toString().trim()
+            } catch (e) {
+              console.error('Fehler beim Parsen von additionalData:', e)
+            }
+          }
+          
+          return ''
+        }
         
         // Filtere Gäste mit Status CONFIRMED, "Bestätigt" oder ATTENDED (case-insensitive)
         // Unterstütze sowohl englische als auch deutsche Status-Werte
         const confirmedGuests = allGuests.filter((guest: any) => {
-          const status = (guest.status || '').toString().trim()
+          const status = getGuestStatus(guest)
           const statusUpper = status.toUpperCase()
           
           // Prüfe auf verschiedene Varianten von "Bestätigt"
@@ -68,7 +123,14 @@ export default function CheckinPage() {
             statusUpper === 'ANWESEND' ||
             status === 'Anwesend'
           
-          return isConfirmed || isAttended
+          const matches = isConfirmed || isAttended
+          
+          // Debug für jeden Gast
+          if (!matches && status) {
+            console.log(`Gast "${guest.name}" hat Status "${status}" (nicht bestätigt)`)
+          }
+          
+          return matches
         })
         
         console.log('Bestätigte/Anwesend:', confirmedGuests.length)
@@ -107,6 +169,26 @@ export default function CheckinPage() {
     )
     setFilteredGuests(filtered)
   }, [searchQuery, guests])
+
+  // Helper-Funktion: Hole Status aus guest.status oder additionalData
+  const getGuestStatus = (guest: any): string => {
+    if (guest.status) {
+      return guest.status.toString().trim()
+    }
+    if (guest.additionalData) {
+      try {
+        const additional = typeof guest.additionalData === 'string' 
+          ? JSON.parse(guest.additionalData) 
+          : guest.additionalData
+        if (additional.Status) return additional.Status.toString().trim()
+        if (additional.status) return additional.status.toString().trim()
+        if (additional.STATUS) return additional.STATUS.toString().trim()
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData:', e)
+      }
+    }
+    return ''
+  }
 
   const handleAnwesendChange = async (guestId: string, isAnwesend: boolean) => {
     try {
@@ -217,24 +299,47 @@ export default function CheckinPage() {
                     <tr
                       key={guest.id}
                       className={`border-b border-gray-100 hover:bg-gray-50 ${
-                        (guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND' ? 'bg-green-50' : ''
+                        (() => {
+                          const status = getGuestStatus(guest).toUpperCase()
+                          return status === 'ATTENDED' || status === 'ANWESEND'
+                        })() ? 'bg-green-50' : ''
                       }`}
                     >
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{guest.name || '-'}</span>
+                        <span className="font-medium text-gray-900">
+                          {guest.name || 
+                           (guest.additionalData ? (() => {
+                             try {
+                               const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+                               return add.Name || add.name || '-'
+                             } catch { return '-' }
+                           })() : '-')}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
-                        {guest.receptionBy || '-'}
+                        {guest.receptionBy || 
+                         (guest.additionalData ? (() => {
+                           try {
+                             const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+                             return add['VIP Begleiter (Name)'] || add['VIP Begleiter'] || '-'
+                           } catch { return '-' }
+                         })() : '-')}
                       </td>
                       <td className="px-4 py-3">
                         <select
-                          value={(guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND' ? 'Ja' : 'Nein'}
+                          value={(() => {
+                            const status = getGuestStatus(guest).toUpperCase()
+                            return status === 'ATTENDED' || status === 'ANWESEND' ? 'Ja' : 'Nein'
+                          })()}
                           onChange={(e) => {
                             const isAnwesend = e.target.value === 'Ja'
                             handleAnwesendChange(guest.id, isAnwesend)
                           }}
                           className={`rounded-full px-3 py-1 text-xs font-medium border-0 focus:ring-2 focus:ring-indigo-500 ${
-                            (guest.status || '').toUpperCase() === 'ATTENDED' || (guest.status || '').toUpperCase() === 'ANWESEND'
+                            (() => {
+                              const status = getGuestStatus(guest).toUpperCase()
+                              return status === 'ATTENDED' || status === 'ANWESEND'
+                            })()
                               ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-800'
                           }`}
@@ -254,12 +359,12 @@ export default function CheckinPage() {
             <div className="mt-4 text-sm text-gray-600">
               {filteredGuests.length} von {guests.length} bestätigten Gästen
               {filteredGuests.filter(g => {
-                const status = (g.status || '').toUpperCase()
+                const status = getGuestStatus(g).toUpperCase()
                 return status === 'ATTENDED' || status === 'ANWESEND'
               }).length > 0 && (
                 <span className="ml-2 text-green-600">
                   ({filteredGuests.filter(g => {
-                    const status = (g.status || '').toUpperCase()
+                    const status = getGuestStatus(g).toUpperCase()
                     return status === 'ATTENDED' || status === 'ANWESEND'
                   }).length} anwesend)
                 </span>
