@@ -865,7 +865,7 @@ export default function CategoryPage() {
         body: JSON.stringify({
           id: editingTask,
           title: taskForm.title,
-          description: taskForm.description !== undefined && taskForm.description !== '' ? taskForm.description : (taskForm.description === '' ? null : undefined),
+          description: taskForm.description || null,
           priority: taskForm.priority,
           dueDate: taskForm.dueDate || undefined,
           status: taskForm.status,
@@ -1017,7 +1017,7 @@ export default function CategoryPage() {
           eventId,
           category: categoryInfo.dbCategory,
           title: checklistForm.title,
-          description: checklistForm.description !== undefined && checklistForm.description !== '' ? checklistForm.description : (checklistForm.description === '' ? null : undefined),
+          description: checklistForm.description || null,
           dueDate: checklistForm.dueDate || undefined,
           status: checklistForm.status,
         }),
@@ -1061,7 +1061,7 @@ export default function CategoryPage() {
         body: JSON.stringify({
           id: editingChecklist,
           title: checklistForm.title,
-          description: checklistForm.description !== undefined && checklistForm.description !== '' ? checklistForm.description : (checklistForm.description === '' ? null : undefined),
+          description: checklistForm.description || null,
           dueDate: checklistForm.dueDate || undefined,
           status: checklistForm.status,
         }),
