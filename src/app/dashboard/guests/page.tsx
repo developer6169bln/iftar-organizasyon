@@ -37,9 +37,22 @@ export default function GuestsPage() {
   
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
   const getColumnValue = (guest: any, columnName: string): string => {
-    // Standard-Felder - Mapping zu neuen Spaltennamen
+    // ZUERST: Prüfe additionalData (hat Priorität, da es die importierten Daten enthält)
+    if (guest.additionalData) {
+      try {
+        const additional = JSON.parse(guest.additionalData)
+        // Wenn die Spalte in additionalData existiert, verwende diesen Wert
+        if (additional.hasOwnProperty(columnName)) {
+          const value = additional[columnName]
+          return value !== null && value !== undefined ? String(value) : ''
+        }
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData:', e)
+      }
+    }
+    
+    // DANN: Standard-Felder - Mapping zu neuen Spaltennamen (Fallback)
     if (columnName === 'Kategorie') {
-      // Kategorie könnte aus category oder additionalData kommen
       return guest.category || ''
     }
     if (columnName === 'Name' || columnName === 'name') {
@@ -52,7 +65,7 @@ export default function GuestsPage() {
       return guest.title || ''
     }
     if (columnName === 'Ebende') {
-      // Ebene - könnte aus additionalData kommen
+      // Ebene - wird aus additionalData gelesen (siehe oben)
       return ''
     }
     if (columnName === 'E-Mail' || columnName === 'email' || columnName === 'E-Mail') {
@@ -65,7 +78,6 @@ export default function GuestsPage() {
       return guest.tableNumber?.toString() || ''
     }
     if (columnName === 'Anwesend') {
-      // Anwesend - könnte aus status oder additionalData kommen
       return guest.status === 'ATTENDED' ? 'Ja' : 'Nein'
     }
     if (columnName === 'VIP Begleitung benötigt?') {
@@ -78,11 +90,11 @@ export default function GuestsPage() {
       return guest.arrivalDate ? new Date(guest.arrivalDate).toLocaleString('de-DE') : ''
     }
     if (columnName === 'Einladungspriorität') {
-      // Priorität - könnte aus additionalData kommen
+      // Priorität - wird aus additionalData gelesen (siehe oben)
       return ''
     }
     if (columnName === 'Wahrscheinlichkeit') {
-      // Wahrscheinlichkeit - könnte aus additionalData kommen
+      // Wahrscheinlichkeit - wird aus additionalData gelesen (siehe oben)
       return ''
     }
     if (columnName === 'Notiz' || columnName === 'notes') {
@@ -90,16 +102,6 @@ export default function GuestsPage() {
     }
     if (columnName === 'İşlemler') {
       return '' // Aktionen-Spalte
-    }
-    
-    // Zusätzliche Spalten aus additionalData
-    if (guest.additionalData) {
-      try {
-        const additional = JSON.parse(guest.additionalData)
-        return additional[columnName] || ''
-      } catch (e) {
-        return ''
-      }
     }
     
     return ''
@@ -294,8 +296,7 @@ export default function GuestsPage() {
     }
   }
 
-  // Sammle Spalten nur aus importierten Daten (nicht aus allen Gästen)
-  // Die Spalten werden beim Import direkt aus Google Sheets gesetzt
+  // Sammle ALLE Spalten aus additionalData aller Gäste
   useEffect(() => {
     // Wenn keine Gäste vorhanden, setze Standard-Spalten
     if (guests.length === 0) {
@@ -303,29 +304,27 @@ export default function GuestsPage() {
       return
     }
     
-    // Wenn Gäste vorhanden, verwende die Spalten aus dem ersten Gast (der sollte alle Spalten haben)
-    const firstGuest = guests[0]
-    if (firstGuest?.additionalData) {
-      try {
-        const additional = JSON.parse(firstGuest.additionalData)
-        const columnsSet = new Set<string>(standardColumns)
-        
-        // Füge alle Spalten aus additionalData hinzu
-        Object.keys(additional).forEach(key => {
-          if (key && !standardColumns.includes(key)) {
-            columnsSet.add(key)
-          }
-        })
-        
-        setAllColumns(Array.from(columnsSet))
-      } catch (e) {
-        console.error('Fehler beim Parsen von additionalData:', e)
-        setAllColumns(standardColumns)
+    // Sammle alle Spalten aus allen Gästen
+    const columnsSet = new Set<string>(standardColumns)
+    
+    guests.forEach(guest => {
+      if (guest?.additionalData) {
+        try {
+          const additional = JSON.parse(guest.additionalData)
+          // Füge ALLE Spalten aus additionalData hinzu
+          Object.keys(additional).forEach(key => {
+            if (key && key.trim()) {
+              // Füge hinzu, auch wenn es bereits in standardColumns ist (für Vollständigkeit)
+              columnsSet.add(key.trim())
+            }
+          })
+        } catch (e) {
+          console.error('Fehler beim Parsen von additionalData:', e)
+        }
       }
-    } else {
-      // Wenn kein additionalData vorhanden, nur Standard-Spalten
-      setAllColumns(standardColumns)
-    }
+    })
+    
+    setAllColumns(Array.from(columnsSet))
   }, [guests])
 
   useEffect(() => {
@@ -556,12 +555,15 @@ export default function GuestsPage() {
       if (response.ok) {
         const result = await response.json()
         
-        // Setze Spaltenüberschriften NUR aus Google Sheets (1:1 Übernahme)
+        // Lade Gäste zuerst, damit wir die Spalten aus additionalData sammeln können
+        await loadGuests()
+        
+        // Setze Spaltenüberschriften aus Google Sheets UND aus additionalData
         if (result.headers && Array.isArray(result.headers) && result.headers.length > 0) {
           // Verwende NUR die Spalten aus Google Sheets, plus Standard-Spalten für Funktionen
           const importedColumns: string[] = []
           
-          // Füge Standard-Spalten hinzu (für Funktionen wie VIP, Status, etc.)
+          // Füge Standard-Spalten hinzu (für Funktionen wie Status, etc.)
           importedColumns.push(...standardColumns.filter(col => col !== 'İşlemler'))
           
           // Füge alle Spalten aus Google Sheets hinzu (1:1)
@@ -576,11 +578,10 @@ export default function GuestsPage() {
           
           setAllColumns(importedColumns)
         } else {
-          // Wenn keine Header, setze Standard-Spalten
-          setAllColumns(standardColumns)
+          // Wenn keine Header, lass useEffect die Spalten aus additionalData sammeln
+          // (wird automatisch durch loadGuests() ausgelöst)
         }
         
-        await loadGuests()
         setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
         alert(`Synchronisation abgeschlossen: ${result.created} Gäste importiert`)
         return true
