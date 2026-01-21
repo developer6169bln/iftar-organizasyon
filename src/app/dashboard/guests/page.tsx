@@ -12,6 +12,19 @@ export default function GuestsPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingGuest, setEditingGuest] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({
+    vip: '',
+    name: '',
+    title: '',
+    organization: '',
+    email: '',
+    phone: '',
+    tableNumber: '',
+    reception: '',
+    arrivalDate: '',
+    notes: '',
+    status: '',
+  })
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -203,21 +216,77 @@ export default function GuestsPage() {
   }
 
   useEffect(() => {
-    // Filter guests based on search query
-    if (searchQuery.trim() === '') {
-      setFilteredGuests(guests)
-    } else {
+    // Filter guests based on search query and column filters
+    let filtered = guests
+
+    // Apply search query filter
+    if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase()
-      setFilteredGuests(
-        guests.filter(guest =>
-          guest.name.toLowerCase().includes(query) ||
-          guest.email?.toLowerCase().includes(query) ||
-          guest.title?.toLowerCase().includes(query) ||
-          guest.organization?.toLowerCase().includes(query)
-        )
+      filtered = filtered.filter(guest =>
+        guest.name.toLowerCase().includes(query) ||
+        guest.email?.toLowerCase().includes(query) ||
+        guest.title?.toLowerCase().includes(query) ||
+        guest.organization?.toLowerCase().includes(query)
       )
     }
-  }, [searchQuery, guests])
+
+    // Apply column filters
+    if (columnFilters.vip) {
+      const isVip = columnFilters.vip.toLowerCase() === 'ja' || columnFilters.vip.toLowerCase() === 'yes' || columnFilters.vip.toLowerCase() === 'vip' || columnFilters.vip === '★'
+      filtered = filtered.filter(guest => (isVip && guest.isVip) || (!isVip && !guest.isVip))
+    }
+    if (columnFilters.name) {
+      const filter = columnFilters.name.toLowerCase()
+      filtered = filtered.filter(guest => guest.name?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.title) {
+      const filter = columnFilters.title.toLowerCase()
+      filtered = filtered.filter(guest => guest.title?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.organization) {
+      const filter = columnFilters.organization.toLowerCase()
+      filtered = filtered.filter(guest => guest.organization?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.email) {
+      const filter = columnFilters.email.toLowerCase()
+      filtered = filtered.filter(guest => guest.email?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.phone) {
+      const filter = columnFilters.phone.toLowerCase()
+      filtered = filtered.filter(guest => guest.phone?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.tableNumber) {
+      const filter = columnFilters.tableNumber.toLowerCase()
+      filtered = filtered.filter(guest => 
+        guest.tableNumber?.toString().toLowerCase().includes(filter)
+      )
+    }
+    if (columnFilters.reception) {
+      const filter = columnFilters.reception.toLowerCase()
+      filtered = filtered.filter(guest => 
+        guest.receptionBy?.toLowerCase().includes(filter) ||
+        (guest.needsSpecialReception && filter.includes('ja'))
+      )
+    }
+    if (columnFilters.arrivalDate) {
+      const filter = columnFilters.arrivalDate.toLowerCase()
+      filtered = filtered.filter(guest => {
+        if (!guest.arrivalDate) return false
+        const dateStr = new Date(guest.arrivalDate).toLocaleDateString('de-DE').toLowerCase()
+        return dateStr.includes(filter)
+      })
+    }
+    if (columnFilters.notes) {
+      const filter = columnFilters.notes.toLowerCase()
+      filtered = filtered.filter(guest => guest.notes?.toLowerCase().includes(filter))
+    }
+    if (columnFilters.status) {
+      const filter = columnFilters.status.toLowerCase()
+      filtered = filtered.filter(guest => guest.status?.toLowerCase().includes(filter))
+    }
+
+    setFilteredGuests(filtered)
+  }, [searchQuery, guests, columnFilters])
 
   const loadGuests = async () => {
     try {
@@ -804,6 +873,129 @@ export default function GuestsPage() {
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Notizen</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Durum</th>
                       <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">İşlemler</th>
+                    </tr>
+                    {/* Filter Row */}
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="VIP..."
+                          value={columnFilters.vip}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, vip: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="İsim filtrele..."
+                          value={columnFilters.name}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, name: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Ünvan filtrele..."
+                          value={columnFilters.title}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, title: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Kurum filtrele..."
+                          value={columnFilters.organization}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, organization: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="E-posta filtrele..."
+                          value={columnFilters.email}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, email: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Telefon filtrele..."
+                          value={columnFilters.phone}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, phone: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Masa filtrele..."
+                          value={columnFilters.tableNumber}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, tableNumber: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Empfang filtrele..."
+                          value={columnFilters.reception}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, reception: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Anreise filtrele..."
+                          value={columnFilters.arrivalDate}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, arrivalDate: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Notizen filtrele..."
+                          value={columnFilters.notes}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, notes: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <input
+                          type="text"
+                          placeholder="Durum filtrele..."
+                          value={columnFilters.status}
+                          onChange={(e) => setColumnFilters({ ...columnFilters, status: e.target.value })}
+                          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-indigo-500 focus:outline-none"
+                        />
+                      </th>
+                      <th className="px-4 py-2">
+                        <button
+                          onClick={() => setColumnFilters({
+                            vip: '',
+                            name: '',
+                            title: '',
+                            organization: '',
+                            email: '',
+                            phone: '',
+                            tableNumber: '',
+                            reception: '',
+                            arrivalDate: '',
+                            notes: '',
+                            status: '',
+                          })}
+                          className="rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                          title="Alle Filter zurücksetzen"
+                        >
+                          🔄
+                        </button>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
