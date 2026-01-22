@@ -42,20 +42,11 @@ export default function CheckinPage() {
       if (response.ok) {
         const allGuests = await response.json()
         
-        // Filtere NUR Gäste mit Status BESTÄTIGT (case-insensitive)
-        // Nur das status-Feld wird überprüft, nicht additionalData
-        const confirmedGuests = allGuests.filter((guest: any) => {
-          const status = (guest.status || '').toString().trim()
-          const statusUpper = status.toUpperCase()
-          
-          // Nur BESTÄTIGT akzeptieren (auch BESTAETIGT ohne Umlaut)
-          return statusUpper === 'BESTÄTIGT' || statusUpper === 'BESTAETIGT'
-        })
+        // Zeige ALLE Gäste ohne Filter
+        console.log(`Geladen: ${allGuests.length} Gäste insgesamt`)
         
-        console.log(`Gefunden: ${confirmedGuests.length} bestätigte Gäste von ${allGuests.length} insgesamt`)
-        
-        setGuests(confirmedGuests)
-        setFilteredGuests(confirmedGuests)
+        setGuests(allGuests)
+        setFilteredGuests(allGuests)
       } else {
         console.error('Fehler beim Laden der Gäste')
       }
@@ -104,7 +95,13 @@ export default function CheckinPage() {
 
   const handleAnwesendChange = async (guestId: string, isAnwesend: boolean) => {
     try {
-      const newStatus = isAnwesend ? 'ATTENDED' : 'BESTÄTIGT'
+      // Hole aktuellen Gast, um den Status zu erhalten
+      const currentGuest = guests.find(g => g.id === guestId)
+      const currentStatus = (currentGuest?.status || '').toString().trim().toUpperCase()
+      
+      // Wenn anwesend, setze auf ATTENDED, sonst auf den vorherigen Status oder CONFIRMED
+      const newStatus = isAnwesend ? 'ATTENDED' : (currentStatus === 'ATTENDED' || currentStatus === 'ANWESEND' ? 'CONFIRMED' : currentGuest?.status || 'CONFIRMED')
+      
       const response = await fetch('/api/guests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -116,11 +113,9 @@ export default function CheckinPage() {
 
       if (response.ok) {
         // Aktualisiere lokalen State
-        const updatedGuest = { ...guests.find(g => g.id === guestId), status: newStatus }
+        const updatedGuest = { ...currentGuest, status: newStatus }
         setGuests(guests.map(g => g.id === guestId ? updatedGuest : g))
         setFilteredGuests(filteredGuests.map(g => g.id === guestId ? updatedGuest : g))
-        // Lade Gäste neu, um aktualisierte Liste zu erhalten
-        loadGuests()
       } else {
         const error = await response.json()
         alert(error.error || 'Fehler beim Aktualisieren')
@@ -195,7 +190,7 @@ export default function CheckinPage() {
                 {searchQuery ? 'Keine Ergebnisse gefunden' : 'Keine bestätigten Gäste vorhanden'}
               </p>
               <p className="mt-2 text-xs text-gray-400">
-                Hinweis: Nur Gäste mit Status "BESTÄTIGT" werden angezeigt
+                Alle Gäste werden angezeigt
               </p>
             </div>
           ) : (
@@ -269,7 +264,7 @@ export default function CheckinPage() {
 
           {!loading && filteredGuests.length > 0 && (
             <div className="mt-4 text-sm text-gray-600">
-              {filteredGuests.length} von {guests.length} bestätigten Gästen
+              {filteredGuests.length} Gäste insgesamt
               {filteredGuests.filter(g => {
                 const status = (g.status || '').toString().trim().toUpperCase()
                 return status === 'ATTENDED' || status === 'ANWESEND'
