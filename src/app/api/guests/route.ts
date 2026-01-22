@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
+import { sendPushNotificationFromServer } from '@/lib/sendPushNotification'
 
 const guestSchema = z.object({
   eventId: z.string(),
@@ -100,6 +101,17 @@ export async function POST(request: NextRequest) {
       userEmail: userInfo.userEmail,
       eventId: validatedData.eventId,
       description: `Gast "${guest.name}" erstellt`,
+    })
+
+    // Push Notification senden
+    await sendPushNotificationFromServer({
+      title: 'Neuer Gast hinzugefügt',
+      body: `Gast "${guest.name}" wurde zur Liste hinzugefügt`,
+      url: '/dashboard/guests',
+      tag: 'guest-added',
+    }).catch((error) => {
+      // Fehler beim Senden der Notification nicht blockieren
+      console.error('Fehler beim Senden der Push Notification:', error)
     })
 
     return NextResponse.json(guest, { status: 201 })
