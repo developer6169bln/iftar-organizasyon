@@ -41,10 +41,31 @@ export default function PushNotificationSetup() {
   const handleEnableNotifications = async () => {
     setIsLoading(true)
     try {
+      // Prüfe ob auf iOS und ob App vom Home-Bildschirm geöffnet wurde
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches
+      
+      if (isIOS && !isStandalone) {
+        const shouldContinue = confirm(
+          '⚠️ WICHTIG für iOS:\n\n' +
+          'Push Notifications funktionieren auf iOS nur, wenn die App vom Home-Bildschirm geöffnet wurde.\n\n' +
+          'Bitte:\n' +
+          '1. Tippe auf das "Teilen" Icon\n' +
+          '2. Wähle "Zum Home-Bildschirm"\n' +
+          '3. Öffne die App vom Home-Bildschirm\n' +
+          '4. Versuche es erneut\n\n' +
+          'Trotzdem fortfahren?'
+        )
+        if (!shouldContinue) {
+          setIsLoading(false)
+          return
+        }
+      }
+
       // 1. Service Worker registrieren
       const registration = await registerServiceWorker()
       if (!registration) {
-        alert('Service Worker konnte nicht registriert werden')
+        alert('Service Worker konnte nicht registriert werden. Prüfe die Browser-Konsole für Details.')
         return
       }
 
@@ -64,7 +85,7 @@ export default function PushNotificationSetup() {
         setIsSubscribed(true)
         alert('Push Notifications erfolgreich aktiviert!')
       } else {
-        alert('Fehler beim Erstellen der Subscription')
+        alert('Fehler beim Erstellen der Subscription. Prüfe die Browser-Konsole für Details.')
       }
     } catch (error) {
       console.error('Fehler:', error)

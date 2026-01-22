@@ -3,15 +3,44 @@
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if ('serviceWorker' in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
+      // Warte auf Service Worker ready (wichtig für mobile Geräte)
+      if (navigator.serviceWorker.controller) {
+        console.log('Service Worker bereits aktiv');
+      }
+      
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+      });
+      
       console.log('Service Worker registriert:', registration);
+      console.log('Service Worker Scope:', registration.scope);
+      console.log('Service Worker State:', registration.active?.state);
+      
+      // Warte auf aktivierung (wichtig für mobile)
+      if (registration.installing) {
+        await new Promise((resolve) => {
+          registration.installing!.addEventListener('statechange', () => {
+            if (registration.installing!.state === 'activated') {
+              resolve(null);
+            }
+          });
+        });
+      }
+      
+      // Warte auf ready
+      await navigator.serviceWorker.ready;
+      console.log('Service Worker ready');
+      
       return registration;
     } catch (error) {
       console.error('Service Worker Registrierung fehlgeschlagen:', error);
+      console.error('Fehler-Details:', error instanceof Error ? error.message : String(error));
       return null;
     }
+  } else {
+    console.warn('Service Worker wird von diesem Browser nicht unterstützt');
+    return null;
   }
-  return null;
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
