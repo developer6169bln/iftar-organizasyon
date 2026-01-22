@@ -14,16 +14,22 @@ Diese Anleitung zeigt, wie man native Browser Push Notifications in deiner Next.
 
 VAPID (Voluntary Application Server Identification) Keys sind notwendig, um Push Notifications zu senden.
 
-### Option A: Online Tool
-1. Gehe zu: https://web-push-codelab.glitch.me/
-2. Klicke auf "Generate Keys"
-3. Kopiere die **Public Key** und **Private Key**
+### Option A: Mit dem Projekt-Script (Empfohlen)
+```bash
+npm run generate-vapid-keys
+```
 
-### Option B: Node.js Tool
+Das Script generiert die Keys und zeigt sie direkt an.
+
+### Option B: Mit web-push CLI
 ```bash
 npm install -g web-push
 web-push generate-vapid-keys
 ```
+
+### Option C: Online Tools
+- https://vapidkeys.com/
+- https://www.stephane-quantin.com/en/tools/generate/vapid-keys
 
 **Wichtig:** Speichere beide Keys sicher! Du wirst sie für die Umgebungsvariablen brauchen.
 

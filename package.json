@@ -14,7 +14,8 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
-    "migrate:dev": "prisma migrate dev"
+    "migrate:dev": "prisma migrate dev",
+    "generate-vapid-keys": "node scripts/generate-vapid-keys.js"
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",

@@ -2,16 +2,26 @@
 
 ## VAPID Keys generieren
 
-1. **Online Tool (Empfohlen):**
-   - Gehe zu: https://web-push-codelab.glitch.me/
-   - Klicke auf "Generate Keys"
-   - Kopiere die **Public Key** und **Private Key**
+### Option 1: Mit dem Projekt-Script (Empfohlen)
+```bash
+npm run generate-vapid-keys
+```
 
-2. **Oder mit Node.js:**
-   ```bash
-   npm install -g web-push
-   web-push generate-vapid-keys
-   ```
+Das Script generiert die Keys und zeigt sie direkt an. Kopiere sie dann in deine Umgebungsvariablen.
+
+### Option 2: Mit web-push CLI
+```bash
+# Global installieren (falls noch nicht geschehen)
+npm install -g web-push
+
+# Keys generieren
+web-push generate-vapid-keys
+```
+
+### Option 3: Online Tool
+- Gehe zu: https://vapidkeys.com/
+- Oder: https://www.stephane-quantin.com/en/tools/generate/vapid-keys
+- Kopiere die **Public Key** und **Private Key**
 
 ## Umgebungsvariablen setzen
 
