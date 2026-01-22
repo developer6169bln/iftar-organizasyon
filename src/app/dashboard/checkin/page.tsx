@@ -42,14 +42,14 @@ export default function CheckinPage() {
       if (response.ok) {
         const allGuests = await response.json()
         
-        // Filtere NUR Gäste mit Status CONFIRMED (case-insensitive)
+        // Filtere NUR Gäste mit Status BESTÄTIGT (case-insensitive)
         // Nur das status-Feld wird überprüft, nicht additionalData
         const confirmedGuests = allGuests.filter((guest: any) => {
           const status = (guest.status || '').toString().trim()
           const statusUpper = status.toUpperCase()
           
-          // Nur CONFIRMED akzeptieren
-          return statusUpper === 'CONFIRMED'
+          // Nur BESTÄTIGT akzeptieren (auch BESTAETIGT ohne Umlaut)
+          return statusUpper === 'BESTÄTIGT' || statusUpper === 'BESTAETIGT'
         })
         
         console.log(`Gefunden: ${confirmedGuests.length} bestätigte Gäste von ${allGuests.length} insgesamt`)
@@ -104,7 +104,7 @@ export default function CheckinPage() {
 
   const handleAnwesendChange = async (guestId: string, isAnwesend: boolean) => {
     try {
-      const newStatus = isAnwesend ? 'ATTENDED' : 'CONFIRMED'
+      const newStatus = isAnwesend ? 'ATTENDED' : 'BESTÄTIGT'
       const response = await fetch('/api/guests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -195,7 +195,7 @@ export default function CheckinPage() {
                 {searchQuery ? 'Keine Ergebnisse gefunden' : 'Keine bestätigten Gäste vorhanden'}
               </p>
               <p className="mt-2 text-xs text-gray-400">
-                Hinweis: Nur Gäste mit Status "CONFIRMED" werden angezeigt
+                Hinweis: Nur Gäste mit Status "BESTÄTIGT" werden angezeigt
               </p>
             </div>
           ) : (
@@ -227,7 +227,7 @@ export default function CheckinPage() {
                       })() : '-')
                     
                     const currentStatus = (guest.status || '').toString().trim().toUpperCase()
-                    const isAttended = currentStatus === 'ATTENDED'
+                    const isAttended = currentStatus === 'ATTENDED' || currentStatus === 'ANWESEND'
                     
                     return (
                       <tr
@@ -272,12 +272,12 @@ export default function CheckinPage() {
               {filteredGuests.length} von {guests.length} bestätigten Gästen
               {filteredGuests.filter(g => {
                 const status = (g.status || '').toString().trim().toUpperCase()
-                return status === 'ATTENDED'
+                return status === 'ATTENDED' || status === 'ANWESEND'
               }).length > 0 && (
                 <span className="ml-2 text-green-600">
                   ({filteredGuests.filter(g => {
                     const status = (g.status || '').toString().trim().toUpperCase()
-                    return status === 'ATTENDED'
+                    return status === 'ATTENDED' || status === 'ANWESEND'
                   }).length} anwesend)
                 </span>
               )}
