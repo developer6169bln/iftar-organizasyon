@@ -206,7 +206,7 @@ export default function PushNotificationSetup() {
           </p>
           <button
             onClick={handleEnableNotifications}
-            disabled={isLoading || (permission !== 'default' && permission !== 'granted')}
+            disabled={isLoading || permission === 'denied'}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {isLoading ? 'Wird aktiviert...' : 'Push Notifications aktivieren'}
