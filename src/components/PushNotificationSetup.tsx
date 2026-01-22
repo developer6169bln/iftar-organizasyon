@@ -23,9 +23,15 @@ export default function PushNotificationSetup() {
       if (supported && 'Notification' in window) {
         const currentPermission = Notification.permission
         setPermission(currentPermission)
+        console.log('=== Push Notification Support Check ===')
         console.log('Notification Permission Status:', currentPermission)
         console.log('Service Worker Support:', 'serviceWorker' in navigator)
         console.log('PushManager Support:', 'PushManager' in window)
+        console.log('User Agent:', navigator.userAgent)
+        console.log('Is Standalone:', (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches)
+        console.log('Is iOS:', /iPad|iPhone|iPod/.test(navigator.userAgent))
+        console.log('Is Android:', /android/i.test(navigator.userAgent))
+        console.log('========================================')
       }
     }
     
@@ -112,24 +118,34 @@ export default function PushNotificationSetup() {
       console.log('Berechtigung erteilt:', permissionResult)
 
       // 2. Service Worker registrieren
+      console.log('Registriere Service Worker...')
       const registration = await registerServiceWorker()
       if (!registration) {
-        alert('Service Worker konnte nicht registriert werden. Prüfe die Browser-Konsole für Details.')
+        const errorMsg = 'Service Worker konnte nicht registriert werden. Prüfe die Browser-Konsole für Details.'
+        console.error(errorMsg)
+        alert(errorMsg + '\n\nMögliche Ursachen:\n- Browser unterstützt keine Service Worker\n- HTTPS erforderlich\n- Service Worker Datei nicht erreichbar')
         setIsLoading(false)
         return
       }
 
-      console.log('Service Worker registriert, erstelle Push Subscription...')
+      console.log('Service Worker registriert:', registration)
+      console.log('Service Worker active:', registration.active?.state)
+      console.log('Service Worker scope:', registration.scope)
+
+      // Zusätzliche Wartezeit für mobile Geräte
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      console.log('Erstelle Push Subscription...')
 
       // 3. Push Subscription erstellen
       const subscription = await subscribeToPush(registration)
       if (subscription) {
         setIsSubscribed(true)
-        console.log('Push Subscription erfolgreich erstellt:', subscription)
-        alert('✅ Push Notifications erfolgreich aktiviert!')
+        console.log('✅ Push Subscription erfolgreich erstellt:', subscription.endpoint)
+        alert('✅ Push Notifications erfolgreich aktiviert!\n\nDu wirst jetzt über wichtige Ereignisse benachrichtigt.')
       } else {
-        console.error('Fehler beim Erstellen der Subscription')
-        alert('Fehler beim Erstellen der Subscription. Prüfe die Browser-Konsole für Details.')
+        const errorMsg = 'Fehler beim Erstellen der Subscription. Prüfe die Browser-Konsole für Details.'
+        console.error(errorMsg)
+        alert(errorMsg + '\n\nMögliche Ursachen:\n- VAPID Keys nicht konfiguriert\n- Netzwerkfehler\n- Browser-Berechtigungen')
       }
     } catch (error) {
       console.error('Fehler beim Aktivieren:', error)

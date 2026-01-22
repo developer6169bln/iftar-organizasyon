@@ -88,10 +88,31 @@ self.addEventListener('notificationclick', function(event) {
 
 // Service Worker Install
 self.addEventListener('install', function(event) {
+  console.log('[Service Worker] Install Event');
+  // Sofort aktivieren (wichtig für mobile)
   self.skipWaiting();
 });
 
 // Service Worker Activate
 self.addEventListener('activate', function(event) {
-  event.waitUntil(clients.claim());
+  console.log('[Service Worker] Activate Event');
+  event.waitUntil(
+    Promise.all([
+      // Übernehme alle Clients sofort
+      clients.claim(),
+      // Entferne alte Service Worker
+      self.clients.matchAll().then(clients => {
+        console.log('[Service Worker] Aktive Clients:', clients.length);
+      })
+    ])
+  );
+});
+
+// Message Handler für SKIP_WAITING
+self.addEventListener('message', function(event) {
+  console.log('[Service Worker] Message Event:', event.data);
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[Service Worker] SKIP_WAITING empfangen');
+    self.skipWaiting();
+  }
 });
