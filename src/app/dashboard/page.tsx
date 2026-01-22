@@ -429,7 +429,24 @@ export default function DashboardPage() {
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Quick Links */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Link
+            href="/dashboard/checkin"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-600 text-2xl text-white">
+                ✓
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Check-in</h3>
+                <p className="text-sm text-gray-600">
+                  Check-in Liste für bestätigte Gäste (CONFIRMED)
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
           <Link
             href="/dashboard/reports"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
