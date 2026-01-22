@@ -42,35 +42,10 @@ export default function CheckinPage() {
       if (response.ok) {
         const allGuests = await response.json()
         
-        // Helper-Funktion: Hole Status aus guest.status oder additionalData
-        const getGuestStatus = (guest: any): string => {
-          // Zuerst prüfe das status-Feld
-          if (guest.status) {
-            return guest.status.toString().trim()
-          }
-          
-          // Dann prüfe additionalData für "Status" Spalte
-          if (guest.additionalData) {
-            try {
-              const additional = typeof guest.additionalData === 'string' 
-                ? JSON.parse(guest.additionalData) 
-                : guest.additionalData
-              
-              // Suche nach "Status" in verschiedenen Schreibweisen
-              if (additional.Status) return additional.Status.toString().trim()
-              if (additional.status) return additional.status.toString().trim()
-              if (additional.STATUS) return additional.STATUS.toString().trim()
-            } catch (e) {
-              console.error('Fehler beim Parsen von additionalData:', e)
-            }
-          }
-          
-          return ''
-        }
-        
         // Filtere NUR Gäste mit Status CONFIRMED (case-insensitive)
+        // Nur das status-Feld wird überprüft, nicht additionalData
         const confirmedGuests = allGuests.filter((guest: any) => {
-          const status = getGuestStatus(guest)
+          const status = (guest.status || '').toString().trim()
           const statusUpper = status.toUpperCase()
           
           // Nur CONFIRMED akzeptieren
@@ -122,24 +97,9 @@ export default function CheckinPage() {
     setFilteredGuests(filtered)
   }, [searchQuery, guests])
 
-  // Helper-Funktion: Hole Status aus guest.status oder additionalData
+  // Helper-Funktion: Hole Status nur aus guest.status
   const getGuestStatus = (guest: any): string => {
-    if (guest.status) {
-      return guest.status.toString().trim()
-    }
-    if (guest.additionalData) {
-      try {
-        const additional = typeof guest.additionalData === 'string' 
-          ? JSON.parse(guest.additionalData) 
-          : guest.additionalData
-        if (additional.Status) return additional.Status.toString().trim()
-        if (additional.status) return additional.status.toString().trim()
-        if (additional.STATUS) return additional.STATUS.toString().trim()
-      } catch (e) {
-        console.error('Fehler beim Parsen von additionalData:', e)
-      }
-    }
-    return ''
+    return (guest.status || '').toString().trim()
   }
 
   const handleAnwesendChange = async (guestId: string, isAnwesend: boolean) => {
@@ -266,7 +226,7 @@ export default function CheckinPage() {
                         } catch { return '-' }
                       })() : '-')
                     
-                    const currentStatus = getGuestStatus(guest).toUpperCase()
+                    const currentStatus = (guest.status || '').toString().trim().toUpperCase()
                     const isAttended = currentStatus === 'ATTENDED'
                     
                     return (
@@ -311,12 +271,12 @@ export default function CheckinPage() {
             <div className="mt-4 text-sm text-gray-600">
               {filteredGuests.length} von {guests.length} bestätigten Gästen
               {filteredGuests.filter(g => {
-                const status = getGuestStatus(g).toUpperCase()
+                const status = (g.status || '').toString().trim().toUpperCase()
                 return status === 'ATTENDED'
               }).length > 0 && (
                 <span className="ml-2 text-green-600">
                   ({filteredGuests.filter(g => {
-                    const status = getGuestStatus(g).toUpperCase()
+                    const status = (g.status || '').toString().trim().toUpperCase()
                     return status === 'ATTENDED'
                   }).length} anwesend)
                 </span>
