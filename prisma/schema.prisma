@@ -16,91 +16,92 @@ model User {
   email     String   @unique
   name      String
   password  String
-  role      String @default("COORDINATOR")
+  role      String   @default("COORDINATOR")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   // Beziehungen
-  assignedTasks TaskAssignment[]
-  tasks Task[]  // Direkt zugewiesene Aufgaben
-  checklistItems ChecklistItem[]
-  responsibleCategories Category[]  // Bereiche, für die dieser Benutzer verantwortlich ist
-  
+  assignedTasks         TaskAssignment[]
+  tasks                 Task[] // Direkt zugewiesene Aufgaben
+  checklistItems        ChecklistItem[]
+  responsibleCategories Category[] // Bereiche, für die dieser Benutzer verantwortlich ist
+  PushSubscription      PushSubscription[]
+
   @@map("users")
 }
 
 // Iftar Event Details
 model Event {
-  id          String   @id @default(cuid())
-  title       String
-  date        DateTime
-  location    String
-  description String?
-  status      String @default("PLANNING")
-  googleSheetsId String?  // Google Sheets Spreadsheet ID
-  googleSheetsSheetName String?  // Sheet Name (default: 'Gästeliste')
-  googleSheetsEnabled Boolean @default(false)  // Synchronisation aktiviert
-  googleSheetsLastSync DateTime?  // Letzte Synchronisation
-  googleSheetsColumnMapping String?  // JSON: Mapping von Sheet-Spalten zu DB-Feldern
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id                        String    @id @default(cuid())
+  title                     String
+  date                      DateTime
+  location                  String
+  description               String?
+  status                    String    @default("PLANNING")
+  googleSheetsId            String? // Google Sheets Spreadsheet ID
+  googleSheetsSheetName     String? // Sheet Name (default: 'Gästeliste')
+  googleSheetsEnabled       Boolean   @default(false) // Synchronisation aktiviert
+  googleSheetsLastSync      DateTime? // Letzte Synchronisation
+  googleSheetsColumnMapping String? // JSON: Mapping von Sheet-Spalten zu DB-Feldern
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
   // Beziehungen
-  guests      Guest[]
-  tasks       Task[]
+  guests         Guest[]
+  tasks          Task[]
   checklistItems ChecklistItem[]
-  programItems ProgramItem[]
-  
+  programItems   ProgramItem[]
+
   @@map("events")
 }
 
 // Gäste / Davet Listesi
 model Guest {
-  id          String   @id @default(cuid())
-  eventId     String
-  name        String
-  email       String?
-  phone       String?
-  title       String?  // Unvan/Title
-  organization String? // Kurum/Organization
-  tableNumber Int?     // Masa numarası
-  isVip      Boolean  @default(false) // VIP misafir
-  status      String @default("INVITED")
-  arrivalTime DateTime? // Ankunftszeit am Event-Tag
-  arrivalDate DateTime? // Anreisedatum (wann kommt der Gast an)
-  needsSpecialReception Boolean @default(false) // Benötigt besonderen Empfang
-  receptionBy String? // Wer empfängt diesen Gast
-  notes       String?
-  additionalData String? // JSON: Alle zusätzlichen Spalten aus Google Sheets (1:1)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+  id                    String    @id @default(cuid())
+  eventId               String
+  name                  String
+  email                 String?
+  phone                 String?
+  title                 String? // Unvan/Title
+  organization          String? // Kurum/Organization
+  tableNumber           Int? // Masa numarası
+  isVip                 Boolean   @default(false) // VIP misafir
+  status                String    @default("INVITED")
+  arrivalTime           DateTime? // Ankunftszeit am Event-Tag
+  arrivalDate           DateTime? // Anreisedatum (wann kommt der Gast an)
+  needsSpecialReception Boolean   @default(false) // Benötigt besonderen Empfang
+  receptionBy           String? // Wer empfängt diesen Gast
+  notes                 String?
+  additionalData        String? // JSON: Alle zusätzlichen Spalten aus Google Sheets (1:1)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   @@map("guests")
 }
 
 // Aufgabenbereiche (9 Hauptbereiche)
 model Task {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   eventId     String
   category    String
   title       String
   description String?
-  status      String @default("PENDING")
-  priority    String @default("MEDIUM")
+  status      String    @default("PENDING")
+  priority    String    @default("MEDIUM")
   dueDate     DateTime?
   completedAt DateTime?
-  assignedTo  String?  // Direkter Verantwortlicher
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  assignedUser User?   @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
-  assignments TaskAssignment[]
+  assignedTo  String? // Direkter Verantwortlicher
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  event          Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignedUser   User?            @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  assignments    TaskAssignment[]
   checklistItems ChecklistItem[]
-  attachments Attachment[]
-  
+  attachments    Attachment[]
+
   @@map("tasks")
 }
 
@@ -109,71 +110,71 @@ model TaskAssignment {
   id        String   @id @default(cuid())
   taskId    String
   userId    String
-  role      String?  // Zusätzliche Rolle/Verantwortung
+  role      String? // Zusätzliche Rolle/Verantwortung
   createdAt DateTime @default(now())
-  
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([taskId, userId])
   @@map("task_assignments")
 }
 
 // Checklisten-Items für jeden Bereich
 model ChecklistItem {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   eventId     String?
   taskId      String?
   category    String
   title       String
   description String?
-  status      String @default("NOT_STARTED")
+  status      String    @default("NOT_STARTED")
   assignedTo  String?
   dueDate     DateTime?
   completedAt DateTime?
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  event       Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  task        Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  assignedUser User?   @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
-  attachments Attachment[]
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignedUser User?        @relation(fields: [assignedTo], references: [id], onDelete: SetNull)
+  attachments  Attachment[]
+
   @@map("checklist_items")
 }
 
 // Protokoll-Einträge
 model Protocol {
-  id          String   @id @default(cuid())
-  eventId     String
-  category    String
-  title       String
-  content     String   // Protokoll-Inhalt
-  authorId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  id        String   @id @default(cuid())
+  eventId   String
+  category  String
+  title     String
+  content   String // Protokoll-Inhalt
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@map("protocols")
 }
 
 // Notizen und Dokumente
 model Note {
-  id          String   @id @default(cuid())
-  eventId     String?
-  taskId      String?
-  category    String?
-  type        String?  // MEETING, CALL, APPOINTMENT
-  responsibleUserId String? // Verantwortlicher (User ID)
+  id                  String   @id @default(cuid())
+  eventId             String?
+  taskId              String?
+  category            String?
+  type                String? // MEETING, CALL, APPOINTMENT
+  responsibleUserId   String? // Verantwortlicher (User ID)
   participantsUserIds String? // JSON Array von User IDs (TEXT)
-  calledWithUserId String? // Für CALL: mit welchem User telefoniert
-  calledWithText  String? // Für CALL: Freitext falls kein User
-  title       String
-  content     String
-  authorId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  calledWithUserId    String? // Für CALL: mit welchem User telefoniert
+  calledWithText      String? // Für CALL: Freitext falls kein User
+  title               String
+  content             String
+  authorId            String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
   @@map("notes")
 }
 
@@ -181,83 +182,99 @@ model Note {
 model ProgramItem {
   id          String   @id @default(cuid())
   eventId     String
-  type        String   // SPEECH, MUSIC, EZAN, QURAN, HITABET, IFTAR_START, SUNUCU
-  title       String   // Titel/Name des Programmpunkts
-  speakerName String?  // Name des Konuşmacı/Kuran okuyan/Ezan okuyan/Sunucu
-  topic       String?  // Konu/Thema
-  duration    Int      // Dauer in Minuten
+  type        String // SPEECH, MUSIC, EZAN, QURAN, HITABET, IFTAR_START, SUNUCU
+  title       String // Titel/Name des Programmpunkts
+  speakerName String? // Name des Konuşmacı/Kuran okuyan/Ezan okuyan/Sunucu
+  topic       String? // Konu/Thema
+  duration    Int // Dauer in Minuten
   startTime   DateTime // Startzeit
-  order       Int      // Reihenfolge im Programm
-  musicType   String?  // Musiktyp (wenn type = MUSIC)
+  order       Int // Reihenfolge im Programm
+  musicType   String? // Musiktyp (wenn type = MUSIC)
   notes       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   @@map("program_items")
 }
 
 // Organisationsbereiche (editierbar)
 model Category {
   id                String   @id @default(cuid())
-  categoryId        String   @unique  // Eindeutige ID (z.B. 'PROTOCOL', 'GUEST_LIST')
+  categoryId        String   @unique // Eindeutige ID (z.B. 'PROTOCOL', 'GUEST_LIST')
   name              String
   icon              String
   color             String
   description       String?
-  responsibleUserId String?  // Hauptverantwortlicher
-  order             Int      @default(0)  // Reihenfolge
+  responsibleUserId String? // Hauptverantwortlicher
+  order             Int      @default(0) // Reihenfolge
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  
-  responsibleUser   User?    @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
-  
+
+  responsibleUser User? @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
+
   @@map("categories")
 }
 
 // Dateianhänge für Tasks und ChecklistItems
 model Attachment {
-  id            String   @id @default(cuid())
-  taskId        String?
+  id              String   @id @default(cuid())
+  taskId          String?
   checklistItemId String?
-  fileName      String
-  filePath      String   // Pfad zur Datei im public/uploads Ordner
-  fileType      String   // MIME-Type (image/png, application/pdf, etc.)
-  fileSize      Int      // Größe in Bytes
-  uploadedBy    String?
-  createdAt     DateTime @default(now())
-  
-  task          Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileName        String
+  filePath        String // Pfad zur Datei im public/uploads Ordner
+  fileType        String // MIME-Type (image/png, application/pdf, etc.)
+  fileSize        Int // Größe in Bytes
+  uploadedBy      String?
+  createdAt       DateTime @default(now())
+
+  task          Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
   checklistItem ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  
+
   @@map("attachments")
 }
 
 // Audit-Log für alle Benutzeraktionen
 model AuditLog {
-  id            String   @id @default(cuid())
-  userId        String?  // User ID (null wenn nicht authentifiziert)
-  userEmail     String?  // User E-Mail (für bessere Lesbarkeit)
-  action        String   // CREATE, UPDATE, DELETE, VIEW, CLICK, LOGIN, LOGOUT, etc.
-  entityType    String?  // GUEST, TASK, CHECKLIST, NOTE, CATEGORY, USER, etc.
-  entityId      String?  // ID der betroffenen Entity
-  eventId       String?  // Event ID (falls relevant)
-  category      String?  // Kategorie (falls relevant)
-  description   String?  // Beschreibung der Aktion
-  oldValues     String?  // JSON: Vorherige Werte (bei Updates)
-  newValues     String?  // JSON: Neue Werte (bei Updates/Creates)
-  ipAddress     String?  // IP-Adresse des Benutzers
-  userAgent     String?  // User-Agent (Browser/Device Info)
-  url           String?  // URL/Route wo die Aktion stattfand
-  metadata      String?  // JSON: Zusätzliche Metadaten
-  createdAt     DateTime @default(now())
-  
+  id          String   @id @default(cuid())
+  userId      String? // User ID (null wenn nicht authentifiziert)
+  userEmail   String? // User E-Mail (für bessere Lesbarkeit)
+  action      String // CREATE, UPDATE, DELETE, VIEW, CLICK, LOGIN, LOGOUT, etc.
+  entityType  String? // GUEST, TASK, CHECKLIST, NOTE, CATEGORY, USER, etc.
+  entityId    String? // ID der betroffenen Entity
+  eventId     String? // Event ID (falls relevant)
+  category    String? // Kategorie (falls relevant)
+  description String? // Beschreibung der Aktion
+  oldValues   String? // JSON: Vorherige Werte (bei Updates)
+  newValues   String? // JSON: Neue Werte (bei Updates/Creates)
+  ipAddress   String? // IP-Adresse des Benutzers
+  userAgent   String? // User-Agent (Browser/Device Info)
+  url         String? // URL/Route wo die Aktion stattfand
+  metadata    String? // JSON: Zusätzliche Metadaten
+  createdAt   DateTime @default(now())
+
   @@index([userId])
   @@index([entityType, entityId])
   @@index([eventId])
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Push Notification Subscriptions
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String? // Optional: Benutzer-ID
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import PushNotificationSetup from '@/components/PushNotificationSetup'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -481,6 +482,11 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+        </div>
+
+        {/* Push Notifications Setup */}
+        <div className="mb-8">
+          <PushNotificationSetup />
         </div>
 
         {/* Event Info Card */}
