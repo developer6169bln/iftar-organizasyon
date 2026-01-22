@@ -44,11 +44,33 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {
-  if ('Notification' in window) {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
+  if (!('Notification' in window)) {
+    console.warn('Notifications werden von diesem Browser nicht unterstützt');
+    return false;
   }
-  return false;
+  
+  // Prüfe aktuelle Berechtigung
+  const currentPermission = Notification.permission;
+  console.log('Aktuelle Notification-Berechtigung:', currentPermission);
+  
+  if (currentPermission === 'granted') {
+    return true;
+  }
+  
+  if (currentPermission === 'denied') {
+    console.warn('Benachrichtigungen wurden blockiert');
+    return false;
+  }
+  
+  // Berechtigung anfragen (muss in User-Interaktion passieren!)
+  try {
+    const permission = await Notification.requestPermission();
+    console.log('Berechtigung Ergebnis:', permission);
+    return permission === 'granted';
+  } catch (error) {
+    console.error('Fehler beim Anfordern der Berechtigung:', error);
+    return false;
+  }
 }
 
 export async function subscribeToPush(

@@ -17,11 +17,15 @@ export default function PushNotificationSetup() {
 
   useEffect(() => {
     const checkSupport = () => {
-      const supported = 'serviceWorker' in navigator && 'PushManager' in window
+      const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
       setIsSupported(supported)
       
       if (supported && 'Notification' in window) {
-        setPermission(Notification.permission)
+        const currentPermission = Notification.permission
+        setPermission(currentPermission)
+        console.log('Notification Permission Status:', currentPermission)
+        console.log('Service Worker Support:', 'serviceWorker' in navigator)
+        console.log('PushManager Support:', 'PushManager' in window)
       }
     }
     
@@ -62,33 +66,73 @@ export default function PushNotificationSetup() {
         }
       }
 
-      // 1. Service Worker registrieren
-      const registration = await registerServiceWorker()
-      if (!registration) {
-        alert('Service Worker konnte nicht registriert werden. Prüfe die Browser-Konsole für Details.')
+      // Prüfe ob Notifications unterstützt werden
+      if (!('Notification' in window)) {
+        alert('Dieser Browser unterstützt keine Push Notifications')
+        setIsLoading(false)
         return
       }
 
-      // 2. Berechtigung anfragen
-      const hasPermission = await requestNotificationPermission()
-      if (!hasPermission) {
-        alert('Benachrichtigungen wurden nicht erlaubt. Bitte erlaube sie in den Browser-Einstellungen.')
-        setPermission('denied')
+      // Prüfe ob Service Worker unterstützt wird
+      if (!('serviceWorker' in navigator)) {
+        alert('Dieser Browser unterstützt keine Service Worker')
+        setIsLoading(false)
+        return
+      }
+
+      // 1. ZUERST: Berechtigung anfragen (muss in User-Interaktion passieren!)
+      // WICHTIG: Auf mobilen Geräten muss die Berechtigung synchron im Click-Handler angefragt werden
+      console.log('Aktuelle Berechtigung:', Notification.permission)
+      
+      let permissionResult: NotificationPermission = Notification.permission
+      
+      if (permissionResult === 'default') {
+        // Berechtigung anfragen - muss direkt im Click-Handler sein (nicht async!)
+        try {
+          permissionResult = await Notification.requestPermission()
+          console.log('Berechtigung Ergebnis:', permissionResult)
+        } catch (error) {
+          console.error('Fehler beim Anfordern der Berechtigung:', error)
+          alert('Fehler beim Anfordern der Berechtigung. Bitte erlaube Benachrichtigungen in den Browser-Einstellungen.')
+          setIsLoading(false)
+          return
+        }
+      }
+
+      if (permissionResult !== 'granted') {
+        alert('Benachrichtigungen wurden nicht erlaubt. Bitte erlaube sie in den Browser-Einstellungen:\n\n' +
+              'iOS: Einstellungen → Safari → Websites → Benachrichtigungen\n' +
+              'Android: Browser-Einstellungen → Benachrichtigungen')
+        setPermission(permissionResult)
+        setIsLoading(false)
         return
       }
       
       setPermission('granted')
+      console.log('Berechtigung erteilt:', permissionResult)
+
+      // 2. Service Worker registrieren
+      const registration = await registerServiceWorker()
+      if (!registration) {
+        alert('Service Worker konnte nicht registriert werden. Prüfe die Browser-Konsole für Details.')
+        setIsLoading(false)
+        return
+      }
+
+      console.log('Service Worker registriert, erstelle Push Subscription...')
 
       // 3. Push Subscription erstellen
       const subscription = await subscribeToPush(registration)
       if (subscription) {
         setIsSubscribed(true)
-        alert('Push Notifications erfolgreich aktiviert!')
+        console.log('Push Subscription erfolgreich erstellt:', subscription)
+        alert('✅ Push Notifications erfolgreich aktiviert!')
       } else {
+        console.error('Fehler beim Erstellen der Subscription')
         alert('Fehler beim Erstellen der Subscription. Prüfe die Browser-Konsole für Details.')
       }
     } catch (error) {
-      console.error('Fehler:', error)
+      console.error('Fehler beim Aktivieren:', error)
       alert('Fehler beim Aktivieren der Notifications: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
     } finally {
       setIsLoading(false)
@@ -162,15 +206,30 @@ export default function PushNotificationSetup() {
           </p>
           <button
             onClick={handleEnableNotifications}
-            disabled={isLoading || permission !== 'default' && permission !== 'granted'}
+            disabled={isLoading || (permission !== 'default' && permission !== 'granted')}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {isLoading ? 'Wird aktiviert...' : 'Push Notifications aktivieren'}
           </button>
           {permission === 'default' && (
-            <p className="text-xs text-gray-500">
-              Beim Klicken wirst du nach Berechtigung gefragt.
-            </p>
+            <div className="text-xs text-gray-500 space-y-1">
+              <p>Beim Klicken wirst du nach Berechtigung gefragt.</p>
+              <p className="text-yellow-600">
+                ⚠️ Auf mobilen Geräten: Stelle sicher, dass du die Berechtigung erteilst!
+              </p>
+            </div>
+          )}
+          {permission === 'denied' && (
+            <div className="mt-2 rounded-lg bg-red-50 p-3 text-xs text-red-800">
+              <p className="font-semibold">Benachrichtigungen wurden blockiert</p>
+              <p className="mt-1">
+                Bitte erlaube Benachrichtigungen in den Browser-Einstellungen:
+              </p>
+              <ul className="mt-1 list-inside list-disc">
+                <li>iOS: Einstellungen → Safari → Websites → Benachrichtigungen</li>
+                <li>Android: Browser-Einstellungen → Website-Einstellungen → Benachrichtigungen</li>
+              </ul>
+            </div>
           )}
         </div>
       )}
