@@ -95,7 +95,7 @@ export default function InstallPrompt() {
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-4 md:p-6 animate-in slide-in-from-bottom-4 duration-300">
+    <div className="fixed inset-x-0 bottom-0 z-50 p-4 md:p-6 transition-all duration-300 ease-out">
       <div className="mx-auto max-w-md rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 p-5 shadow-2xl text-white">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0 mt-1">
