@@ -166,22 +166,24 @@ export default function PushNotificationSetup() {
     )
   }
 
-  if (permission === 'denied') {
-    return (
-      <div className="rounded-lg bg-red-50 p-4 text-red-800">
-        <p className="font-semibold">❌ Benachrichtigungen blockiert</p>
-        <p className="text-sm mt-1">
-          Bitte erlaube Benachrichtigungen in deinen Browser-Einstellungen, um Push Notifications zu aktivieren.
-        </p>
-      </div>
-    )
-  }
-
   return (
     <div className="rounded-lg bg-white p-6 shadow-md">
       <h3 className="mb-4 text-lg font-semibold text-gray-900">Push Notifications</h3>
       
-      {isSubscribed ? (
+      {permission === 'denied' ? (
+        <div className="space-y-4">
+          <div className="rounded-lg bg-red-50 p-4 text-red-800">
+            <p className="font-semibold">❌ Benachrichtigungen blockiert</p>
+            <p className="text-sm mt-1">
+              Bitte erlaube Benachrichtigungen in deinen Browser-Einstellungen, um Push Notifications zu aktivieren.
+            </p>
+            <ul className="mt-2 text-xs list-inside list-disc">
+              <li>iOS: Einstellungen → Safari → Websites → Benachrichtigungen</li>
+              <li>Android: Browser-Einstellungen → Website-Einstellungen → Benachrichtigungen</li>
+            </ul>
+          </div>
+        </div>
+      ) : isSubscribed ? (
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-green-600">
             <span className="text-xl">✓</span>
@@ -206,7 +208,7 @@ export default function PushNotificationSetup() {
           </p>
           <button
             onClick={handleEnableNotifications}
-            disabled={isLoading || permission === 'denied'}
+            disabled={isLoading}
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {isLoading ? 'Wird aktiviert...' : 'Push Notifications aktivieren'}
@@ -217,18 +219,6 @@ export default function PushNotificationSetup() {
               <p className="text-yellow-600">
                 ⚠️ Auf mobilen Geräten: Stelle sicher, dass du die Berechtigung erteilst!
               </p>
-            </div>
-          )}
-          {permission === 'denied' && (
-            <div className="mt-2 rounded-lg bg-red-50 p-3 text-xs text-red-800">
-              <p className="font-semibold">Benachrichtigungen wurden blockiert</p>
-              <p className="mt-1">
-                Bitte erlaube Benachrichtigungen in den Browser-Einstellungen:
-              </p>
-              <ul className="mt-1 list-inside list-disc">
-                <li>iOS: Einstellungen → Safari → Websites → Benachrichtigungen</li>
-                <li>Android: Browser-Einstellungen → Website-Einstellungen → Benachrichtigungen</li>
-              </ul>
             </div>
           )}
         </div>
