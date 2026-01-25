@@ -15,6 +15,8 @@ export default function GuestsPage() {
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
   const [allColumns, setAllColumns] = useState<string[]>([])
   const [showNoResultsWarning, setShowNoResultsWarning] = useState(false)
+  const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
@@ -173,6 +175,109 @@ export default function GuestsPage() {
     loadGoogleSheetsConfig()
   }, [])
 
+  // Wende gespeicherte Reihenfolge an, wenn allColumns sich ändert
+  useEffect(() => {
+    if (allColumns.length > 0) {
+      loadColumnOrder()
+    }
+  }, [guests.length]) // Nur wenn Gäste geladen wurden
+
+  // Lade gespeicherte Spaltenreihenfolge aus localStorage
+  const loadColumnOrder = () => {
+    try {
+      const savedOrder = localStorage.getItem('guestColumnsOrder')
+      if (savedOrder) {
+        const order = JSON.parse(savedOrder)
+        applyColumnOrder(order)
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Spaltenreihenfolge:', e)
+    }
+  }
+
+  // Wende gespeicherte Reihenfolge an
+  const applyColumnOrder = (savedOrder: string[]) => {
+    if (savedOrder.length === 0 || allColumns.length === 0) return
+    
+    // Erstelle eine Map für schnellen Zugriff
+    const orderMap = new Map(savedOrder.map((col, index) => [col, index]))
+    
+    // Sortiere allColumns nach gespeicherter Reihenfolge
+    const sorted = [...allColumns].sort((a, b) => {
+      const indexA = orderMap.get(a) ?? Infinity
+      const indexB = orderMap.get(b) ?? Infinity
+      return indexA - indexB
+    })
+    
+    // Füge Spalten hinzu, die nicht in der gespeicherten Reihenfolge sind
+    const missing = allColumns.filter(col => !orderMap.has(col))
+    if (missing.length > 0) {
+      sorted.push(...missing)
+    }
+    
+    // Nur aktualisieren wenn sich etwas geändert hat
+    if (JSON.stringify(sorted) !== JSON.stringify(allColumns)) {
+      setAllColumns(sorted)
+    }
+  }
+
+  // Speichere Spaltenreihenfolge in localStorage
+  const saveColumnOrder = (columns: string[]) => {
+    try {
+      localStorage.setItem('guestColumnsOrder', JSON.stringify(columns))
+    } catch (e) {
+      console.error('Fehler beim Speichern der Spaltenreihenfolge:', e)
+    }
+  }
+
+  // Drag-Handler
+  const handleDragStart = (column: string) => {
+    setDraggedColumn(column)
+  }
+
+  const handleDragOver = (e: React.DragEvent, column: string) => {
+    e.preventDefault()
+    if (draggedColumn && draggedColumn !== column) {
+      setDragOverColumn(column)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, targetColumn: string) => {
+    e.preventDefault()
+    
+    if (!draggedColumn || draggedColumn === targetColumn) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    // Erstelle neue Spaltenreihenfolge
+    const newColumns = [...allColumns]
+    const draggedIndex = newColumns.indexOf(draggedColumn)
+    const targetIndex = newColumns.indexOf(targetColumn)
+
+    // Entferne die gezogene Spalte
+    newColumns.splice(draggedIndex, 1)
+    
+    // Füge sie an der neuen Position ein
+    newColumns.splice(targetIndex, 0, draggedColumn)
+
+    setAllColumns(newColumns)
+    saveColumnOrder(newColumns)
+    
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+
   const loadEventAndGuests = async () => {
     try {
       const eventResponse = await fetch('/api/events')
@@ -321,6 +426,7 @@ export default function GuestsPage() {
     // Wenn keine Gäste vorhanden, setze Standard-Spalten
     if (guests.length === 0) {
       setAllColumns(standardColumns)
+      saveColumnOrder(standardColumns)
       return
     }
     
@@ -344,7 +450,12 @@ export default function GuestsPage() {
       }
     })
     
-    setAllColumns(Array.from(columnsSet))
+    const newColumns = Array.from(columnsSet)
+    setAllColumns(newColumns)
+    // Versuche gespeicherte Reihenfolge anzuwenden
+    setTimeout(() => {
+      loadColumnOrder()
+    }, 100)
   }, [guests])
 
   useEffect(() => {
@@ -630,6 +741,7 @@ export default function GuestsPage() {
           }
           
           setAllColumns(importedColumns)
+        saveColumnOrder(importedColumns)
         } else {
           // Wenn keine Header, lass useEffect die Spalten aus additionalData sammeln
           // (wird automatisch durch loadGuests() ausgelöst)
@@ -800,7 +912,9 @@ export default function GuestsPage() {
       loadGuests()
       
       // Entferne Spalte aus allColumns
-      setAllColumns(allColumns.filter(col => col !== columnName))
+      const newColumns = allColumns.filter(col => col !== columnName)
+      setAllColumns(newColumns)
+      saveColumnOrder(newColumns)
       
       // Entferne Filter für diese Spalte
       const newFilters = { ...columnFilters }
@@ -1184,15 +1298,49 @@ export default function GuestsPage() {
                     <tr className="border-b border-gray-200">
                       {allColumns.map((column) => {
                         const isStandardColumn = standardColumns.includes(column)
+                        const isDragging = draggedColumn === column
+                        const isDragOver = dragOverColumn === column
                         return (
-                          <th key={column} className="px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap">
+                          <th
+                            key={column}
+                            draggable
+                            onDragStart={() => handleDragStart(column)}
+                            onDragOver={(e) => handleDragOver(e, column)}
+                            onDragLeave={handleDragLeave}
+                            onDrop={(e) => handleDrop(e, column)}
+                            onDragEnd={handleDragEnd}
+                            className={`px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap cursor-move select-none ${
+                              isDragging ? 'opacity-50' : ''
+                            } ${
+                              isDragOver ? 'bg-indigo-100 border-l-4 border-indigo-500' : ''
+                            } transition-colors`}
+                          >
                             <div className="flex items-center gap-2">
-                              <span>{column}</span>
+                              <span className="flex items-center gap-1">
+                                <svg
+                                  className="h-4 w-4 text-gray-400"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 8h16M4 16h16"
+                                  />
+                                </svg>
+                                {column}
+                              </span>
                               {!isStandardColumn && (
                                 <button
-                                  onClick={() => handleDeleteColumn(column)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteColumn(column)
+                                  }}
                                   className="text-red-500 hover:text-red-700"
                                   title={`Spalte "${column}" löschen`}
+                                  onMouseDown={(e) => e.stopPropagation()}
                                 >
                                   🗑️
                                 </button>
