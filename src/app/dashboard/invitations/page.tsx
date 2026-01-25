@@ -18,6 +18,7 @@ export default function InvitationsPage() {
   const [sending, setSending] = useState(false)
   const [activeTab, setActiveTab] = useState<'send' | 'list' | 'templates' | 'config'>('send')
   const [eventId, setEventId] = useState<string>('')
+  const [selectedInvitations, setSelectedInvitations] = useState<string[]>([])
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -312,10 +313,43 @@ export default function InvitationsPage() {
           <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-xl font-semibold">Einladungsliste</h2>
             
+            {/* Auswahl-Info und Bulk-Aktionen */}
+            {selectedInvitations.length > 0 && (
+              <div className="mb-4 rounded-lg bg-indigo-50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-indigo-900">
+                    {selectedInvitations.length} Einladung(en) ausgewählt
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (confirm(`Möchten Sie wirklich ${selectedInvitations.length} Einladung(en) erneut senden?`)) {
+                          // TODO: Implementiere erneutes Senden
+                          alert('Funktion wird noch implementiert')
+                        }
+                      }}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                    >
+                      Erneut senden
+                    </button>
+                    <button
+                      onClick={() => setSelectedInvitations([])}
+                      className="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300"
+                    >
+                      Auswahl aufheben
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Filter */}
             <div className="mb-4 flex gap-2">
               <button
-                onClick={() => loadInvitations(eventId)}
+                onClick={() => {
+                  loadInvitations(eventId)
+                  setSelectedInvitations([])
+                }}
                 className="rounded-lg bg-gray-200 px-4 py-2 text-sm hover:bg-gray-300"
               >
                 Alle
@@ -325,6 +359,7 @@ export default function InvitationsPage() {
                   fetch(`/api/invitations/list?eventId=${eventId}&response=ACCEPTED`)
                     .then(r => r.json())
                     .then(setInvitations)
+                    .then(() => setSelectedInvitations([]))
                 }}
                 className="rounded-lg bg-green-100 px-4 py-2 text-sm text-green-700 hover:bg-green-200"
               >
@@ -335,6 +370,7 @@ export default function InvitationsPage() {
                   fetch(`/api/invitations/list?eventId=${eventId}&response=DECLINED`)
                     .then(r => r.json())
                     .then(setInvitations)
+                    .then(() => setSelectedInvitations([]))
                 }}
                 className="rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700 hover:bg-red-200"
               >
@@ -345,6 +381,7 @@ export default function InvitationsPage() {
                   fetch(`/api/invitations/list?eventId=${eventId}&response=PENDING`)
                     .then(r => r.json())
                     .then(setInvitations)
+                    .then(() => setSelectedInvitations([]))
                 }}
                 className="rounded-lg bg-yellow-100 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-200"
               >
@@ -357,6 +394,21 @@ export default function InvitationsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={invitations.length > 0 && selectedInvitations.length === invitations.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedInvitations(invitations.map((inv: any) => inv.id))
+                          } else {
+                            setSelectedInvitations([])
+                          }
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        title="Alle auswählen"
+                      />
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Gast
                     </th>
@@ -380,6 +432,20 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.map((invitation) => (
                     <tr key={invitation.id}>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedInvitations.includes(invitation.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedInvitations([...selectedInvitations, invitation.id])
+                            } else {
+                              setSelectedInvitations(selectedInvitations.filter(id => id !== invitation.id))
+                            }
+                          }}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {invitation.guest?.name}
                       </td>
