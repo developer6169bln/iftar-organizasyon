@@ -575,9 +575,8 @@ export default function GuestsPage() {
     console.log('📊 Gefundene Spalten:', {
       total: orderedColumns.length,
       checkbox: checkboxColumns.length,
-      standard: standardInOther.length,
-      additional: additionalInOther.length,
-      additionalColumns: additionalInOther,
+      imported: otherColumns.length,
+      importedColumns: otherColumns,
       allColumns: orderedColumns
     })
     
