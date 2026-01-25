@@ -19,9 +19,13 @@ export default function GuestsPage() {
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   const [sortColumn, setSortColumn] = useState<string | null>(null)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [selectedGuests, setSelectedGuests] = useState<string[]>([])
+  const [editingCell, setEditingCell] = useState<{ guestId: string; column: string } | null>(null)
+  const [editingValue, setEditingValue] = useState<string>('')
+  const [invitations, setInvitations] = useState<Record<string, any>>({}) // guestId -> invitation
   
   // Geschützte Spalten (können nicht gelöscht werden)
-  const protectedColumns = ['Nummer', 'İşlemler']
+  const protectedColumns = ['Nummer', 'İşlemler', 'Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
   
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
@@ -502,16 +506,16 @@ export default function GuestsPage() {
       if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
         return // Behalte minimale Struktur
       }
-      // Setze minimale Struktur (nur Nummer und İşlemler)
-      const minimalColumns = ['Nummer', 'İşlemler']
+      // Setze minimale Struktur mit Checkbox-Spalten
+      const minimalColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'İşlemler']
       setAllColumns(minimalColumns)
       saveColumnOrder(minimalColumns)
       return
     }
     
     // Sammle NUR Spalten aus additionalData (direkter Import, kein Abgleich mit Standard-Spalten)
-    // Füge "Nummer" immer hinzu (geschützte Spalte)
-    const columnsSet = new Set<string>(['Nummer'])
+    // Füge Checkbox-Spalten und "Nummer" immer hinzu (geschützte Spalten)
+    const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt'])
     
     guests.forEach(guest => {
       if (guest?.additionalData) {
@@ -529,22 +533,31 @@ export default function GuestsPage() {
       }
     })
     
-    // Stelle sicher, dass "Nummer" immer vorhanden ist und an erster Stelle
+    // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer vorhanden sind und an den richtigen Stellen
     const finalColumns = Array.from(columnsSet)
-    const nummerIndex = finalColumns.indexOf('Nummer')
-    if (nummerIndex > 0) {
-      finalColumns.splice(nummerIndex, 1)
-      finalColumns.unshift('Nummer')
-    } else if (nummerIndex === -1) {
-      finalColumns.unshift('Nummer')
-    }
+    
+    // Entferne Checkbox-Spalten und Nummer aus der Liste
+    const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
+    const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
+    
+    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann andere Spalten
+    const orderedColumns = [
+      'Auswahl',
+      'Nummer',
+      'VIP',
+      'Einladung E-Mail',
+      'Einladung Post',
+      'Nimmt Teil',
+      'Abgesagt',
+      ...otherColumns
+    ]
     
     // Füge "İşlemler" am Ende hinzu (für Aktionen)
-    if (!finalColumns.includes('İşlemler')) {
-      finalColumns.push('İşlemler')
+    if (!orderedColumns.includes('İşlemler')) {
+      orderedColumns.push('İşlemler')
     }
     
-    setAllColumns(finalColumns)
+    setAllColumns(orderedColumns)
     // Versuche gespeicherte Reihenfolge anzuwenden
     setTimeout(() => {
       loadColumnOrder()
@@ -710,11 +723,155 @@ export default function GuestsPage() {
         const data = await response.json()
         setGuests(data)
         setFilteredGuests(data)
+        
+        // Lade auch Invitations für alle Gäste
+        await loadInvitations(data.map((g: any) => g.id))
       }
     } catch (error) {
       console.error('Misafirler yüklenirken hata:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadInvitations = async (guestIds: string[]) => {
+    try {
+      const eventsRes = await fetch('/api/events')
+      if (eventsRes.ok) {
+        const events = await eventsRes.json()
+        if (events.length > 0) {
+          const invitationsRes = await fetch(`/api/invitations/list?eventId=${events[0].id}`)
+          if (invitationsRes.ok) {
+            const invitationsData = await invitationsRes.json()
+            // Erstelle Map: guestId -> invitation
+            const invitationsMap: Record<string, any> = {}
+            invitationsData.forEach((inv: any) => {
+              invitationsMap[inv.guestId] = inv
+            })
+            setInvitations(invitationsMap)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Laden der Einladungen:', error)
+    }
+  }
+
+  const handleCellEdit = (guestId: string, column: string, currentValue: any) => {
+    setEditingCell({ guestId, column })
+    setEditingValue(String(currentValue || ''))
+  }
+
+  const handleCellSave = async (guestId: string, column: string) => {
+    try {
+      const guest = guests.find(g => g.id === guestId)
+      if (!guest) return
+
+      let updateData: any = { id: guestId }
+
+      // Standard-Felder
+      if (column === 'Name') {
+        updateData.name = editingValue
+      } else if (column === 'E-Mail') {
+        updateData.email = editingValue || null
+      } else if (column === 'Partei / Organisation / Unternehmen') {
+        updateData.organization = editingValue || null
+      } else if (column === 'Funktion') {
+        updateData.title = editingValue || null
+      } else if (column === 'Tischnummer') {
+        updateData.tableNumber = editingValue ? parseInt(editingValue) : null
+      } else if (column === 'Notiz') {
+        updateData.notes = editingValue || null
+      } else {
+        // Zusätzliche Spalten aus additionalData
+        const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+        additional[column] = editingValue
+        updateData.additionalData = JSON.stringify(additional)
+      }
+
+      const response = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        setGuests(guests.map(g => g.id === guestId ? updated : g))
+        setEditingCell(null)
+        setEditingValue('')
+      } else {
+        const error = await response.json()
+        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleCellCancel = () => {
+    setEditingCell(null)
+    setEditingValue('')
+  }
+
+  const handleCheckboxChange = async (guestId: string, field: string, checked: boolean) => {
+    try {
+      if (field === 'vip') {
+        const response = await fetch('/api/guests', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: guestId, isVip: checked }),
+        })
+        if (response.ok) {
+          const updated = await response.json()
+          setGuests(guests.map(g => g.id === guestId ? updated : g))
+        }
+      } else {
+        // Für Invitation-Felder
+        const invitation = invitations[guestId]
+        if (!invitation) {
+          // Erstelle neue Invitation falls nicht vorhanden
+          const eventsRes = await fetch('/api/events')
+          if (eventsRes.ok) {
+            const events = await eventsRes.json()
+            if (events.length > 0) {
+              // TODO: Erstelle Invitation
+              alert('Invitation muss zuerst erstellt werden')
+            }
+          }
+          return
+        }
+
+        const updateData: any = { id: invitation.id }
+        
+        if (field === 'sentByPost') {
+          updateData.sentByPost = checked
+          if (checked) {
+            updateData.sentAt = new Date().toISOString()
+          }
+        } else if (field === 'nimmtTeil') {
+          updateData.response = checked ? 'ACCEPTED' : 'PENDING'
+          updateData.respondedAt = checked ? new Date().toISOString() : null
+        } else if (field === 'abgesagt') {
+          updateData.response = checked ? 'DECLINED' : 'PENDING'
+          updateData.respondedAt = checked ? new Date().toISOString() : null
+        }
+
+        const response = await fetch('/api/invitations/update', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateData),
+        })
+
+        if (response.ok) {
+          const updated = await response.json()
+          setInvitations({ ...invitations, [guestId]: updated })
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
     }
   }
 
@@ -1630,6 +1787,108 @@ export default function GuestsPage() {
                         className={`border-b border-gray-100 hover:bg-gray-50 ${guest.isVip ? 'bg-yellow-50' : ''}`}
                       >
                         {allColumns.map((column) => {
+                          // Checkbox-Spalten
+                          if (column === 'Auswahl') {
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedGuests.includes(guest.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedGuests([...selectedGuests, guest.id])
+                                    } else {
+                                      setSelectedGuests(selectedGuests.filter(id => id !== guest.id))
+                                    }
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'VIP') {
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={guest.isVip || false}
+                                  onChange={(e) => handleCheckboxChange(guest.id, 'vip', e.target.checked)}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Einladung E-Mail') {
+                            const invitation = invitations[guest.id]
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={!!invitation?.sentAt}
+                                  disabled
+                                  className="rounded border-gray-300 text-gray-400"
+                                  title={invitation?.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Einladung Post') {
+                            const invitation = invitations[guest.id]
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={invitation?.sentByPost || false}
+                                  onChange={(e) => handleCheckboxChange(guest.id, 'sentByPost', e.target.checked)}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Nimmt Teil') {
+                            const invitation = invitations[guest.id]
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={invitation?.response === 'ACCEPTED'}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      handleCheckboxChange(guest.id, 'nimmtTeil', true)
+                                    } else {
+                                      handleCheckboxChange(guest.id, 'nimmtTeil', false)
+                                    }
+                                  }}
+                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Abgesagt') {
+                            const invitation = invitations[guest.id]
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={invitation?.response === 'DECLINED'}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      handleCheckboxChange(guest.id, 'abgesagt', true)
+                                    } else {
+                                      handleCheckboxChange(guest.id, 'abgesagt', false)
+                                    }
+                                  }}
+                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
                           // Nummer-Spalte: Automatisch generierte fortlaufende Nummer (0, 1, 2, ...)
                           if (column === 'Nummer') {
                             return (
@@ -1756,13 +2015,57 @@ export default function GuestsPage() {
                             )
                           }
                           
-                          // Standard-Spalten und zusätzliche Spalten aus additionalData
+                          // Standard-Spalten und zusätzliche Spalten aus additionalData - alle editierbar
                           const value = getColumnValue(guest, column)
+                          const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
+                          
                           return (
-                            <td key={column} className="px-4 py-3 text-sm text-gray-600">
-                              <span className="cursor-pointer hover:text-indigo-600" title={value || '-'}>
-                                {value || <span className="text-gray-400">-</span>}
-                              </span>
+                            <td 
+                              key={column} 
+                              className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50"
+                              onClick={() => !isEditing && handleCellEdit(guest.id, column, value)}
+                            >
+                              {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={editingValue}
+                                    onChange={(e) => setEditingValue(e.target.value)}
+                                    onBlur={() => handleCellSave(guest.id, column)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleCellSave(guest.id, column)
+                                      } else if (e.key === 'Escape') {
+                                        handleCellCancel()
+                                      }
+                                    }}
+                                    className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCellSave(guest.id, column)
+                                    }}
+                                    className="text-green-600 hover:text-green-700"
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCellCancel()
+                                    }}
+                                    className="text-red-600 hover:text-red-700"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="hover:text-indigo-600" title={value || '-'}>
+                                  {value || <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>}
+                                </span>
+                              )}
                             </td>
                           )
                         })}
