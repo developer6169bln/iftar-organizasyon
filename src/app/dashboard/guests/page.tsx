@@ -952,6 +952,7 @@ export default function GuestsPage() {
       
       // Setze Spalten zurück
       setAllColumns(standardColumns)
+      saveColumnOrder(standardColumns)
       setColumnFilters({})
     } catch (error) {
       console.error('Fehler beim Löschen aller Gäste:', error)
