@@ -18,6 +18,9 @@ export default function GuestsPage() {
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
   
+  // Geschützte Spalten (können nicht gelöscht werden)
+  const protectedColumns = ['Nummer', 'İşlemler']
+  
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
     'Kategorie',
@@ -54,11 +57,17 @@ export default function GuestsPage() {
     'İşlemler',
     'Telefon',
     'Anwesend',
-    'VIP'
+    'VIP',
+    'Nummer' // Nummer-Spalte hat keinen Filter
   ]
   
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
-  const getColumnValue = (guest: any, columnName: string): string => {
+  const getColumnValue = (guest: any, columnName: string, index?: number): string => {
+    // Nummer-Spalte: Automatisch generierte fortlaufende Nummer
+    if (columnName === 'Nummer') {
+      return index !== undefined ? index.toString() : ''
+    }
+    
     // ZUERST: Prüfe additionalData (hat Priorität, da es die importierten Daten enthält)
     if (guest.additionalData) {
       try {
@@ -199,8 +208,13 @@ export default function GuestsPage() {
   const applyColumnOrder = (savedOrder: string[]) => {
     if (savedOrder.length === 0 || allColumns.length === 0) return
     
+    // Stelle sicher, dass "Nummer" immer an erster Stelle ist
+    const orderWithNummer = savedOrder.includes('Nummer') 
+      ? savedOrder 
+      : ['Nummer', ...savedOrder.filter(col => col !== 'Nummer')]
+    
     // Erstelle eine Map für schnellen Zugriff
-    const orderMap = new Map(savedOrder.map((col, index) => [col, index]))
+    const orderMap = new Map(orderWithNummer.map((col, index) => [col, index]))
     
     // Sortiere allColumns nach gespeicherter Reihenfolge
     const sorted = [...allColumns].sort((a, b) => {
@@ -213,6 +227,15 @@ export default function GuestsPage() {
     const missing = allColumns.filter(col => !orderMap.has(col))
     if (missing.length > 0) {
       sorted.push(...missing)
+    }
+    
+    // Stelle sicher, dass "Nummer" an erster Stelle ist
+    const nummerIndex = sorted.indexOf('Nummer')
+    if (nummerIndex > 0) {
+      sorted.splice(nummerIndex, 1)
+      sorted.unshift('Nummer')
+    } else if (nummerIndex === -1) {
+      sorted.unshift('Nummer')
     }
     
     // Nur aktualisieren wenn sich etwas geändert hat
@@ -255,16 +278,47 @@ export default function GuestsPage() {
       return
     }
 
+    // Verhindere Verschieben von geschützten Spalten
+    if (protectedColumns.includes(draggedColumn)) {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+
+    // Verhindere Verschieben auf Position von "Nummer" (immer an erster Stelle)
+    if (targetColumn === 'Nummer') {
+      setDraggedColumn(null)
+      setDragOverColumn(null)
+      return
+    }
+
     // Erstelle neue Spaltenreihenfolge
     const newColumns = [...allColumns]
     const draggedIndex = newColumns.indexOf(draggedColumn)
     const targetIndex = newColumns.indexOf(targetColumn)
 
-    // Entferne die gezogene Spalte
-    newColumns.splice(draggedIndex, 1)
-    
-    // Füge sie an der neuen Position ein
-    newColumns.splice(targetIndex, 0, draggedColumn)
+    // Stelle sicher, dass "Nummer" an erster Stelle bleibt
+    if (targetIndex === 0 && newColumns[0] === 'Nummer') {
+      // Verschiebe nicht auf Position 0, wenn "Nummer" dort ist
+      if (draggedIndex > 0) {
+        // Entferne die gezogene Spalte
+        newColumns.splice(draggedIndex, 1)
+        // Füge sie nach "Nummer" ein (Position 1)
+        newColumns.splice(1, 0, draggedColumn)
+      }
+    } else {
+      // Entferne die gezogene Spalte
+      newColumns.splice(draggedIndex, 1)
+      // Füge sie an der neuen Position ein
+      newColumns.splice(targetIndex, 0, draggedColumn)
+    }
+
+    // Stelle sicher, dass "Nummer" an erster Stelle ist
+    const nummerIndex = newColumns.indexOf('Nummer')
+    if (nummerIndex > 0) {
+      newColumns.splice(nummerIndex, 1)
+      newColumns.unshift('Nummer')
+    }
 
     setAllColumns(newColumns)
     saveColumnOrder(newColumns)
@@ -423,15 +477,21 @@ export default function GuestsPage() {
 
   // Sammle ALLE Spalten aus additionalData aller Gäste
   useEffect(() => {
-    // Wenn keine Gäste vorhanden, setze Standard-Spalten
+    // Wenn keine Gäste vorhanden, prüfe ob bereits minimale Struktur vorhanden
     if (guests.length === 0) {
+      // Wenn bereits minimale Struktur (nur Nummer), behalte sie
+      if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
+        return // Behalte minimale Struktur
+      }
+      // Sonst setze Standard-Spalten
       setAllColumns(standardColumns)
       saveColumnOrder(standardColumns)
       return
     }
     
     // Sammle alle Spalten aus allen Gästen
-    const columnsSet = new Set<string>(standardColumns)
+    // Füge "Nummer" immer hinzu (geschützte Spalte)
+    const columnsSet = new Set<string>(['Nummer', ...standardColumns])
     
     guests.forEach(guest => {
       if (guest?.additionalData) {
@@ -450,8 +510,18 @@ export default function GuestsPage() {
       }
     })
     
-    const newColumns = Array.from(columnsSet)
-    setAllColumns(newColumns)
+    // Stelle sicher, dass "Nummer" immer vorhanden ist
+    columnsSet.add('Nummer')
+    
+    const finalColumns = Array.from(columnsSet)
+    // Stelle sicher, dass "Nummer" an erster Stelle ist
+    const nummerIndex = finalColumns.indexOf('Nummer')
+    if (nummerIndex > 0) {
+      finalColumns.splice(nummerIndex, 1)
+      finalColumns.unshift('Nummer')
+    }
+    
+    setAllColumns(finalColumns)
     // Versuche gespeicherte Reihenfolge anzuwenden
     setTimeout(() => {
       loadColumnOrder()
@@ -727,9 +797,13 @@ export default function GuestsPage() {
           // Verwende NUR die Spalten aus Google Sheets (1:1, als Master)
           const importedColumns: string[] = []
           
+          // Füge ZUERST "Nummer" hinzu (geschützte Spalte, immer an erster Stelle, von 0 startend)
+          importedColumns.push('Nummer')
+          
           // Füge alle Spalten aus Google Sheets hinzu (1:1, als Master)
+          // WICHTIG: Ignoriere "Nummer" aus Google Sheets, da sie automatisch generiert wird
           result.headers.forEach((header: string) => {
-            if (header && header.trim() && !importedColumns.includes(header)) {
+            if (header && header.trim() && !importedColumns.includes(header) && header !== 'Nummer') {
               importedColumns.push(header)
             }
           })
@@ -741,7 +815,7 @@ export default function GuestsPage() {
           }
           
           setAllColumns(importedColumns)
-        saveColumnOrder(importedColumns)
+          saveColumnOrder(importedColumns)
         } else {
           // Wenn keine Header, lass useEffect die Spalten aus additionalData sammeln
           // (wird automatisch durch loadGuests() ausgelöst)
@@ -884,6 +958,12 @@ export default function GuestsPage() {
   const handleDeleteColumn = async (columnName: string) => {
     if (!eventId) return
     
+    // Prüfe ob Spalte geschützt ist
+    if (protectedColumns.includes(columnName)) {
+      alert(`Die Spalte "${columnName}" ist geschützt und kann nicht gelöscht werden.`)
+      return
+    }
+    
     // Prüfe ob es eine Standard-Spalte ist (diese können nicht gelöscht werden)
     if (standardColumns.includes(columnName)) {
       alert('Standard-Spalten können nicht gelöscht werden')
@@ -912,7 +992,20 @@ export default function GuestsPage() {
       loadGuests()
       
       // Entferne Spalte aus allColumns
+      // Stelle sicher, dass "Nummer" immer erhalten bleibt
       const newColumns = allColumns.filter(col => col !== columnName)
+      
+      // Stelle sicher, dass "Nummer" an erster Stelle ist
+      if (!newColumns.includes('Nummer')) {
+        newColumns.unshift('Nummer')
+      } else {
+        const nummerIndex = newColumns.indexOf('Nummer')
+        if (nummerIndex > 0) {
+          newColumns.splice(nummerIndex, 1)
+          newColumns.unshift('Nummer')
+        }
+      }
+      
       setAllColumns(newColumns)
       saveColumnOrder(newColumns)
       
@@ -957,6 +1050,50 @@ export default function GuestsPage() {
     } catch (error) {
       console.error('Fehler beim Löschen aller Gäste:', error)
       alert('Fehler beim Löschen aller Gäste')
+    }
+  }
+
+  // Reset Tabelle: Löscht alle Gäste und setzt Struktur auf nur "Nummer" zurück
+  const handleResetTable = async () => {
+    if (!eventId) return
+    
+    const confirmMessage = 
+      '⚠️ WICHTIG: Diese Aktion wird:\n\n' +
+      '• ALLE Gäste löschen\n' +
+      '• ALLE Spalten entfernen (außer "Nummer")\n' +
+      '• Die Tabelle auf minimale Struktur zurücksetzen\n\n' +
+      'Diese Aktion kann nicht rückgängig gemacht werden!\n\n' +
+      'Möchten Sie fortfahren?'
+    
+    if (!confirm(confirmMessage)) {
+      return
+    }
+
+    try {
+      // Lösche alle Gäste
+      const response = await fetch(`/api/guests?eventId=${eventId}&deleteAll=true`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        alert(`Fehler beim Löschen: ${error.error || 'Unbekannter Fehler'}`)
+        return
+      }
+
+      // Setze Spalten auf nur "Nummer" und "İşlemler" zurück
+      const minimalColumns = ['Nummer', 'İşlemler']
+      setAllColumns(minimalColumns)
+      saveColumnOrder(minimalColumns)
+      setColumnFilters({})
+      
+      // Lade Gäste neu (sollte leer sein)
+      await loadGuests()
+      
+      alert('✅ Tabelle zurückgesetzt:\n\n• Alle Gäste gelöscht\n• Struktur auf "Nummer" minimiert\n• Bereit für neuen Import')
+    } catch (error) {
+      console.error('Fehler beim Zurücksetzen der Tabelle:', error)
+      alert('Fehler beim Zurücksetzen der Tabelle')
     }
   }
 
@@ -1234,13 +1371,22 @@ export default function GuestsPage() {
               <h2 className="text-xl font-semibold">Misafir Listesi</h2>
               <div className="flex items-center gap-4">
                 {guests.length > 0 && (
-                  <button
-                    onClick={handleDeleteAll}
-                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-                    title="Alle Gäste löschen"
-                  >
-                    🗑️ Alle löschen
-                  </button>
+                  <>
+                    <button
+                      onClick={handleResetTable}
+                      className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
+                      title="Tabelle zurücksetzen (nur Nummer-Spalte behalten)"
+                    >
+                      🔄 Tabelle zurücksetzen
+                    </button>
+                    <button
+                      onClick={handleDeleteAll}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+                      title="Alle Gäste löschen"
+                    >
+                      🗑️ Alle löschen
+                    </button>
+                  </>
                 )}
                 <div className="relative">
                   <input
@@ -1304,13 +1450,15 @@ export default function GuestsPage() {
                         return (
                           <th
                             key={column}
-                            draggable
-                            onDragStart={() => handleDragStart(column)}
-                            onDragOver={(e) => handleDragOver(e, column)}
+                            draggable={!protectedColumns.includes(column)}
+                            onDragStart={() => !protectedColumns.includes(column) && handleDragStart(column)}
+                            onDragOver={(e) => !protectedColumns.includes(column) && handleDragOver(e, column)}
                             onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, column)}
+                            onDrop={(e) => !protectedColumns.includes(column) && handleDrop(e, column)}
                             onDragEnd={handleDragEnd}
-                            className={`px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap cursor-move select-none ${
+                            className={`px-4 py-3 text-left text-sm font-semibold text-gray-900 whitespace-nowrap select-none ${
+                              protectedColumns.includes(column) ? 'cursor-default bg-gray-50' : 'cursor-move'
+                            } ${
                               isDragging ? 'opacity-50' : ''
                             } ${
                               isDragOver ? 'bg-indigo-100 border-l-4 border-indigo-500' : ''
@@ -1333,7 +1481,7 @@ export default function GuestsPage() {
                                 </svg>
                                 {column}
                               </span>
-                              {!isStandardColumn && (
+                              {!isStandardColumn && !protectedColumns.includes(column) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -1345,6 +1493,11 @@ export default function GuestsPage() {
                                 >
                                   🗑️
                                 </button>
+                              )}
+                              {protectedColumns.includes(column) && (
+                                <span className="text-xs text-gray-400" title="Geschützte Spalte">
+                                  🔒
+                                </span>
                               )}
                             </div>
                           </th>
@@ -1390,12 +1543,21 @@ export default function GuestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredGuests.map((guest) => (
+                    {filteredGuests.map((guest, index) => (
                       <tr
                         key={guest.id}
                         className={`border-b border-gray-100 hover:bg-gray-50 ${guest.isVip ? 'bg-yellow-50' : ''}`}
                       >
                         {allColumns.map((column) => {
+                          // Nummer-Spalte: Automatisch generierte fortlaufende Nummer (0, 1, 2, ...)
+                          if (column === 'Nummer') {
+                            return (
+                              <td key={column} className="px-4 py-3 text-center text-sm font-medium text-gray-600">
+                                {index}
+                              </td>
+                            )
+                          }
+                          
                           // Spezialbehandlung für bestimmte Spalten
                           if (column === 'Name') {
                             return (
