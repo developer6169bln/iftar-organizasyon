@@ -25,7 +25,7 @@ export default function GuestsPage() {
   const [invitations, setInvitations] = useState<Record<string, any>>({}) // guestId -> invitation
   
   // Geschützte Spalten (können nicht gelöscht werden)
-  const protectedColumns = ['Nummer', 'İşlemler', 'Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
+  const protectedColumns = ['Nummer', 'İşlemler']
   
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
@@ -68,6 +68,7 @@ export default function GuestsPage() {
     'Einladung Post',
     'Nimmt Teil',
     'Abgesagt',
+    'Mail-Liste',
     'Anwesend',
     'VIP',
     'Nummer' // Nummer-Spalte hat keinen Filter
@@ -217,31 +218,28 @@ export default function GuestsPage() {
   const applyColumnOrder = (savedOrder: string[]) => {
     if (savedOrder.length === 0 || allColumns.length === 0) return
     
-    // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer an den richtigen Stellen sind
-    const checkboxCols = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
-    const protectedCols = ['İşlemler']
+    // Stelle sicher, dass nur "Nummer" und "İşlemler" geschützt sind
+    const protectedCols = ['Nummer', 'İşlemler']
     
     // Filtere gespeicherte Reihenfolge: Nur Spalten, die auch in allColumns existieren
     const validSavedOrder = savedOrder.filter(col => allColumns.includes(col))
     
-    // Entferne Checkbox-Spalten und geschützte Spalten aus der gespeicherten Reihenfolge
+    // Entferne nur geschützte Spalten aus der gespeicherten Reihenfolge
     const savedWithoutProtected = validSavedOrder.filter(col => 
-      !checkboxCols.includes(col) && !protectedCols.includes(col)
-    )
-    
-    // Baue neue Reihenfolge: Checkbox-Spalten, dann gespeicherte Reihenfolge, dann fehlende Spalten
-    const checkboxInOrder = checkboxCols.filter(col => allColumns.includes(col))
-    const missing = allColumns.filter(col => 
-      !checkboxInOrder.includes(col) && 
-      !savedWithoutProtected.includes(col) && 
       !protectedCols.includes(col)
     )
     
+    // Baue neue Reihenfolge: Nummer zuerst, dann gespeicherte Reihenfolge, dann fehlende Spalten, dann İşlemler
+    const missing = allColumns.filter(col => 
+      !protectedCols.includes(col) && 
+      !savedWithoutProtected.includes(col)
+    )
+    
     const newOrder = [
-      ...checkboxInOrder,
+      'Nummer', // Immer an erster Stelle
       ...savedWithoutProtected,
       ...missing,
-      ...protectedCols.filter(col => allColumns.includes(col))
+      'İşlemler' // Immer am Ende
     ]
     
     // Nur aktualisieren wenn sich etwas geändert hat
@@ -508,15 +506,15 @@ export default function GuestsPage() {
         return // Behalte minimale Struktur
       }
       // Setze minimale Struktur mit Checkbox-Spalten
-      const minimalColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'İşlemler']
+      const minimalColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste', 'İşlemler']
       setAllColumns(minimalColumns)
       saveColumnOrder(minimalColumns)
       return
     }
     
     // Sammle NUR Spalten aus additionalData (direkter Import, KEINE Standard-Spalten)
-    // Füge nur Checkbox-Spalten und "Nummer" hinzu (geschützte Spalten)
-    const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt'])
+    // Füge nur Checkbox-Spalten und "Nummer" hinzu
+    const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
     
     // Sammle NUR Spalten aus additionalData von ALLEN Gästen (keine Standard-Spalten)
     guests.forEach(guest => {
@@ -544,7 +542,7 @@ export default function GuestsPage() {
     const finalColumns = Array.from(columnsSet)
     
     // Entferne Checkbox-Spalten und Nummer aus der Liste
-    const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
+    const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
     const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
     
     // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann NUR importierte Spalten (keine Standard-Spalten)
@@ -556,6 +554,7 @@ export default function GuestsPage() {
       'Einladung Post',
       'Nimmt Teil',
       'Abgesagt',
+      'Mail-Liste',
       ...otherColumns // NUR importierte Spalten, keine Standard-Spalten
     ]
     
@@ -1901,6 +1900,48 @@ export default function GuestsPage() {
                                     }
                                   }}
                                   className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          if (column === 'Mail-Liste') {
+                            // Hole Wert aus additionalData
+                            let mailListeValue = false
+                            if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                mailListeValue = additional['Mail-Liste'] === true || additional['Mail-Liste'] === 'true' || additional['Mail-Liste'] === 1
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
+                            return (
+                              <td key={column} className="px-4 py-3 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={mailListeValue}
+                                  onChange={(e) => {
+                                    // Speichere in additionalData
+                                    const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+                                    additional['Mail-Liste'] = e.target.checked
+                                    
+                                    fetch('/api/guests', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        id: guest.id,
+                                        additionalData: JSON.stringify(additional)
+                                      }),
+                                    }).then(res => res.json()).then(updated => {
+                                      setGuests(guests.map(g => g.id === guest.id ? updated : g))
+                                    }).catch(err => {
+                                      console.error('Fehler beim Speichern:', err)
+                                      alert('Fehler beim Speichern')
+                                    })
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
                               </td>
                             )
