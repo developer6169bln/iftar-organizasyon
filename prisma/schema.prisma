@@ -51,6 +51,7 @@ model Event {
   tasks          Task[]
   checklistItems ChecklistItem[]
   programItems   ProgramItem[]
+  invitations    Invitation[]
 
   @@map("events")
 }
@@ -76,7 +77,8 @@ model Guest {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitations Invitation[]
 
   @@map("guests")
 }
@@ -277,4 +279,78 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// Email-Konfiguration (Gmail oder IMAP)
+model EmailConfig {
+  id          String   @id @default(cuid())
+  name        String // Name der Konfiguration
+  type        String // GMAIL oder IMAP
+  email       String // Absender-E-Mail
+  password    String? // Passwort (verschlüsselt)
+  appPassword String? // Gmail App-Passwort
+  imapHost    String? // IMAP Host (z.B. imap.gmail.com)
+  imapPort    Int? // IMAP Port (z.B. 993)
+  smtpHost    String? // SMTP Host
+  smtpPort    Int? // SMTP Port (z.B. 587)
+  isActive    Boolean  @default(false) // Nur eine aktive Konfiguration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invitations Invitation[]
+
+  @@map("email_configs")
+}
+
+// Email-Templates für Einladungen (mehrsprachig)
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String // Template-Name
+  language  String // de, tr, en, ar, etc.
+  subject   String // Betreff
+  body      String // HTML-Body
+  plainText String? // Plain-Text-Version
+  isDefault Boolean  @default(false) // Standard-Template für Sprache
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invitations Invitation[]
+
+  @@unique([language, isDefault])
+  @@map("email_templates")
+}
+
+// Einladungen
+model Invitation {
+  id            String    @id @default(cuid())
+  guestId       String
+  eventId       String
+  templateId    String? // Verwendetes Template
+  language      String // Sprache der Einladung
+  subject       String
+  body          String // HTML-Body
+  acceptToken   String    @unique // Token für Zusage-Link
+  declineToken  String    @unique // Token für Absage-Link
+  trackingToken String    @unique // Token für Email-Tracking
+  sentAt        DateTime? // Wann wurde Email gesendet
+  openedAt      DateTime? // Wann wurde Email geöffnet (Tracking)
+  respondedAt   DateTime? // Wann wurde geantwortet
+  response      String? // ACCEPTED, DECLINED, PENDING
+  emailConfigId String? // Welche Email-Konfiguration wurde verwendet
+  errorMessage  String? // Fehlermeldung falls Versand fehlgeschlagen
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  guest       Guest          @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template    EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  emailConfig EmailConfig?   @relation(fields: [emailConfigId], references: [id], onDelete: SetNull)
+
+  @@index([guestId])
+  @@index([eventId])
+  @@index([acceptToken])
+  @@index([declineToken])
+  @@index([trackingToken])
+  @@index([response])
+  @@map("invitations")
 }
