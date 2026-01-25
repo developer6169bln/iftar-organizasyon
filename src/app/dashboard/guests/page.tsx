@@ -475,40 +475,32 @@ export default function GuestsPage() {
     }
   }
 
-  // Sammle ALLE Spalten aus additionalData aller Gäste
+  // Sammle NUR Spalten aus additionalData (direkter Import, kein Abgleich)
   useEffect(() => {
-    // Wenn keine Gäste vorhanden, prüfe ob bereits minimale Struktur vorhanden
+    // Wenn keine Gäste vorhanden, setze minimale Struktur (nur Nummer)
     if (guests.length === 0) {
       // Wenn bereits minimale Struktur (nur Nummer), behalte sie
       if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
         return // Behalte minimale Struktur
       }
-      // Wenn keine Spalten vorhanden, setze minimale Struktur (nur Nummer)
-      if (allColumns.length === 0) {
-        const minimalColumns = ['Nummer', 'İşlemler']
-        setAllColumns(minimalColumns)
-        saveColumnOrder(minimalColumns)
-        return
-      }
-      // Sonst setze Standard-Spalten (mit Nummer)
-      const columnsWithNummer = ['Nummer', ...standardColumns.filter(col => col !== 'Nummer')]
-      setAllColumns(columnsWithNummer)
-      saveColumnOrder(columnsWithNummer)
+      // Setze minimale Struktur (nur Nummer und İşlemler)
+      const minimalColumns = ['Nummer', 'İşlemler']
+      setAllColumns(minimalColumns)
+      saveColumnOrder(minimalColumns)
       return
     }
     
-    // Sammle alle Spalten aus allen Gästen
+    // Sammle NUR Spalten aus additionalData (direkter Import, kein Abgleich mit Standard-Spalten)
     // Füge "Nummer" immer hinzu (geschützte Spalte)
-    const columnsSet = new Set<string>(['Nummer', ...standardColumns])
+    const columnsSet = new Set<string>(['Nummer'])
     
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
           const additional = JSON.parse(guest.additionalData)
-          // Füge ALLE Spalten aus additionalData hinzu
+          // Füge ALLE Spalten aus additionalData hinzu (direkter Import)
           Object.keys(additional).forEach(key => {
-            if (key && key.trim()) {
-              // Füge hinzu, auch wenn es bereits in standardColumns ist (für Vollständigkeit)
+            if (key && key.trim() && key !== 'Nummer') {
               columnsSet.add(key.trim())
             }
           })
@@ -518,15 +510,19 @@ export default function GuestsPage() {
       }
     })
     
-    // Stelle sicher, dass "Nummer" immer vorhanden ist
-    columnsSet.add('Nummer')
-    
+    // Stelle sicher, dass "Nummer" immer vorhanden ist und an erster Stelle
     const finalColumns = Array.from(columnsSet)
-    // Stelle sicher, dass "Nummer" an erster Stelle ist
     const nummerIndex = finalColumns.indexOf('Nummer')
     if (nummerIndex > 0) {
       finalColumns.splice(nummerIndex, 1)
       finalColumns.unshift('Nummer')
+    } else if (nummerIndex === -1) {
+      finalColumns.unshift('Nummer')
+    }
+    
+    // Füge "İşlemler" am Ende hinzu (für Aktionen)
+    if (!finalColumns.includes('İşlemler')) {
+      finalColumns.push('İşlemler')
     }
     
     setAllColumns(finalColumns)
@@ -800,28 +796,26 @@ export default function GuestsPage() {
         // Lade Gäste zuerst, damit wir die Spalten aus additionalData sammeln können
         await loadGuests()
         
-        // Setze Spaltenüberschriften AUSSCHLIESSLICH aus Google Sheets (Master-Import)
+        // Setze Spaltenüberschriften AUSSCHLIESSLICH aus Google Sheets (direkter Import, kein Abgleich)
         if (result.headers && Array.isArray(result.headers) && result.headers.length > 0) {
-          // Verwende NUR die Spalten aus Google Sheets (1:1, als Master)
+          // Direkter Import: Nur Spalten aus Google Sheets (1:1, genau wie importiert)
           const importedColumns: string[] = []
           
           // Füge ZUERST "Nummer" hinzu (geschützte Spalte, immer an erster Stelle, von 0 startend)
           importedColumns.push('Nummer')
           
-          // Füge alle Spalten aus Google Sheets hinzu (1:1, als Master)
-          // WICHTIG: Ignoriere "Nummer" aus Google Sheets, da sie automatisch generiert wird
+          // Füge ALLE Spalten aus Google Sheets hinzu (1:1, genau wie importiert)
+          // KEIN Abgleich, KEINE Standard-Spalten, NUR die importierten Spalten
           result.headers.forEach((header: string) => {
             if (header && header.trim() && !importedColumns.includes(header) && header !== 'Nummer') {
               importedColumns.push(header)
             }
           })
           
-          // Füge nur notwendige Standard-Spalten hinzu, die nicht in Google Sheets sind
-          // (z.B. für Funktionen wie Bearbeiten/Löschen)
-          if (!importedColumns.includes('İşlemler')) {
-            importedColumns.push('İşlemler')
-          }
+          // Füge nur "İşlemler" am Ende hinzu (für Aktionen)
+          importedColumns.push('İşlemler')
           
+          // Setze Spalten direkt (ersetzt alle alten Spalten)
           setAllColumns(importedColumns)
           saveColumnOrder(importedColumns)
         } else {
