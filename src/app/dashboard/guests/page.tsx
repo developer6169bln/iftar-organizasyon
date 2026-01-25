@@ -523,6 +523,10 @@ export default function GuestsPage() {
     // Füge Checkbox-Spalten und "Nummer" immer hinzu (geschützte Spalten)
     const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt'])
     
+    // Füge auch Standard-Spalten hinzu, die immer vorhanden sein sollten
+    const standardGuestColumns = ['Name', 'E-Mail', 'Partei / Organisation / Unternehmen', 'Funktion', 'Status', 'Tischnummer', 'Notiz']
+    standardGuestColumns.forEach(col => columnsSet.add(col))
+    
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
@@ -546,7 +550,12 @@ export default function GuestsPage() {
     const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
     const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
     
-    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann andere Spalten
+    // Sortiere andere Spalten: Standard-Spalten zuerst, dann zusätzliche
+    const standardCols = ['Name', 'E-Mail', 'Partei / Organisation / Unternehmen', 'Funktion', 'Status', 'Tischnummer', 'Notiz']
+    const standardInOther = otherColumns.filter(col => standardCols.includes(col))
+    const additionalInOther = otherColumns.filter(col => !standardCols.includes(col))
+    
+    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann Standard-Spalten, dann zusätzliche Spalten
     const orderedColumns = [
       'Auswahl',
       'Nummer',
@@ -555,7 +564,8 @@ export default function GuestsPage() {
       'Einladung Post',
       'Nimmt Teil',
       'Abgesagt',
-      ...otherColumns
+      ...standardInOther,
+      ...additionalInOther
     ]
     
     // Füge "İşlemler" am Ende hinzu (für Aktionen)
@@ -1906,29 +1916,51 @@ export default function GuestsPage() {
                           
                           // Spezialbehandlung für bestimmte Spalten
                           if (column === 'Name') {
+                            const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
                             return (
-                              <td key={column} className="px-4 py-3">
-                                {editingGuest === guest.id ? (
-                                  <input
-                                    type="text"
-                                    defaultValue={guest.name}
-                                    onBlur={(e) => {
-                                      if (e.target.value !== guest.name) {
-                                        handleUpdate(guest.id, { name: e.target.value })
-                                      }
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') e.currentTarget.blur()
-                                      if (e.key === 'Escape') setEditingGuest(null)
-                                    }}
-                                    className="w-full rounded border border-indigo-300 px-2 py-1 text-sm focus:border-indigo-500 focus:outline-none"
-                                    autoFocus
-                                  />
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 cursor-pointer hover:bg-gray-50"
+                                onClick={() => !isEditing && handleCellEdit(guest.id, column, guest.name)}
+                              >
+                                {isEditing ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={editingValue}
+                                      onChange={(e) => setEditingValue(e.target.value)}
+                                      onBlur={() => handleCellSave(guest.id, column)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleCellSave(guest.id, column)
+                                        } else if (e.key === 'Escape') {
+                                          handleCellCancel()
+                                        }
+                                      }}
+                                      className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleCellSave(guest.id, column)
+                                      }}
+                                      className="text-green-600 hover:text-green-700"
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleCellCancel()
+                                      }}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
                                 ) : (
-                                  <span
-                                    className="cursor-pointer font-medium text-gray-900 hover:text-indigo-600"
-                                    onClick={() => setEditingGuest(guest.id)}
-                                  >
+                                  <span className="font-medium text-gray-900 hover:text-indigo-600">
                                     {guest.name}
                                   </span>
                                 )}
