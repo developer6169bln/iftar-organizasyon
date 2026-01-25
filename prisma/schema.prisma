@@ -333,6 +333,7 @@ model Invitation {
   declineToken  String    @unique // Token für Absage-Link
   trackingToken String    @unique // Token für Email-Tracking
   sentAt        DateTime? // Wann wurde Email gesendet
+  sentByPost    Boolean   @default(false) // Wurde per Post gesendet
   openedAt      DateTime? // Wann wurde Email geöffnet (Tracking)
   respondedAt   DateTime? // Wann wurde geantwortet
   response      String? // ACCEPTED, DECLINED, PENDING

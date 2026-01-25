@@ -218,6 +218,79 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleCheckboxChange = async (invitationId: string, field: string, checked: boolean) => {
+    try {
+      const updateData: any = { id: invitationId }
+      
+      if (field === 'sentByPost') {
+        updateData.sentByPost = checked
+        // Wenn per Post gesendet, setze sentAt auf jetzt
+        if (checked) {
+          updateData.sentAt = new Date().toISOString()
+        }
+      } else if (field === 'nimmtTeil') {
+        updateData.response = checked ? 'ACCEPTED' : 'PENDING'
+        updateData.respondedAt = checked ? new Date().toISOString() : null
+        // Stelle sicher, dass "Abgesagt" zurückgesetzt wird
+        if (checked) {
+          // response wird bereits auf ACCEPTED gesetzt, das reicht
+        }
+      } else if (field === 'abgesagt') {
+        updateData.response = checked ? 'DECLINED' : 'PENDING'
+        updateData.respondedAt = checked ? new Date().toISOString() : null
+        // Stelle sicher, dass "Nimmt Teil" zurückgesetzt wird
+        if (checked) {
+          // response wird bereits auf DECLINED gesetzt, das reicht
+        }
+      }
+
+      const response = await fetch('/api/invitations/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        setInvitations(invitations.map(inv => 
+          inv.id === invitationId ? updated : inv
+        ))
+      } else {
+        const error = await response.json()
+        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleVipChange = async (guestId: string, checked: boolean) => {
+    try {
+      const response = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: guestId, isVip: checked }),
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        // Aktualisiere lokalen State
+        setInvitations(invitations.map(inv => 
+          inv.guestId === guestId ? { ...inv, guest: updated } : inv
+        ))
+        // Aktualisiere auch guests State falls vorhanden
+        setGuests(guests.map(g => g.id === guestId ? updated : g))
+      } else {
+        const error = await response.json()
+        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
   const handleCellCancel = () => {
     setEditingCell(null)
     setEditingValue('')
@@ -452,7 +525,7 @@ export default function InvitationsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       <input
                         type="checkbox"
                         checked={invitations.length > 0 && selectedInvitations.length === invitations.length}
@@ -466,6 +539,7 @@ export default function InvitationsPage() {
                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         title="Alle auswählen"
                       />
+                      <div className="mt-1 text-xs">Auswahl Einladung</div>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Gast
@@ -473,14 +547,26 @@ export default function InvitationsPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Email
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      VIP
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Einladung E-Mail
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Einladung Post
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Nimmt Teil
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Abgesagt
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Gesendet
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Gelesen
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
-                      Antwort
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Antwort-Datum
@@ -490,7 +576,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.map((invitation) => (
                     <tr key={invitation.id}>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input
                           type="checkbox"
                           checked={selectedInvitations.includes(invitation.id)}
@@ -510,9 +596,64 @@ export default function InvitationsPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                         {invitation.guest?.email}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={invitation.guest?.isVip || false}
+                          onChange={(e) => handleVipChange(invitation.guestId, e.target.checked)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!invitation.sentAt}
+                          disabled
+                          className="rounded border-gray-300 text-gray-400"
+                          title={invitation.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={invitation.sentByPost || false}
+                          onChange={(e) => handleCheckboxChange(invitation.id, 'sentByPost', e.target.checked)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={invitation.response === 'ACCEPTED'}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              // Wenn "Nimmt Teil" aktiviert wird, setze "Abgesagt" zurück
+                              handleCheckboxChange(invitation.id, 'nimmtTeil', true)
+                            } else {
+                              handleCheckboxChange(invitation.id, 'response', false)
+                            }
+                          }}
+                          className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={invitation.response === 'DECLINED'}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              // Wenn "Abgesagt" aktiviert wird, setze "Nimmt Teil" zurück
+                              handleCheckboxChange(invitation.id, 'abgesagt', true)
+                            } else {
+                              handleCheckboxChange(invitation.id, 'response', false)
+                            }
+                          }}
+                          className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        />
+                      </td>
                       <td 
                         className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50"
-                        onClick={() => handleCellEdit(invitation.id, 'sentAt', invitation.sentAt)}
+                        onClick={() => !invitation.sentAt && handleCellEdit(invitation.id, 'sentAt', invitation.sentAt)}
                       >
                         {editingCell?.invitationId === invitation.id && editingCell?.field === 'sentAt' ? (
                           <div className="flex items-center gap-2">

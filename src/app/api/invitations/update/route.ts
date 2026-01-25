@@ -23,6 +23,10 @@ export async function PUT(request: NextRequest) {
       allowedFields.sentAt = updateData.sentAt ? new Date(updateData.sentAt) : null
     }
     
+    if (updateData.sentByPost !== undefined) {
+      allowedFields.sentByPost = updateData.sentByPost === true || updateData.sentByPost === 'true'
+    }
+    
     if (updateData.openedAt !== undefined) {
       allowedFields.openedAt = updateData.openedAt ? new Date(updateData.openedAt) : null
     }
