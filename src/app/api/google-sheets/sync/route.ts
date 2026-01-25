@@ -68,11 +68,24 @@ export async function POST(request: NextRequest) {
       })
     } else if (direction === 'from') {
       // Synchronisiere von Google Sheets zu DB
+      const { confirmOverwrite = false } = body
+      
+      if (!confirmOverwrite) {
+        return NextResponse.json(
+          { 
+            error: 'Bestätigung erforderlich',
+            requiresConfirmation: true,
+            message: 'Dieser Import wird ALLE vorhandenen Gäste und Spalten löschen und durch die Google Sheets Tabelle ersetzen. Bitte bestätigen Sie diese Aktion.'
+          },
+          { status: 400 }
+        )
+      }
+      
       // Lese zuerst die Header aus Google Sheets
       const headers = await getSheetHeaders(spreadsheetId, sheetName)
       
-      // Lösche ALLE vorhandenen Gäste für dieses Event (für 1:1 Import)
-      await prisma.guest.deleteMany({
+      // Lösche ALLE vorhandenen Gäste für dieses Event (Master-Import: kompletter Ersatz)
+      const deletedCount = await prisma.guest.deleteMany({
         where: { eventId },
       })
       
@@ -101,11 +114,12 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Synchronisation abgeschlossen: ${created} Gäste importiert`,
+        message: `Master-Import abgeschlossen: ${created} Gäste importiert, ${deletedCount.count} alte Gäste gelöscht`,
         created,
+        deleted: deletedCount.count,
         updated: 0,
         lastSync: new Date().toISOString(),
-        headers, // Sende Spaltenüberschriften zurück
+        headers, // Sende Spaltenüberschriften zurück (Master-Spalten)
       })
     } else {
       return NextResponse.json(

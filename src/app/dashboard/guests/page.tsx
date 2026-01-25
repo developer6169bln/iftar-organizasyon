@@ -578,6 +578,21 @@ export default function GuestsPage() {
   const syncFromGoogleSheets = async () => {
     if (!eventId || !googleSheetsConfig.enabled) return
 
+    // Bestätigungsdialog: Warnung vor Überschreibung
+    const confirmMessage = 
+      '⚠️ WICHTIG: Dieser Import wird:\n\n' +
+      '• ALLE vorhandenen Gäste löschen\n' +
+      '• ALLE vorhandenen Spalten überschreiben\n' +
+      '• Die Google Sheets Tabelle als Master-Tabelle importieren\n\n' +
+      'Diese Aktion kann nicht rückgängig gemacht werden!\n\n' +
+      'Möchten Sie fortfahren?'
+    
+    const confirmed = window.confirm(confirmMessage)
+    
+    if (!confirmed) {
+      return false // Benutzer hat abgebrochen
+    }
+
     try {
       setSyncing(true)
       const response = await fetch('/api/google-sheets/sync', {
@@ -586,6 +601,7 @@ export default function GuestsPage() {
         body: JSON.stringify({
           eventId,
           direction: 'from',
+          confirmOverwrite: true, // Bestätigung senden
         }),
       })
 
@@ -595,23 +611,23 @@ export default function GuestsPage() {
         // Lade Gäste zuerst, damit wir die Spalten aus additionalData sammeln können
         await loadGuests()
         
-        // Setze Spaltenüberschriften aus Google Sheets UND aus additionalData
+        // Setze Spaltenüberschriften AUSSCHLIESSLICH aus Google Sheets (Master-Import)
         if (result.headers && Array.isArray(result.headers) && result.headers.length > 0) {
-          // Verwende NUR die Spalten aus Google Sheets, plus Standard-Spalten für Funktionen
+          // Verwende NUR die Spalten aus Google Sheets (1:1, als Master)
           const importedColumns: string[] = []
           
-          // Füge Standard-Spalten hinzu (für Funktionen wie Status, etc.)
-          importedColumns.push(...standardColumns.filter(col => col !== 'İşlemler'))
-          
-          // Füge alle Spalten aus Google Sheets hinzu (1:1)
+          // Füge alle Spalten aus Google Sheets hinzu (1:1, als Master)
           result.headers.forEach((header: string) => {
             if (header && header.trim() && !importedColumns.includes(header)) {
               importedColumns.push(header)
             }
           })
           
-          // Füge "İşlemler" am Ende hinzu
-          importedColumns.push('İşlemler')
+          // Füge nur notwendige Standard-Spalten hinzu, die nicht in Google Sheets sind
+          // (z.B. für Funktionen wie Bearbeiten/Löschen)
+          if (!importedColumns.includes('İşlemler')) {
+            importedColumns.push('İşlemler')
+          }
           
           setAllColumns(importedColumns)
         } else {
@@ -620,11 +636,17 @@ export default function GuestsPage() {
         }
         
         setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
-        alert(`Synchronisation abgeschlossen: ${result.created} Gäste importiert`)
+        alert(`✅ Master-Import abgeschlossen:\n\n• ${result.created} Gäste importiert\n• ${result.deleted || 0} alte Gäste gelöscht\n• Alle Spalten aus Google Sheets übernommen\n• Alte Daten wurden ersetzt`)
         return true
       } else {
         const error = await response.json()
-        alert(error.error || 'Synchronisation fehlgeschlagen')
+        
+        // Prüfe ob Bestätigung erforderlich ist
+        if (error.requiresConfirmation) {
+          alert(error.message || 'Bestätigung erforderlich')
+        } else {
+          alert(error.error || 'Synchronisation fehlgeschlagen')
+        }
         return false
       }
     } catch (error) {
