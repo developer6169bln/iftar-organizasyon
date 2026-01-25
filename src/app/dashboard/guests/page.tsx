@@ -17,6 +17,8 @@ export default function GuestsPage() {
   const [showNoResultsWarning, setShowNoResultsWarning] = useState(false)
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null)
+  const [sortColumn, setSortColumn] = useState<string | null>(null)
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   
   // Geschützte Spalten (können nicht gelöscht werden)
   const protectedColumns = ['Nummer', 'İşlemler']
@@ -330,6 +332,23 @@ export default function GuestsPage() {
   const handleDragEnd = () => {
     setDraggedColumn(null)
     setDragOverColumn(null)
+  }
+
+  // Sortier-Handler
+  const handleSort = (column: string) => {
+    // Verhindere Sortierung für "İşlemler"
+    if (column === 'İşlemler') {
+      return
+    }
+    
+    if (sortColumn === column) {
+      // Wechsle Sortierrichtung
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // Neue Spalte, starte mit aufsteigend
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
   }
 
   const loadEventAndGuests = async () => {
@@ -647,8 +666,42 @@ export default function GuestsPage() {
       setShowNoResultsWarning(false)
     }
 
+    // Sortierung anwenden
+    if (sortColumn) {
+      filtered = [...filtered].sort((a, b) => {
+        const valueA = getColumnValue(a, sortColumn, 0)
+        const valueB = getColumnValue(b, sortColumn, 0)
+        
+        // Nummer-Spalte: Numerische Sortierung
+        if (sortColumn === 'Nummer') {
+          const numA = parseInt(valueA) || 0
+          const numB = parseInt(valueB) || 0
+          return sortDirection === 'asc' ? numA - numB : numB - numA
+        }
+        
+        // Versuche numerische Sortierung
+        const numA = parseFloat(valueA)
+        const numB = parseFloat(valueB)
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return sortDirection === 'asc' ? numA - numB : numB - numA
+        }
+        
+        // Text-Sortierung (case-insensitive)
+        const textA = valueA.toLowerCase()
+        const textB = valueB.toLowerCase()
+        
+        if (textA < textB) {
+          return sortDirection === 'asc' ? -1 : 1
+        }
+        if (textA > textB) {
+          return sortDirection === 'asc' ? 1 : -1
+        }
+        return 0
+      })
+    }
+
     setFilteredGuests(filtered)
-  }, [searchQuery, guests, columnFilters, showNoResultsWarning])
+  }, [searchQuery, guests, columnFilters, showNoResultsWarning, sortColumn, sortDirection])
 
   const loadGuests = async () => {
     try {
@@ -1467,21 +1520,47 @@ export default function GuestsPage() {
                             } transition-colors`}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1">
-                                <svg
-                                  className="h-4 w-4 text-gray-400"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  stroke="currentColor"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 8h16M4 16h16"
-                                  />
-                                </svg>
+                              <span 
+                                className={`flex items-center gap-1 ${
+                                  column !== 'İşlemler' ? 'cursor-pointer hover:text-indigo-600' : ''
+                                }`}
+                                onClick={() => column !== 'İşlemler' && handleSort(column)}
+                                title={column !== 'İşlemler' ? 'Klicken zum Sortieren' : ''}
+                              >
+                                {column !== 'İşlemler' && (
+                                  <svg
+                                    className="h-4 w-4 text-gray-400"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M4 8h16M4 16h16"
+                                    />
+                                  </svg>
+                                )}
                                 {column}
+                                {sortColumn === column && column !== 'İşlemler' && (
+                                  <span className="ml-1 text-indigo-600">
+                                    {sortDirection === 'asc' ? (
+                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                      </svg>
+                                    )}
+                                  </span>
+                                )}
+                                {!sortColumn && column !== 'İşlemler' && (
+                                  <svg className="h-3 w-3 ml-1 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                                  </svg>
+                                )}
                               </span>
                               {!isStandardColumn && !protectedColumns.includes(column) && (
                                 <button
