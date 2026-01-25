@@ -197,11 +197,8 @@ export default function GuestsPage() {
   }, [])
 
   // Wende gespeicherte Reihenfolge an, wenn allColumns sich ändert
-  useEffect(() => {
-    if (allColumns.length > 0) {
-      loadColumnOrder()
-    }
-  }, [guests.length]) // Nur wenn Gäste geladen wurden
+  // Entfernt: loadColumnOrder wird nicht mehr automatisch aufgerufen
+  // Die Spaltenreihenfolge wird jetzt direkt im useEffect für guests gesetzt
 
   // Lade gespeicherte Spaltenreihenfolge aus localStorage
   const loadColumnOrder = () => {
@@ -216,43 +213,41 @@ export default function GuestsPage() {
     }
   }
 
-  // Wende gespeicherte Reihenfolge an
+  // Wende gespeicherte Reihenfolge an (nur für Drag-and-Drop, nicht beim ersten Laden)
   const applyColumnOrder = (savedOrder: string[]) => {
     if (savedOrder.length === 0 || allColumns.length === 0) return
     
-    // Stelle sicher, dass "Nummer" immer an erster Stelle ist
-    const orderWithNummer = savedOrder.includes('Nummer') 
-      ? savedOrder 
-      : ['Nummer', ...savedOrder.filter(col => col !== 'Nummer')]
+    // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer an den richtigen Stellen sind
+    const checkboxCols = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
+    const protectedCols = ['İşlemler']
     
-    // Erstelle eine Map für schnellen Zugriff
-    const orderMap = new Map(orderWithNummer.map((col, index) => [col, index]))
+    // Filtere gespeicherte Reihenfolge: Nur Spalten, die auch in allColumns existieren
+    const validSavedOrder = savedOrder.filter(col => allColumns.includes(col))
     
-    // Sortiere allColumns nach gespeicherter Reihenfolge
-    const sorted = [...allColumns].sort((a, b) => {
-      const indexA = orderMap.get(a) ?? Infinity
-      const indexB = orderMap.get(b) ?? Infinity
-      return indexA - indexB
-    })
+    // Entferne Checkbox-Spalten und geschützte Spalten aus der gespeicherten Reihenfolge
+    const savedWithoutProtected = validSavedOrder.filter(col => 
+      !checkboxCols.includes(col) && !protectedCols.includes(col)
+    )
     
-    // Füge Spalten hinzu, die nicht in der gespeicherten Reihenfolge sind
-    const missing = allColumns.filter(col => !orderMap.has(col))
-    if (missing.length > 0) {
-      sorted.push(...missing)
-    }
+    // Baue neue Reihenfolge: Checkbox-Spalten, dann gespeicherte Reihenfolge, dann fehlende Spalten
+    const checkboxInOrder = checkboxCols.filter(col => allColumns.includes(col))
+    const missing = allColumns.filter(col => 
+      !checkboxInOrder.includes(col) && 
+      !savedWithoutProtected.includes(col) && 
+      !protectedCols.includes(col)
+    )
     
-    // Stelle sicher, dass "Nummer" an erster Stelle ist
-    const nummerIndex = sorted.indexOf('Nummer')
-    if (nummerIndex > 0) {
-      sorted.splice(nummerIndex, 1)
-      sorted.unshift('Nummer')
-    } else if (nummerIndex === -1) {
-      sorted.unshift('Nummer')
-    }
+    const newOrder = [
+      ...checkboxInOrder,
+      ...savedWithoutProtected,
+      ...missing,
+      ...protectedCols.filter(col => allColumns.includes(col))
+    ]
     
     // Nur aktualisieren wenn sich etwas geändert hat
-    if (JSON.stringify(sorted) !== JSON.stringify(allColumns)) {
-      setAllColumns(sorted)
+    if (JSON.stringify(newOrder) !== JSON.stringify(allColumns)) {
+      setAllColumns(newOrder)
+      saveColumnOrder(newOrder)
     }
   }
 
@@ -527,6 +522,7 @@ export default function GuestsPage() {
     const standardGuestColumns = ['Name', 'E-Mail', 'Partei / Organisation / Unternehmen', 'Funktion', 'Status', 'Tischnummer', 'Notiz']
     standardGuestColumns.forEach(col => columnsSet.add(col))
     
+    // Sammle ALLE Spalten aus additionalData von ALLEN Gästen
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
@@ -534,14 +530,19 @@ export default function GuestsPage() {
           // Füge ALLE Spalten aus additionalData hinzu (direkter Import)
           Object.keys(additional).forEach(key => {
             if (key && key.trim() && key !== 'Nummer') {
-              columnsSet.add(key.trim())
+              // Normalisiere den Spaltennamen (trim whitespace)
+              const normalizedKey = key.trim()
+              columnsSet.add(normalizedKey)
             }
           })
         } catch (e) {
-          console.error('Fehler beim Parsen von additionalData:', e)
+          console.error('Fehler beim Parsen von additionalData für Gast:', guest.id, e)
         }
       }
     })
+    
+    // Debug: Zeige welche Spalten gesammelt wurden
+    console.log('🔍 Gesammelte Spalten (vor Sortierung):', Array.from(columnsSet))
     
     // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer vorhanden sind und an den richtigen Stellen
     const finalColumns = Array.from(columnsSet)
@@ -573,11 +574,36 @@ export default function GuestsPage() {
       orderedColumns.push('İşlemler')
     }
     
+    // WICHTIG: Setze Spalten direkt, ohne gespeicherte Reihenfolge zu verwenden
+    // Die gespeicherte Reihenfolge könnte alte Spalten enthalten, die nicht mehr existieren
     setAllColumns(orderedColumns)
-    // Versuche gespeicherte Reihenfolge anzuwenden
-    setTimeout(() => {
-      loadColumnOrder()
-    }, 100)
+    
+    // Speichere die neue Reihenfolge
+    saveColumnOrder(orderedColumns)
+    
+    // Debug: Log alle gefundenen Spalten
+    console.log('📊 Gefundene Spalten:', {
+      total: orderedColumns.length,
+      checkbox: checkboxColumns.length,
+      standard: standardInOther.length,
+      additional: additionalInOther.length,
+      additionalColumns: additionalInOther,
+      allColumns: orderedColumns
+    })
+    
+    // Debug: Zeige auch, welche Spalten aus additionalData gefunden wurden
+    const allAdditionalKeys = new Set<string>()
+    guests.forEach(guest => {
+      if (guest?.additionalData) {
+        try {
+          const additional = JSON.parse(guest.additionalData)
+          Object.keys(additional).forEach(key => allAdditionalKeys.add(key))
+        } catch (e) {
+          // Ignoriere Parse-Fehler
+        }
+      }
+    })
+    console.log('📋 Spalten aus additionalData:', Array.from(allAdditionalKeys))
   }, [guests])
 
   useEffect(() => {
