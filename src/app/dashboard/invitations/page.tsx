@@ -19,6 +19,8 @@ export default function InvitationsPage() {
   const [activeTab, setActiveTab] = useState<'send' | 'list' | 'templates' | 'config'>('send')
   const [eventId, setEventId] = useState<string>('')
   const [selectedInvitations, setSelectedInvitations] = useState<string[]>([])
+  const [editingCell, setEditingCell] = useState<{ invitationId: string; field: string } | null>(null)
+  const [editingValue, setEditingValue] = useState<string>('')
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -163,6 +165,62 @@ export default function InvitationsPage() {
     } finally {
       setSending(false)
     }
+  }
+
+  const handleCellEdit = (invitationId: string, field: string, currentValue: any) => {
+    setEditingCell({ invitationId, field })
+    // Formatiere Wert für Input
+    if (field === 'sentAt' || field === 'openedAt' || field === 'respondedAt') {
+      if (currentValue) {
+        const date = new Date(currentValue)
+        setEditingValue(date.toISOString().slice(0, 16)) // datetime-local Format
+      } else {
+        setEditingValue('')
+      }
+    } else if (field === 'response') {
+      setEditingValue(currentValue || 'PENDING')
+    } else {
+      setEditingValue(String(currentValue || ''))
+    }
+  }
+
+  const handleCellSave = async (invitationId: string, field: string) => {
+    try {
+      const updateData: any = { id: invitationId }
+      
+      if (field === 'sentAt' || field === 'openedAt' || field === 'respondedAt') {
+        updateData[field] = editingValue ? editingValue : null
+      } else if (field === 'response') {
+        updateData[field] = editingValue || 'PENDING'
+      }
+
+      const response = await fetch('/api/invitations/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      })
+
+      if (response.ok) {
+        const updated = await response.json()
+        // Aktualisiere lokalen State
+        setInvitations(invitations.map(inv => 
+          inv.id === invitationId ? updated : inv
+        ))
+        setEditingCell(null)
+        setEditingValue('')
+      } else {
+        const error = await response.json()
+        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleCellCancel = () => {
+    setEditingCell(null)
+    setEditingValue('')
   }
 
   const getResponseStats = () => {
@@ -452,41 +510,206 @@ export default function InvitationsPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                         {invitation.guest?.email}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                        {invitation.sentAt
-                          ? new Date(invitation.sentAt).toLocaleString('de-DE')
-                          : '-'}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                        {invitation.openedAt ? (
-                          <span className="text-green-600">
-                            {new Date(invitation.openedAt).toLocaleString('de-DE')}
-                          </span>
+                      <td 
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'sentAt', invitation.sentAt)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'sentAt' ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="datetime-local"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => handleCellSave(invitation.id, 'sentAt')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCellSave(invitation.id, 'sentAt')
+                                } else if (e.key === 'Escape') {
+                                  handleCellCancel()
+                                }
+                              }}
+                              className="rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellSave(invitation.id, 'sentAt')
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellCancel()
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-gray-400">Nicht gelesen</span>
+                          invitation.sentAt
+                            ? new Date(invitation.sentAt).toLocaleString('de-DE')
+                            : <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm">
-                        {invitation.response === 'ACCEPTED' && (
-                          <span className="rounded-full bg-green-100 px-2 py-1 text-green-800">
-                            Zusage
-                          </span>
-                        )}
-                        {invitation.response === 'DECLINED' && (
-                          <span className="rounded-full bg-red-100 px-2 py-1 text-red-800">
-                            Absage
-                          </span>
-                        )}
-                        {(!invitation.response || invitation.response === 'PENDING') && (
-                          <span className="rounded-full bg-yellow-100 px-2 py-1 text-yellow-800">
-                            Ausstehend
-                          </span>
+                      <td 
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'openedAt', invitation.openedAt)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'openedAt' ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="datetime-local"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => handleCellSave(invitation.id, 'openedAt')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCellSave(invitation.id, 'openedAt')
+                                } else if (e.key === 'Escape') {
+                                  handleCellCancel()
+                                }
+                              }}
+                              className="rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellSave(invitation.id, 'openedAt')
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellCancel()
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          invitation.openedAt ? (
+                            <span className="text-green-600">
+                              {new Date(invitation.openedAt).toLocaleString('de-DE')}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
+                          )
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                        {invitation.respondedAt
-                          ? new Date(invitation.respondedAt).toLocaleString('de-DE')
-                          : '-'}
+                      <td 
+                        className="whitespace-nowrap px-4 py-3 text-sm cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'response', invitation.response)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'response' ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => handleCellSave(invitation.id, 'response')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCellSave(invitation.id, 'response')
+                                } else if (e.key === 'Escape') {
+                                  handleCellCancel()
+                                }
+                              }}
+                              className="rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              autoFocus
+                            >
+                              <option value="PENDING">Ausstehend</option>
+                              <option value="ACCEPTED">Zusage</option>
+                              <option value="DECLINED">Absage</option>
+                            </select>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellSave(invitation.id, 'response')
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellCancel()
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          invitation.response === 'ACCEPTED' ? (
+                            <span className="rounded-full bg-green-100 px-2 py-1 text-green-800">
+                              Zusage
+                            </span>
+                          ) : invitation.response === 'DECLINED' ? (
+                            <span className="rounded-full bg-red-100 px-2 py-1 text-red-800">
+                              Absage
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-yellow-100 px-2 py-1 text-yellow-800">
+                              Ausstehend
+                            </span>
+                          )
+                        )}
+                      </td>
+                      <td 
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'respondedAt', invitation.respondedAt)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'respondedAt' ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="datetime-local"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onBlur={() => handleCellSave(invitation.id, 'respondedAt')}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCellSave(invitation.id, 'respondedAt')
+                                } else if (e.key === 'Escape') {
+                                  handleCellCancel()
+                                }
+                              }}
+                              className="rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellSave(invitation.id, 'respondedAt')
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCellCancel()
+                              }}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          invitation.respondedAt
+                            ? new Date(invitation.respondedAt).toLocaleString('de-DE')
+                            : <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
+                        )}
                       </td>
                     </tr>
                   ))}
