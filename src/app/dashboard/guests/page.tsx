@@ -514,15 +514,11 @@ export default function GuestsPage() {
       return
     }
     
-    // Sammle NUR Spalten aus additionalData (direkter Import, kein Abgleich mit Standard-Spalten)
-    // Füge Checkbox-Spalten und "Nummer" immer hinzu (geschützte Spalten)
+    // Sammle NUR Spalten aus additionalData (direkter Import, KEINE Standard-Spalten)
+    // Füge nur Checkbox-Spalten und "Nummer" hinzu (geschützte Spalten)
     const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt'])
     
-    // Füge auch Standard-Spalten hinzu, die immer vorhanden sein sollten
-    const standardGuestColumns = ['Name', 'E-Mail', 'Partei / Organisation / Unternehmen', 'Funktion', 'Status', 'Tischnummer', 'Notiz']
-    standardGuestColumns.forEach(col => columnsSet.add(col))
-    
-    // Sammle ALLE Spalten aus additionalData von ALLEN Gästen
+    // Sammle NUR Spalten aus additionalData von ALLEN Gästen (keine Standard-Spalten)
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
@@ -551,12 +547,7 @@ export default function GuestsPage() {
     const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt']
     const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
     
-    // Sortiere andere Spalten: Standard-Spalten zuerst, dann zusätzliche
-    const standardCols = ['Name', 'E-Mail', 'Partei / Organisation / Unternehmen', 'Funktion', 'Status', 'Tischnummer', 'Notiz']
-    const standardInOther = otherColumns.filter(col => standardCols.includes(col))
-    const additionalInOther = otherColumns.filter(col => !standardCols.includes(col))
-    
-    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann Standard-Spalten, dann zusätzliche Spalten
+    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann NUR importierte Spalten (keine Standard-Spalten)
     const orderedColumns = [
       'Auswahl',
       'Nummer',
@@ -565,8 +556,7 @@ export default function GuestsPage() {
       'Einladung Post',
       'Nimmt Teil',
       'Abgesagt',
-      ...standardInOther,
-      ...additionalInOther
+      ...otherColumns // NUR importierte Spalten, keine Standard-Spalten
     ]
     
     // Füge "İşlemler" am Ende hinzu (für Aktionen)
@@ -811,25 +801,11 @@ export default function GuestsPage() {
 
       let updateData: any = { id: guestId }
 
-      // Standard-Felder
-      if (column === 'Name') {
-        updateData.name = editingValue
-      } else if (column === 'E-Mail') {
-        updateData.email = editingValue || null
-      } else if (column === 'Partei / Organisation / Unternehmen') {
-        updateData.organization = editingValue || null
-      } else if (column === 'Funktion') {
-        updateData.title = editingValue || null
-      } else if (column === 'Tischnummer') {
-        updateData.tableNumber = editingValue ? parseInt(editingValue) : null
-      } else if (column === 'Notiz') {
-        updateData.notes = editingValue || null
-      } else {
-        // Zusätzliche Spalten aus additionalData
-        const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
-        additional[column] = editingValue
-        updateData.additionalData = JSON.stringify(additional)
-      }
+      // ALLE Spalten werden jetzt in additionalData gespeichert (direkter Import)
+      // Keine Standard-Felder mehr - alles kommt aus additionalData
+      const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+      additional[column] = editingValue
+      updateData.additionalData = JSON.stringify(additional)
 
       const response = await fetch('/api/guests', {
         method: 'PATCH',
@@ -1940,109 +1916,8 @@ export default function GuestsPage() {
                             )
                           }
                           
-                          // Spezialbehandlung für bestimmte Spalten
-                          if (column === 'Name') {
-                            const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 cursor-pointer hover:bg-gray-50"
-                                onClick={() => !isEditing && handleCellEdit(guest.id, column, guest.name)}
-                              >
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      value={editingValue}
-                                      onChange={(e) => setEditingValue(e.target.value)}
-                                      onBlur={() => handleCellSave(guest.id, column)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          handleCellSave(guest.id, column)
-                                        } else if (e.key === 'Escape') {
-                                          handleCellCancel()
-                                        }
-                                      }}
-                                      className="flex-1 rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                      autoFocus
-                                    />
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleCellSave(guest.id, column)
-                                      }}
-                                      className="text-green-600 hover:text-green-700"
-                                    >
-                                      ✓
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleCellCancel()
-                                      }}
-                                      className="text-red-600 hover:text-red-700"
-                                    >
-                                      ✕
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="font-medium text-gray-900 hover:text-indigo-600">
-                                    {guest.name}
-                                  </span>
-                                )}
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Status') {
-                            return (
-                              <td key={column} className="px-4 py-3">
-                                <select
-                                  value={guest.status}
-                                  onChange={(e) => handleStatusChange(guest.id, e.target.value)}
-                                  className={`rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(guest.status)} border-0 focus:ring-2 focus:ring-indigo-500`}
-                                >
-                                  <option value="INVITED">Eingeladen</option>
-                                  <option value="CONFIRMED">Bestätigt</option>
-                                  <option value="ATTENDED">Anwesend</option>
-                                  <option value="CANCELLED">Abgesagt</option>
-                                  <option value="NO_SHOW">Nicht erschienen</option>
-                                </select>
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Anwesend') {
-                            return (
-                              <td key={column} className="px-4 py-3">
-                                <select
-                                  value={guest.status === 'ATTENDED' ? 'Ja' : 'Nein'}
-                                  onChange={(e) => {
-                                    const newStatus = e.target.value === 'Ja' ? 'ATTENDED' : guest.status === 'ATTENDED' ? 'CONFIRMED' : guest.status
-                                    handleStatusChange(guest.id, newStatus)
-                                  }}
-                                  className={`rounded-full px-2 py-1 text-xs font-medium border-0 focus:ring-2 focus:ring-indigo-500 ${
-                                    guest.status === 'ATTENDED' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                  }`}
-                                >
-                                  <option value="Nein">Nein</option>
-                                  <option value="Ja">Ja</option>
-                                </select>
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'VIP Begleitung benötigt?') {
-                            return (
-                              <td key={column} className="px-4 py-3">
-                                <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                                  guest.needsSpecialReception ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {guest.needsSpecialReception ? 'Ja' : 'Nein'}
-                                </span>
-                              </td>
-                            )
-                          }
+                          // KEINE Spezialbehandlung mehr für Standard-Spalten
+                          // Alle Spalten werden jetzt über getColumnValue und das Standard-Rendering behandelt
                           
                           if (column === 'İşlemler') {
                             return (
