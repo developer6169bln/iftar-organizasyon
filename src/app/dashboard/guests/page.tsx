@@ -483,9 +483,17 @@ export default function GuestsPage() {
       if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
         return // Behalte minimale Struktur
       }
-      // Sonst setze Standard-Spalten
-      setAllColumns(standardColumns)
-      saveColumnOrder(standardColumns)
+      // Wenn keine Spalten vorhanden, setze minimale Struktur (nur Nummer)
+      if (allColumns.length === 0) {
+        const minimalColumns = ['Nummer', 'İşlemler']
+        setAllColumns(minimalColumns)
+        saveColumnOrder(minimalColumns)
+        return
+      }
+      // Sonst setze Standard-Spalten (mit Nummer)
+      const columnsWithNummer = ['Nummer', ...standardColumns.filter(col => col !== 'Nummer')]
+      setAllColumns(columnsWithNummer)
+      saveColumnOrder(columnsWithNummer)
       return
     }
     
