@@ -62,6 +62,12 @@ export default function GuestsPage() {
     'Notiz',
     'İşlemler',
     'Telefon',
+    'Auswahl',
+    'VIP',
+    'Einladung E-Mail',
+    'Einladung Post',
+    'Nimmt Teil',
+    'Abgesagt',
     'Anwesend',
     'VIP',
     'Nummer' // Nummer-Spalte hat keinen Filter
