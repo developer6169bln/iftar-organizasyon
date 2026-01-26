@@ -431,6 +431,245 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleCreate3Templates = async () => {
+    if (!confirm('Möchten Sie 3 fertige Templates in 3 Sprachen (Deutsch, Türkisch, Englisch) erstellen?')) {
+      return
+    }
+
+    try {
+      const templates = [
+        // Template 1: Formelle Einladung
+        {
+          name: 'Formelle Einladung (Deutsch)',
+          language: 'de',
+          subject: 'Offizielle Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Offizielle Einladung</h2>
+<p>Sehr geehrte/r {{GUEST_NAME}},</p>
+<p>wir haben die Ehre, Sie herzlich zum Iftar-Essen einzuladen, das am <strong>{{EVENT_DATE}}</strong> um <strong>{{EVENT_LOCATION}}</strong> stattfindet.</p>
+<p>Diese Veranstaltung bietet eine wunderbare Gelegenheit, gemeinsam den heiligen Monat Ramadan zu würdigen und in einer festlichen Atmosphäre zusammenzukommen.</p>
+<p>Wir würden uns sehr freuen, Sie als unseren geschätzten Gast begrüßen zu dürfen.</p>
+<p><strong>Bitte bestätigen Sie Ihre Teilnahme bis zum angegebenen Datum:</strong></p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Zusage</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Absage</a>
+</p>
+<p>Mit freundlichen Grüßen,<br><strong>Ihr Organisationsteam</strong></p>
+</div>`,
+          plainText: `Sehr geehrte/r {{GUEST_NAME}},\n\nwir haben die Ehre, Sie herzlich zum Iftar-Essen einzuladen, das am {{EVENT_DATE}} um {{EVENT_LOCATION}} stattfindet.\n\nDiese Veranstaltung bietet eine wunderbare Gelegenheit, gemeinsam den heiligen Monat Ramadan zu würdigen und in einer festlichen Atmosphäre zusammenzukommen.\n\nWir würden uns sehr freuen, Sie als unseren geschätzten Gast begrüßen zu dürfen.\n\nBitte bestätigen Sie Ihre Teilnahme über die Links in der E-Mail.\n\nMit freundlichen Grüßen\nIhr Organisationsteam`,
+          isDefault: false,
+        },
+        {
+          name: 'Formelle Einladung (Türkisch)',
+          language: 'tr',
+          subject: 'Resmi İftar Yemeği Daveti - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Resmi Davet</h2>
+<p>Sayın {{GUEST_NAME}},</p>
+<p>Sizleri, <strong>{{EVENT_DATE}}</strong> tarihinde <strong>{{EVENT_LOCATION}}</strong> adresinde düzenlenecek İftar Yemeği'ne davet etmekten onur duyarız.</p>
+<p>Bu etkinlik, kutsal Ramazan ayını birlikte onurlandırmak ve neşeli bir atmosferde bir araya gelmek için harika bir fırsat sunmaktadır.</p>
+<p>Değerli misafirimiz olarak sizleri ağırlamaktan mutluluk duyacağız.</p>
+<p><strong>Lütfen katılımınızı belirtilen tarihe kadar onaylayın:</strong></p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Kabul</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Red</a>
+</p>
+<p>Saygılarımızla,<br><strong>Organizasyon Ekibi</strong></p>
+</div>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\nSizleri, {{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne davet etmekten onur duyarız.\n\nBu etkinlik, kutsal Ramazan ayını birlikte onurlandırmak ve neşeli bir atmosferde bir araya gelmek için harika bir fırsat sunmaktadır.\n\nDeğerli misafirimiz olarak sizleri ağırlamaktan mutluluk duyacağız.\n\nLütfen katılımınızı onaylayın.\n\nSaygılarımızla\nOrganizasyon Ekibi`,
+          isDefault: false,
+        },
+        {
+          name: 'Formelle Einladung (Englisch)',
+          language: 'en',
+          subject: 'Official Invitation to Iftar Dinner - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Official Invitation</h2>
+<p>Dear {{GUEST_NAME}},</p>
+<p>We have the honor to cordially invite you to the Iftar Dinner, which will take place on <strong>{{EVENT_DATE}}</strong> at <strong>{{EVENT_LOCATION}}</strong>.</p>
+<p>This event offers a wonderful opportunity to honor the holy month of Ramadan together and come together in a festive atmosphere.</p>
+<p>We would be delighted to welcome you as our esteemed guest.</p>
+<p><strong>Please confirm your attendance by the specified date:</strong></p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Accept</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #e74c3c; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Decline</a>
+</p>
+<p>Best regards,<br><strong>Your Organization Team</strong></p>
+</div>`,
+          plainText: `Dear {{GUEST_NAME}},\n\nWe have the honor to cordially invite you to the Iftar Dinner, which will take place on {{EVENT_DATE}} at {{EVENT_LOCATION}}.\n\nThis event offers a wonderful opportunity to honor the holy month of Ramadan together and come together in a festive atmosphere.\n\nWe would be delighted to welcome you as our esteemed guest.\n\nPlease confirm your attendance via the links in this email.\n\nBest regards\nYour Organization Team`,
+          isDefault: false,
+        },
+        // Template 2: Persönliche Einladung
+        {
+          name: 'Persönliche Einladung (Deutsch)',
+          language: 'de',
+          subject: 'Herzliche Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Herzliche Einladung</h2>
+<p>Liebe/r {{GUEST_NAME}},</p>
+<p>wir möchten Sie ganz herzlich zu unserem Iftar-Essen einladen!</p>
+<p>Am <strong>{{EVENT_DATE}}</strong> kommen wir zusammen, um gemeinsam das Fastenbrechen zu feiern und eine schöne Zeit zu verbringen. Die Veranstaltung findet in <strong>{{EVENT_LOCATION}}</strong> statt.</p>
+<p>Es wird ein abwechslungsreiches Programm mit leckerem Essen, inspirierenden Gesprächen und einer warmherzigen Gemeinschaft geben.</p>
+<p>Wir freuen uns sehr darauf, Sie dabei zu haben und gemeinsam diesen besonderen Moment zu teilen.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Ja, ich komme gerne!</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #95a5a6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Leider nicht möglich</a>
+</p>
+<p>Wir freuen uns auf Sie!<br><strong>Ihr Organisationsteam</strong></p>
+</div>`,
+          plainText: `Liebe/r {{GUEST_NAME}},\n\nwir möchten Sie ganz herzlich zu unserem Iftar-Essen einladen!\n\nAm {{EVENT_DATE}} kommen wir zusammen, um gemeinsam das Fastenbrechen zu feiern und eine schöne Zeit zu verbringen. Die Veranstaltung findet in {{EVENT_LOCATION}} statt.\n\nEs wird ein abwechslungsreiches Programm mit leckerem Essen, inspirierenden Gesprächen und einer warmherzigen Gemeinschaft geben.\n\nWir freuen uns sehr darauf, Sie dabei zu haben und gemeinsam diesen besonderen Moment zu teilen.\n\nBitte bestätigen Sie Ihre Teilnahme über die Links in der E-Mail.\n\nWir freuen uns auf Sie!\nIhr Organisationsteam`,
+          isDefault: false,
+        },
+        {
+          name: 'Persönliche Einladung (Türkisch)',
+          language: 'tr',
+          subject: 'Samimi İftar Yemeği Daveti - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Samimi Davet</h2>
+<p>Sevgili {{GUEST_NAME}},</p>
+<p>Sizleri İftar Yemeğimize çok samimi bir şekilde davet etmek istiyoruz!</p>
+<p><strong>{{EVENT_DATE}}</strong> tarihinde birlikte oruç açmak ve güzel bir zaman geçirmek için bir araya geliyoruz. Etkinlik <strong>{{EVENT_LOCATION}}</strong> adresinde gerçekleşecek.</p>
+<p>Lezzetli yemekler, ilham verici sohbetler ve sıcak bir toplulukla dolu çeşitli bir program olacak.</p>
+<p>Sizleri aramızda görmekten ve bu özel anı birlikte paylaşmaktan çok mutlu olacağız.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Evet, memnuniyetle gelirim!</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #95a5a6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Maalesef katılamam</a>
+</p>
+<p>Sizleri görmeyi dört gözle bekliyoruz!<br><strong>Organizasyon Ekibi</strong></p>
+</div>`,
+          plainText: `Sevgili {{GUEST_NAME}},\n\nSizleri İftar Yemeğimize çok samimi bir şekilde davet etmek istiyoruz!\n\n{{EVENT_DATE}} tarihinde birlikte oruç açmak ve güzel bir zaman geçirmek için bir araya geliyoruz. Etkinlik {{EVENT_LOCATION}} adresinde gerçekleşecek.\n\nLezzetli yemekler, ilham verici sohbetler ve sıcak bir toplulukla dolu çeşitli bir program olacak.\n\nSizleri aramızda görmekten ve bu özel anı birlikte paylaşmaktan çok mutlu olacağız.\n\nLütfen katılımınızı onaylayın.\n\nSizleri görmeyi dört gözle bekliyoruz!\nOrganizasyon Ekibi`,
+          isDefault: false,
+        },
+        {
+          name: 'Persönliche Einladung (Englisch)',
+          language: 'en',
+          subject: 'Warm Invitation to Iftar Dinner - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+<h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Warm Invitation</h2>
+<p>Dear {{GUEST_NAME}},</p>
+<p>We would like to warmly invite you to our Iftar Dinner!</p>
+<p>On <strong>{{EVENT_DATE}}</strong>, we will come together to break the fast together and spend a wonderful time. The event will take place at <strong>{{EVENT_LOCATION}}</strong>.</p>
+<p>There will be a varied program with delicious food, inspiring conversations, and a warm community.</p>
+<p>We are very much looking forward to having you with us and sharing this special moment together.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block;">Yes, I'd love to come!</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: #95a5a6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Unfortunately not possible</a>
+</p>
+<p>We look forward to seeing you!<br><strong>Your Organization Team</strong></p>
+</div>`,
+          plainText: `Dear {{GUEST_NAME}},\n\nWe would like to warmly invite you to our Iftar Dinner!\n\nOn {{EVENT_DATE}}, we will come together to break the fast together and spend a wonderful time. The event will take place at {{EVENT_LOCATION}}.\n\nThere will be a varied program with delicious food, inspiring conversations, and a warm community.\n\nWe are very much looking forward to having you with us and sharing this special moment together.\n\nPlease confirm your attendance via the links in this email.\n\nWe look forward to seeing you!\nYour Organization Team`,
+          isDefault: false,
+        },
+        // Template 3: VIP Einladung
+        {
+          name: 'VIP Einladung (Deutsch)',
+          language: 'de',
+          subject: 'Exklusive VIP-Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
+<h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Exklusive VIP-Einladung</h2>
+<p style="font-size: 16px;">Sehr geehrte/r {{GUEST_NAME}},</p>
+<p>als geschätzter Partner und wichtiger Gast möchten wir Sie ganz besonders zum Iftar-Essen einladen.</p>
+<p>Am <strong style="color: #f1c40f;">{{EVENT_DATE}}</strong> freuen wir uns darauf, Sie in <strong style="color: #f1c40f;">{{EVENT_LOCATION}}</strong> begrüßen zu dürfen.</p>
+<p>Diese exklusive Veranstaltung bietet Ihnen:</p>
+<ul style="line-height: 1.8;">
+  <li>Premium-Gastronomie und kulinarische Köstlichkeiten</li>
+  <li>Persönliche Betreuung und VIP-Service</li>
+  <li>Inspirierende Gespräche in exklusivem Rahmen</li>
+  <li>Ein unvergessliches Erlebnis in festlicher Atmosphäre</li>
+</ul>
+<p>Ihre Anwesenheit würde unserer Veranstaltung eine besondere Note verleihen.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block; font-weight: bold;">Mit Freude annehmen</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: rgba(255,255,255,0.2); color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; display: inline-block;">Absagen</a>
+</p>
+<p>Mit höchster Wertschätzung,<br><strong>Ihr Organisationsteam</strong></p>
+</div>`,
+          plainText: `Sehr geehrte/r {{GUEST_NAME}},\n\nals geschätzter Partner und wichtiger Gast möchten wir Sie ganz besonders zum Iftar-Essen einladen.\n\nAm {{EVENT_DATE}} freuen wir uns darauf, Sie in {{EVENT_LOCATION}} begrüßen zu dürfen.\n\nDiese exklusive Veranstaltung bietet Ihnen:\n- Premium-Gastronomie und kulinarische Köstlichkeiten\n- Persönliche Betreuung und VIP-Service\n- Inspirierende Gespräche in exklusivem Rahmen\n- Ein unvergessliches Erlebnis in festlicher Atmosphäre\n\nIhre Anwesenheit würde unserer Veranstaltung eine besondere Note verleihen.\n\nBitte bestätigen Sie Ihre Teilnahme über die Links in der E-Mail.\n\nMit höchster Wertschätzung\nIhr Organisationsteam`,
+          isDefault: false,
+        },
+        {
+          name: 'VIP Einladung (Türkisch)',
+          language: 'tr',
+          subject: 'Özel VIP İftar Yemeği Daveti - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
+<h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Özel VIP Daveti</h2>
+<p style="font-size: 16px;">Sayın {{GUEST_NAME}},</p>
+<p>Değerli bir ortak ve önemli bir misafir olarak sizleri İftar Yemeği'ne özellikle davet etmek istiyoruz.</p>
+<p><strong style="color: #f1c40f;">{{EVENT_DATE}}</strong> tarihinde sizleri <strong style="color: #f1c40f;">{{EVENT_LOCATION}}</strong> adresinde ağırlamaktan mutluluk duyacağız.</p>
+<p>Bu özel etkinlik size şunları sunmaktadır:</p>
+<ul style="line-height: 1.8;">
+  <li>Premium gastronomi ve mutfak lezzetleri</li>
+  <li>Kişisel hizmet ve VIP servis</li>
+  <li>Özel bir ortamda ilham verici sohbetler</li>
+  <li>Festival atmosferinde unutulmaz bir deneyim</li>
+</ul>
+<p>Varlığınız etkinliğimize özel bir değer katacaktır.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block; font-weight: bold;">Memnuniyetle Kabul Ediyorum</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: rgba(255,255,255,0.2); color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; display: inline-block;">Reddet</a>
+</p>
+<p>En yüksek saygılarımızla,<br><strong>Organizasyon Ekibi</strong></p>
+</div>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\nDeğerli bir ortak ve önemli bir misafir olarak sizleri İftar Yemeği'ne özellikle davet etmek istiyoruz.\n\n{{EVENT_DATE}} tarihinde sizleri {{EVENT_LOCATION}} adresinde ağırlamaktan mutluluk duyacağız.\n\nBu özel etkinlik size şunları sunmaktadır:\n- Premium gastronomi ve mutfak lezzetleri\n- Kişisel hizmet ve VIP servis\n- Özel bir ortamda ilham verici sohbetler\n- Festival atmosferinde unutulmaz bir deneyim\n\nVarlığınız etkinliğimize özel bir değer katacaktır.\n\nLütfen katılımınızı onaylayın.\n\nEn yüksek saygılarımızla\nOrganizasyon Ekibi`,
+          isDefault: false,
+        },
+        {
+          name: 'VIP Einladung (Englisch)',
+          language: 'en',
+          subject: 'Exclusive VIP Invitation to Iftar Dinner - {{EVENT_TITLE}}',
+          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
+<h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Exclusive VIP Invitation</h2>
+<p style="font-size: 16px;">Dear {{GUEST_NAME}},</p>
+<p>As a valued partner and important guest, we would like to especially invite you to the Iftar Dinner.</p>
+<p>On <strong style="color: #f1c40f;">{{EVENT_DATE}}</strong>, we look forward to welcoming you at <strong style="color: #f1c40f;">{{EVENT_LOCATION}}</strong>.</p>
+<p>This exclusive event offers you:</p>
+<ul style="line-height: 1.8;">
+  <li>Premium gastronomy and culinary delights</li>
+  <li>Personal care and VIP service</li>
+  <li>Inspiring conversations in an exclusive setting</li>
+  <li>An unforgettable experience in a festive atmosphere</li>
+</ul>
+<p>Your presence would add a special touch to our event.</p>
+<p style="text-align: center; margin: 30px 0;">
+  <a href="{{ACCEPT_LINK}}" style="background-color: #27ae60; color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; margin-right: 10px; display: inline-block; font-weight: bold;">Accept with Pleasure</a>
+  <a href="{{DECLINE_LINK}}" style="background-color: rgba(255,255,255,0.2); color: white; padding: 15px 35px; text-decoration: none; border-radius: 5px; display: inline-block;">Decline</a>
+</p>
+<p>With highest appreciation,<br><strong>Your Organization Team</strong></p>
+</div>`,
+          plainText: `Dear {{GUEST_NAME}},\n\nAs a valued partner and important guest, we would like to especially invite you to the Iftar Dinner.\n\nOn {{EVENT_DATE}}, we look forward to welcoming you at {{EVENT_LOCATION}}.\n\nThis exclusive event offers you:\n- Premium gastronomy and culinary delights\n- Personal care and VIP service\n- Inspiring conversations in an exclusive setting\n- An unforgettable experience in a festive atmosphere\n\nYour presence would add a special touch to our event.\n\nPlease confirm your attendance via the links in this email.\n\nWith highest appreciation\nYour Organization Team`,
+          isDefault: false,
+        },
+      ]
+
+      let created = 0
+      let errors = 0
+
+      for (const template of templates) {
+        try {
+          const response = await fetch('/api/email-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(template),
+          })
+          if (response.ok) {
+            created++
+          } else {
+            errors++
+          }
+        } catch (error) {
+          console.error('Fehler beim Erstellen des Templates:', template.name, error)
+          errors++
+        }
+      }
+
+      await loadTemplates()
+      alert(`✅ ${created} Templates erfolgreich erstellt${errors > 0 ? `\n⚠️ ${errors} Fehler` : ''}`)
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Templates:', error)
+      alert('Fehler beim Erstellen der Templates')
+    }
+  }
+
   const handleSendTestEmail = async () => {
     if (!testEmailForm.email || !testEmailForm.templateId) {
       alert('Bitte geben Sie eine E-Mail-Adresse ein und wählen Sie ein Template aus')
@@ -1270,6 +1509,12 @@ export default function InvitationsPage() {
                   className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                 >
                   + Standard-Templates erstellen
+                </button>
+                <button
+                  onClick={handleCreate3Templates}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  ✨ 3 Fertige Templates (DE/TR/EN)
                 </button>
               </div>
             </div>
