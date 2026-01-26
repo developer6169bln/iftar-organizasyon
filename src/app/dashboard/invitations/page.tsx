@@ -21,6 +21,30 @@ export default function InvitationsPage() {
   const [selectedInvitations, setSelectedInvitations] = useState<string[]>([])
   const [editingCell, setEditingCell] = useState<{ invitationId: string; field: string } | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
+  const [includeLinks, setIncludeLinks] = useState<boolean>(true) // Standard: Links einbeziehen
+  const [editingTemplate, setEditingTemplate] = useState<any>(null)
+  const [templateForm, setTemplateForm] = useState({
+    name: '',
+    language: 'de',
+    subject: '',
+    body: '',
+    plainText: '',
+    isDefault: false,
+  })
+  const [configForm, setConfigForm] = useState({
+    name: '',
+    type: 'GMAIL' as 'GMAIL' | 'IMAP',
+    email: '',
+    appPassword: '',
+    password: '',
+    smtpHost: '',
+    smtpPort: 587,
+    imapHost: '',
+    imapPort: 993,
+    isActive: false,
+  })
+  const [editingConfig, setEditingConfig] = useState<any>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -118,6 +142,97 @@ export default function InvitationsPage() {
       }
     } catch (error) {
       console.error('Fehler beim Laden der Email-Konfigurationen:', error)
+    }
+  }
+
+  const handleSaveConfig = async () => {
+    try {
+      if (!configForm.name || !configForm.email) {
+        alert('Name und E-Mail sind erforderlich')
+        return
+      }
+
+      if (configForm.type === 'GMAIL' && !configForm.appPassword) {
+        alert('Gmail App-Passwort ist erforderlich')
+        return
+      }
+
+      if (configForm.type === 'IMAP' && (!configForm.smtpHost || !configForm.smtpPort)) {
+        alert('SMTP Host und Port sind erforderlich')
+        return
+      }
+
+      const url = editingConfig ? '/api/email-config' : '/api/email-config'
+      const method = editingConfig ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingConfig ? { id: editingConfig.id, ...configForm } : configForm),
+      })
+
+      if (response.ok) {
+        await loadEmailConfigs()
+        setConfigForm({
+          name: '',
+          type: 'GMAIL',
+          email: '',
+          appPassword: '',
+          password: '',
+          smtpHost: '',
+          smtpPort: 587,
+          imapHost: '',
+          imapPort: 993,
+          isActive: false,
+        })
+        setEditingConfig(null)
+        alert('Email-Konfiguration gespeichert')
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleEditConfig = (config: any) => {
+    setEditingConfig(config)
+    setConfigForm({
+      name: config.name,
+      type: config.type,
+      email: config.email,
+      appPassword: '',
+      password: '',
+      smtpHost: config.smtpHost || '',
+      smtpPort: config.smtpPort || 587,
+      imapHost: config.imapHost || '',
+      imapPort: config.imapPort || 993,
+      isActive: config.isActive || false,
+    })
+  }
+
+  const handleDeleteConfig = async (id: string) => {
+    if (!confirm('Möchten Sie diese Email-Konfiguration wirklich löschen?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/email-config?id=${id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        await loadEmailConfigs()
+        alert('Email-Konfiguration gelöscht')
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error)
+      alert('Fehler beim Löschen')
     }
   }
 
@@ -397,6 +512,24 @@ export default function InvitationsPage() {
                 <option value="en">Englisch</option>
                 <option value="ar">Arabisch</option>
               </select>
+            </div>
+
+            {/* Option: Links einbeziehen */}
+            <div className="mb-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={includeLinks}
+                  onChange={(e) => setIncludeLinks(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Zusage- und Absage-Links in E-Mail einbeziehen
+                </span>
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                Wenn aktiviert, werden Links für Zusage und Absage in die E-Mail eingefügt (Placeholder: ACCEPT_LINK und DECLINE_LINK)
+              </p>
             </div>
 
             {/* Gäste-Auswahl */}
@@ -872,16 +1005,255 @@ export default function InvitationsPage() {
         {activeTab === 'config' && (
           <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-xl font-semibold">Email-Konfiguration</h2>
-            <p className="mb-4 text-sm text-gray-600">
-              Email-Konfiguration wird später implementiert.
-            </p>
-            {emailConfigs.length > 0 && (
-              <div className="rounded-lg bg-gray-50 p-4">
-                <p className="text-sm">
-                  Aktive Konfiguration: {emailConfigs.find(c => c.isActive)?.name || 'Keine'}
-                </p>
+            
+            {/* Formular für neue/bearbeitete Konfiguration */}
+            <div className="mb-6 rounded-lg border border-gray-200 p-4">
+              <h3 className="mb-4 text-lg font-medium">
+                {editingConfig ? 'Konfiguration bearbeiten' : 'Neue Email-Konfiguration'}
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={configForm.name}
+                    onChange={(e) => setConfigForm({ ...configForm, name: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. Gmail Hauptkonto"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Typ *
+                  </label>
+                  <select
+                    value={configForm.type}
+                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'IMAP' })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="GMAIL">Gmail</option>
+                    <option value="IMAP">Eigener Mail-Server (SMTP/IMAP)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    E-Mail-Adresse *
+                  </label>
+                  <input
+                    type="email"
+                    value={configForm.email}
+                    onChange={(e) => setConfigForm({ ...configForm, email: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="ihre@email.com"
+                  />
+                </div>
+
+                {configForm.type === 'GMAIL' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Gmail App-Passwort *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={configForm.appPassword}
+                          onChange={(e) => setConfigForm({ ...configForm, appPassword: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="16-stelliges App-Passwort"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Erstellen Sie ein App-Passwort in Ihrem Google-Konto unter: 
+                        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline ml-1">
+                          Google Account → Sicherheit → App-Passwörter
+                        </a>
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        SMTP Host *
+                      </label>
+                      <input
+                        type="text"
+                        value={configForm.smtpHost}
+                        onChange={(e) => setConfigForm({ ...configForm, smtpHost: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="smtp.example.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        SMTP Port *
+                      </label>
+                      <input
+                        type="number"
+                        value={configForm.smtpPort}
+                        onChange={(e) => setConfigForm({ ...configForm, smtpPort: parseInt(e.target.value) || 587 })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="587"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Passwort
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={configForm.password}
+                          onChange={(e) => setConfigForm({ ...configForm, password: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="SMTP Passwort"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        IMAP Host (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={configForm.imapHost}
+                        onChange={(e) => setConfigForm({ ...configForm, imapHost: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="imap.example.com"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        IMAP Port (optional)
+                      </label>
+                      <input
+                        type="number"
+                        value={configForm.imapPort}
+                        onChange={(e) => setConfigForm({ ...configForm, imapPort: parseInt(e.target.value) || 993 })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="993"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={configForm.isActive}
+                      onChange={(e) => setConfigForm({ ...configForm, isActive: e.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Als aktive Konfiguration verwenden
+                    </span>
+                  </label>
+                </div>
               </div>
-            )}
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleSaveConfig}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  {editingConfig ? 'Aktualisieren' : 'Erstellen'}
+                </button>
+                {editingConfig && (
+                  <button
+                    onClick={() => {
+                      setEditingConfig(null)
+                      setConfigForm({
+                        name: '',
+                        type: 'GMAIL',
+                        email: '',
+                        appPassword: '',
+                        password: '',
+                        smtpHost: '',
+                        smtpPort: 587,
+                        imapHost: '',
+                        imapPort: 993,
+                        isActive: false,
+                      })
+                    }}
+                    className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Liste der vorhandenen Konfigurationen */}
+            <div>
+              <h3 className="mb-4 text-lg font-medium">Vorhandene Konfigurationen</h3>
+              {emailConfigs.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Konfigurationen vorhanden</p>
+              ) : (
+                <div className="space-y-2">
+                  {emailConfigs.map((config) => (
+                    <div
+                      key={config.id}
+                      className={`flex items-center justify-between rounded-lg border p-4 ${
+                        config.isActive ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {config.name}
+                          {config.isActive && (
+                            <span className="ml-2 rounded bg-green-500 px-2 py-1 text-xs text-white">
+                              Aktiv
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {config.type} - {config.email}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditConfig(config)}
+                          className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          onClick={() => handleDeleteConfig(config.id)}
+                          className="rounded-lg bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700"
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -6,7 +6,8 @@ import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
-    const { guestIds, templateId, language, eventId } = await request.json()
+    const { guestIds, templateId, language, eventId, includeLinks: includeLinksParam = true } = await request.json()
+    const includeLinks = includeLinksParam !== false // Standard: true
 
     if (!guestIds || !Array.isArray(guestIds) || guestIds.length === 0) {
       return NextResponse.json(
@@ -138,8 +139,18 @@ export async function POST(request: NextRequest) {
             day: 'numeric',
           }))
           .replace(/{{EVENT_LOCATION}}/g, event.location)
-          .replace(/{{ACCEPT_LINK}}/g, acceptLink)
-          .replace(/{{DECLINE_LINK}}/g, declineLink)
+        
+        // Links optional einfügen (Standard: true)
+        if (includeLinks) {
+          personalizedBody = personalizedBody
+            .replace(/{{ACCEPT_LINK}}/g, acceptLink)
+            .replace(/{{DECLINE_LINK}}/g, declineLink)
+        } else {
+          // Entferne Links wenn nicht gewünscht
+          personalizedBody = personalizedBody
+            .replace(/{{ACCEPT_LINK}}/g, '')
+            .replace(/{{DECLINE_LINK}}/g, '')
+        }
 
         let personalizedSubject = template.subject
           .replace(/{{GUEST_NAME}}/g, guest.name)
