@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument, rgb, PDFImage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFImage } from 'pdf-lib'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -208,8 +208,8 @@ export async function POST(request: NextRequest) {
     const pdfDoc = await PDFDocument.create()
 
     // Fonts einbetten (einmal für alle Seiten)
-    const helveticaFont = await pdfDoc.embedFont('Helvetica')
-    const helveticaBoldFont = await pdfDoc.embedFont('Helvetica-Bold')
+    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica)
+    const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
 
     // Logo einbetten (falls vorhanden)
     let logoImage: PDFImage | undefined
@@ -294,10 +294,23 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Fehler beim Generieren der Namensschilder:', error)
+    
+    // Detailliertes Logging
+    if (error instanceof Error) {
+      console.error('Fehler-Stack:', error.stack)
+      console.error('Fehler-Name:', error.name)
+      console.error('Fehler-Message:', error.message)
+    }
+    
     return NextResponse.json(
       { 
         error: 'Fehler beim Generieren der Namensschilder',
-        details: error instanceof Error ? error.message : 'Unbekannter Fehler'
+        details: error instanceof Error ? error.message : 'Unbekannter Fehler',
+        // In Development: Mehr Details
+        ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+          stack: error.stack,
+          name: error.name,
+        } : {})
       },
       { status: 500 }
     )
