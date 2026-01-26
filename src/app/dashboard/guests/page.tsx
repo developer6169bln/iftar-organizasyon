@@ -833,6 +833,9 @@ export default function GuestsPage() {
 
   const handleCheckboxChange = async (guestId: string, field: string, checked: boolean) => {
     try {
+      const guest = guests.find(g => g.id === guestId)
+      if (!guest) return
+
       if (field === 'vip') {
         const response = await fetch('/api/guests', {
           method: 'PATCH',
@@ -843,46 +846,101 @@ export default function GuestsPage() {
           const updated = await response.json()
           setGuests(guests.map(g => g.id === guestId ? updated : g))
         }
-      } else {
-        // Für Invitation-Felder
-        const invitation = invitations[guestId]
-        if (!invitation) {
-          // Erstelle neue Invitation falls nicht vorhanden
-          const eventsRes = await fetch('/api/events')
-          if (eventsRes.ok) {
-            const events = await eventsRes.json()
-            if (events.length > 0) {
-              // TODO: Erstelle Invitation
-              alert('Invitation muss zuerst erstellt werden')
-            }
-          }
-          return
-        }
-
-        const updateData: any = { id: invitation.id }
+      } else if (field === 'mailListe') {
+        // Speichere Mail-Liste in additionalData
+        const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+        additional['Mail-Liste'] = checked
         
-        if (field === 'sentByPost') {
-          updateData.sentByPost = checked
-          if (checked) {
-            updateData.sentAt = new Date().toISOString()
-          }
-        } else if (field === 'nimmtTeil') {
-          updateData.response = checked ? 'ACCEPTED' : 'PENDING'
-          updateData.respondedAt = checked ? new Date().toISOString() : null
-        } else if (field === 'abgesagt') {
-          updateData.response = checked ? 'DECLINED' : 'PENDING'
-          updateData.respondedAt = checked ? new Date().toISOString() : null
-        }
-
-        const response = await fetch('/api/invitations/update', {
-          method: 'PUT',
+        const response = await fetch('/api/guests', {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateData),
+          body: JSON.stringify({
+            id: guestId,
+            additionalData: JSON.stringify(additional)
+          }),
         })
-
+        
         if (response.ok) {
           const updated = await response.json()
-          setInvitations({ ...invitations, [guestId]: updated })
+          setGuests(guests.map(g => g.id === guestId ? updated : g))
+        }
+      } else {
+        // Für Invitation-Felder: Speichere in additionalData wenn keine Invitation existiert
+        const invitation = invitations[guestId]
+        
+        if (!invitation) {
+          // Keine Invitation vorhanden - speichere in additionalData
+          const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+          
+          if (field === 'sentByPost') {
+            additional['Einladung Post'] = checked
+            if (checked) {
+              additional['Einladung Post Datum'] = new Date().toISOString()
+            }
+          } else if (field === 'nimmtTeil') {
+            additional['Nimmt Teil'] = checked
+            if (checked) {
+              additional['Nimmt Teil Datum'] = new Date().toISOString()
+              additional['Abgesagt'] = false // Gegenseitig ausschließend
+            }
+          } else if (field === 'abgesagt') {
+            additional['Abgesagt'] = checked
+            if (checked) {
+              additional['Abgesagt Datum'] = new Date().toISOString()
+              additional['Nimmt Teil'] = false // Gegenseitig ausschließend
+            }
+          }
+          
+          const response = await fetch('/api/guests', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: guestId,
+              additionalData: JSON.stringify(additional)
+            }),
+          })
+          
+          if (response.ok) {
+            const updated = await response.json()
+            setGuests(guests.map(g => g.id === guestId ? updated : g))
+          }
+        } else {
+          // Invitation existiert - aktualisiere Invitation
+          const updateData: any = { id: invitation.id }
+          
+          if (field === 'sentByPost') {
+            updateData.sentByPost = checked
+            if (checked) {
+              updateData.sentAt = new Date().toISOString()
+            }
+          } else if (field === 'nimmtTeil') {
+            updateData.response = checked ? 'ACCEPTED' : 'PENDING'
+            updateData.respondedAt = checked ? new Date().toISOString() : null
+            // Wenn "Nimmt Teil" aktiviert wird, setze "Abgesagt" zurück
+            if (checked) {
+              updateData.response = 'ACCEPTED'
+            }
+          } else if (field === 'abgesagt') {
+            updateData.response = checked ? 'DECLINED' : 'PENDING'
+            updateData.respondedAt = checked ? new Date().toISOString() : null
+            // Wenn "Abgesagt" aktiviert wird, setze "Nimmt Teil" zurück
+            if (checked) {
+              updateData.response = 'DECLINED'
+            }
+          }
+
+          const response = await fetch('/api/invitations/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData),
+          })
+
+          if (response.ok) {
+            const updated = await response.json()
+            setInvitations({ ...invitations, [guestId]: updated })
+            // Aktualisiere auch den Gast, falls nötig
+            setGuests(guests.map(g => g.id === guestId ? { ...g } : g))
+          }
         }
       }
     } catch (error) {
