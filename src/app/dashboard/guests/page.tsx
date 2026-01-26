@@ -2179,6 +2179,12 @@ export default function GuestsPage() {
                             return null // Sollte nicht hier ankommen, aber als Sicherheit
                           }
                           
+                          // Überspringe Checkbox-Spalten (werden bereits oben behandelt)
+                          const isCheckboxColumn = ['Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'].includes(column)
+                          if (isCheckboxColumn) {
+                            return null // Sollte nicht hier ankommen, aber als Sicherheit
+                          }
+                          
                           const value = getColumnValue(guest, column)
                           const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
                           
