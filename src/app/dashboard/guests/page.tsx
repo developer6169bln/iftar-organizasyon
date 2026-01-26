@@ -1870,6 +1870,62 @@ export default function GuestsPage() {
                                     
                                     console.log('🔘 Checkbox geändert:', { guestId: guest.id, column, checked: newValue })
                                     
+                                    // Spezielle Behandlung für "Einladungsliste"
+                                    if (column === 'Einladungsliste' || column.toLowerCase().includes('einladungsliste')) {
+                                      try {
+                                        // Lade eventId
+                                        const eventsRes = await fetch('/api/events')
+                                        if (!eventsRes.ok) {
+                                          throw new Error('Fehler beim Laden der Events')
+                                        }
+                                        const events = await eventsRes.ok ? await eventsRes.json() : []
+                                        if (events.length === 0) {
+                                          throw new Error('Kein Event gefunden')
+                                        }
+                                        const currentEventId = events[0].id
+                                        
+                                        if (newValue) {
+                                          // Erstelle Einladung (ohne E-Mail zu senden)
+                                          const createInvitationRes = await fetch('/api/invitations/create', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                              guestId: guest.id,
+                                              eventId: currentEventId,
+                                            }),
+                                          })
+                                          
+                                          if (createInvitationRes.ok) {
+                                            const newInvitation = await createInvitationRes.json()
+                                            setInvitations(prev => ({ ...prev, [guest.id]: newInvitation }))
+                                            console.log('✅ Einladung erstellt:', newInvitation)
+                                          } else {
+                                            const errorData = await createInvitationRes.json()
+                                            throw new Error(errorData.error || 'Fehler beim Erstellen der Einladung')
+                                          }
+                                        } else {
+                                          // Einladung bleibt in DB, wird nur aus local state entfernt
+                                          // (Einladung wird nicht gelöscht, nur aus "Einladungsliste" entfernt)
+                                          setInvitations(prev => {
+                                            const newInvitations = { ...prev }
+                                            delete newInvitations[guest.id]
+                                            return newInvitations
+                                          })
+                                          console.log('✅ Einladung aus Liste entfernt (bleibt in DB)')
+                                        }
+                                      } catch (error) {
+                                        console.error('❌ Fehler bei Einladungsliste:', error)
+                                        // Setze Checkbox zurück bei Fehler
+                                        setCheckboxStates(prev => {
+                                          const newState = { ...prev }
+                                          delete newState[checkboxKey]
+                                          return newState
+                                        })
+                                        alert('Fehler beim Verarbeiten der Einladungsliste: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
+                                        return
+                                      }
+                                    }
+                                    
                                     // Speichere in additionalData
                                     const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
                                     additional[column] = newValue
