@@ -349,6 +349,10 @@ export default function GuestsPage() {
       alert('Bitte wählen Sie eine Datei aus')
       return
     }
+    if (!eventId) {
+      alert('Event konnte nicht geladen werden (eventId fehlt). Bitte Seite neu laden.')
+      return
+    }
 
     // Bestätigungsdialog
     const confirmMessage = 
@@ -369,6 +373,7 @@ export default function GuestsPage() {
       
       const formData = new FormData()
       formData.append('file', importFile)
+      formData.append('eventId', eventId)
 
       const response = await fetch('/api/import/csv-xls', {
         method: 'POST',
