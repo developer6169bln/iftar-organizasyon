@@ -453,9 +453,40 @@ export default function GuestsPage() {
       }
     })
     
-    // Baue finale Reihenfolge: Nummer, dann NUR importierte Spalten
-    const importedColumns = Array.from(columnsSet).filter(col => col !== 'Nummer' && col !== 'İşlemler')
-    const orderedColumns = ['Nummer', ...importedColumns, 'İşlemler']
+    // Lade gespeicherte Reihenfolge aus localStorage
+    let savedOrder: string[] = []
+    try {
+      const savedOrderStr = localStorage.getItem('guestColumnsOrder')
+      if (savedOrderStr) {
+        savedOrder = JSON.parse(savedOrderStr)
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der gespeicherten Spaltenreihenfolge:', e)
+    }
+    
+    // Baue finale Reihenfolge: Behalte gespeicherte Reihenfolge, füge neue Spalten am Ende hinzu
+    const importedColumns = Array.from(columnsSet).filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+    
+    // Entferne geschützte Spalten aus savedOrder
+    const protectedCols = ['ID', 'İşlemler']
+    const savedWithoutProtected = savedOrder.filter(col => 
+      !protectedCols.includes(col) && col !== 'Nummer'
+    )
+    
+    // Finde neue Spalten, die noch nicht in savedOrder sind
+    const newColumns = importedColumns.filter(col => !savedWithoutProtected.includes(col))
+    
+    // Baue finale Reihenfolge:
+    // 1. Nummer (immer zuerst)
+    // 2. Gespeicherte Reihenfolge (nur Spalten, die noch existieren)
+    // 3. Neue Spalten (die noch nicht in gespeicherter Reihenfolge sind)
+    // 4. İşlemler (immer am Ende)
+    const orderedColumns = [
+      'Nummer',
+      ...savedWithoutProtected.filter(col => importedColumns.includes(col)), // Nur existierende Spalten
+      ...newColumns, // Neue Spalten am Ende
+      'İşlemler'
+    ]
     
     // Prüfe ob sich die Spalten geändert haben, bevor wir setzen (verhindert Endlosschleife)
     const currentColumnsStr = JSON.stringify([...allColumns].sort())
@@ -464,12 +495,8 @@ export default function GuestsPage() {
     if (currentColumnsStr !== newColumnsStr) {
       // Setze Spalten direkt
       setAllColumns(orderedColumns)
-      // Speichere Reihenfolge (nur wenn sich wirklich etwas geändert hat)
-      try {
-        localStorage.setItem('guestColumnsOrder', JSON.stringify(orderedColumns))
-      } catch (e) {
-        console.error('Fehler beim Speichern der Spaltenreihenfolge:', e)
-      }
+      // Speichere Reihenfolge IMMER (auch bei neuen Spalten)
+      saveColumnOrder(orderedColumns)
       
       // Nur einmal loggen, nicht bei jedem Render
       if (guests.length > 0) {
@@ -477,7 +504,9 @@ export default function GuestsPage() {
           total: orderedColumns.length,
           imported: importedColumns.length,
           importedColumns: importedColumns,
-          allColumns: orderedColumns
+          allColumns: orderedColumns,
+          savedOrder: savedWithoutProtected,
+          newColumns: newColumns
         })
       }
     }
