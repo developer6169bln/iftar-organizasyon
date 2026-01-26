@@ -59,7 +59,8 @@ async function drawNamensschild(
   logoImage: PDFImage | undefined,
   helveticaFont: any,
   helveticaBoldFont: any,
-  settings: any
+  settings: any,
+  cardOrientation: 'portrait' | 'landscape'
 ) {
   // Hintergrund-Rahmen (keine Faltlinie mehr)
   page.drawRectangle({
@@ -72,12 +73,43 @@ async function drawNamensschild(
     color: rgb(1, 1, 1), // Weiß
   })
 
+  // Hilfsfunktion: Sanitize Text für PDF
+  const sanitizeText = (text: string): string => {
+    if (!text) return ''
+    return text
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim()
+  }
+
+  // Koordinaten-Transformation: Vorschau (HTML/CSS) zu PDF
+  // Vorschau: top/left in Pixeln (170x240 Portrait oder 240x170 Landscape)
+  // PDF: x/y in Punkten (240.95x340.16 Portrait oder 340.16x240.95 Landscape)
+  // HTML: Y von oben, PDF: Y von unten
+  const previewWidth = cardOrientation === 'landscape' ? 240 : 170
+  const previewHeight = cardOrientation === 'landscape' ? 170 : 240
+  const scaleX = width / previewWidth
+  const scaleY = height / previewHeight
+
+  // Hilfsfunktion: Konvertiere Vorschau-Koordinaten zu PDF-Koordinaten
+  const convertX = (previewX: number) => x + (previewX * scaleX)
+  const convertY = (previewY: number) => {
+    // Y umkehren: HTML top -> PDF y (von unten)
+    // In HTML: top=0 ist oben, in PDF: y=0 ist unten
+    // previewY ist der Abstand von oben in der Vorschau
+    // Wir müssen es umkehren: previewHeight - previewY gibt Abstand von unten
+    const previewYFromBottom = previewHeight - previewY
+    return y + (previewYFromBottom * scaleY)
+  }
+
   // Logo (wenn vorhanden) - verwende Einstellungen aus Vorschau
   if (logoImage) {
-    const logoWidth = settings?.logoWidth || 30
-    const logoHeight = settings?.logoHeight || 30
-    const logoX = x + (settings?.logoX || 10)
-    const logoY = y + height - (settings?.logoY || 10) - logoHeight
+    const logoWidth = (settings?.logoWidth || 30) * scaleX
+    const logoHeight = (settings?.logoHeight || 30) * scaleY
+    // Logo-Position: top-left corner in Vorschau
+    const logoX = convertX(settings?.logoX || 10)
+    // Logo-Y: top position in Vorschau, aber wir brauchen bottom position für PDF
+    const logoY = convertY((settings?.logoY || 10) + (settings?.logoHeight || 30)) - logoHeight
     
     try {
       page.drawImage(logoImage, {
@@ -89,15 +121,6 @@ async function drawNamensschild(
     } catch (e) {
       console.error('Fehler beim Zeichnen des Logos:', e)
     }
-  }
-
-  // Hilfsfunktion: Sanitize Text für PDF
-  const sanitizeText = (text: string): string => {
-    if (!text) return ''
-    return text
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .trim()
   }
 
   // Nur: Staat/Institution, Vorname, Name
@@ -116,9 +139,9 @@ async function drawNamensschild(
     try {
       const sanitizedInst = sanitizeText(institution)
       if (sanitizedInst) {
-        const instSize = settings?.institutionSize || 10
-        const instX = x + (settings?.institutionX || 50)
-        const instY = y + height - (settings?.institutionY || 50)
+        const instSize = (settings?.institutionSize || 10) * scaleY
+        const instX = convertX(settings?.institutionX || 50)
+        const instY = convertY(settings?.institutionY || 50)
         const rotation = settings?.institutionRotation || 0
         
         page.drawText(sanitizedInst, {
@@ -140,9 +163,9 @@ async function drawNamensschild(
     try {
       const sanitizedName = sanitizeText(fullName)
       if (sanitizedName) {
-        const nameSize = settings?.nameSize || 14
-        const nameX = x + (settings?.nameX || 50)
-        const nameY = y + height - (settings?.nameY || 70)
+        const nameSize = (settings?.nameSize || 14) * scaleY
+        const nameX = convertX(settings?.nameX || 50)
+        const nameY = convertY(settings?.nameY || 70)
         const rotation = settings?.nameRotation || 0
         
         page.drawText(sanitizedName, {
@@ -312,7 +335,8 @@ export async function POST(request: NextRequest) {
             logoImage,
             helveticaFont,
             helveticaBoldFont,
-            settings
+            settings,
+            cardOrientation
           )
             console.log(`✅ Namensschild ${guestIndex + 1} erstellt für: ${guests[guestIndex].name || 'Unbekannt'}`)
           } catch (e) {
