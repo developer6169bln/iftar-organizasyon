@@ -78,11 +78,11 @@ async function drawNamensschild(
     })
   }
 
-  // Logo (wenn vorhanden) - oben links
+  // Logo (wenn vorhanden) - verwende Einstellungen aus Vorschau
   if (logoImage) {
-    const logoSize = 30
-    const logoX = x + 10
-    const logoY = y + height - logoSize - 10
+    const logoSize = settings?.logoSize || 30
+    const logoX = x + (settings?.logoX || 10)
+    const logoY = y + height - (settings?.logoY || 10) - logoSize
     
     try {
       page.drawImage(logoImage, {
