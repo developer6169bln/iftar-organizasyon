@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(existingInvitation)
     }
 
-    // Hole Standard-Template (deutsch)
-    const template = await prisma.emailTemplate.findFirst({
+    // Hole Standard-Template (deutsch) oder erstelle eines, falls nicht vorhanden
+    let template = await prisma.emailTemplate.findFirst({
       where: {
         language: 'de',
         isDefault: true,
@@ -61,23 +61,28 @@ export async function POST(request: NextRequest) {
     })
 
     if (!template) {
-      return NextResponse.json(
-        { error: 'Kein Standard-Template gefunden' },
-        { status: 404 }
-      )
+      // Erstelle Standard-Template falls keines vorhanden
+      template = await prisma.emailTemplate.create({
+        data: {
+          name: 'Standard Einladung (Deutsch)',
+          language: 'de',
+          subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<p>Liebe/r {{GUEST_NAME}},</p>
+<p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
+<p>Wir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.</p>
+<p>Bitte bestätigen Sie Ihre Teilnahme:</p>
+<p><a href="{{ACCEPT_LINK}}">Zusage</a> | <a href="{{DECLINE_LINK}}">Absage</a></p>
+<p>Mit freundlichen Grüßen<br>Ihr Organisationsteam</p>`,
+          plainText: `Liebe/r {{GUEST_NAME}},\n\nwir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.\n\nWir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.\n\nBitte bestätigen Sie Ihre Teilnahme über die Links in der E-Mail.\n\nMit freundlichen Grüßen\nIhr Organisationsteam`,
+          isDefault: true,
+        },
+      })
     }
 
-    // Hole aktive Email-Config
+    // Hole aktive Email-Config (optional - kann auch null sein)
     const emailConfig = await prisma.emailConfig.findFirst({
       where: { isActive: true },
     })
-
-    if (!emailConfig) {
-      return NextResponse.json(
-        { error: 'Keine Email-Config gefunden' },
-        { status: 404 }
-      )
-    }
 
     // Generiere Tokens
     const acceptToken = crypto.randomBytes(32).toString('hex')
@@ -96,7 +101,7 @@ export async function POST(request: NextRequest) {
         acceptToken,
         declineToken,
         trackingToken,
-        emailConfigId: emailConfig.id,
+        emailConfigId: emailConfig?.id || null, // Optional: kann null sein
         response: 'PENDING',
         // sentAt wird nicht gesetzt, da keine E-Mail gesendet wird
       },
