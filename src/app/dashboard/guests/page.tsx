@@ -233,6 +233,40 @@ export default function GuestsPage() {
     }
   }
 
+  // Speichere aktuelle Reihenfolge als Standard
+  const handleSaveAsDefault = () => {
+    if (allColumns.length === 0) {
+      alert('Keine Spalten vorhanden')
+      return
+    }
+
+    if (confirm('Möchten Sie die aktuelle Spaltenreihenfolge als Standard festlegen?\n\nDiese Reihenfolge wird bei neuen Imports automatisch verwendet.')) {
+      try {
+        // Speichere als Standard
+        localStorage.setItem('guestColumnsOrderDefault', JSON.stringify(allColumns))
+        // Aktualisiere auch die aktuelle Reihenfolge
+        saveColumnOrder(allColumns)
+        alert('✅ Spaltenreihenfolge wurde als Standard gespeichert!')
+      } catch (e) {
+        console.error('Fehler beim Speichern der Standard-Reihenfolge:', e)
+        alert('Fehler beim Speichern der Standard-Reihenfolge')
+      }
+    }
+  }
+
+  // Lade Standard-Reihenfolge
+  const loadDefaultColumnOrder = (): string[] | null => {
+    try {
+      const defaultOrder = localStorage.getItem('guestColumnsOrderDefault')
+      if (defaultOrder) {
+        return JSON.parse(defaultOrder)
+      }
+    } catch (e) {
+      console.error('Fehler beim Laden der Standard-Reihenfolge:', e)
+    }
+    return null
+  }
+
   // Drag-Handler
   const handleDragStart = (column: string) => {
     setDraggedColumn(column)
@@ -302,6 +336,15 @@ export default function GuestsPage() {
 
     setAllColumns(newColumns)
     saveColumnOrder(newColumns)
+    
+    // Prüfe ob Standard-Reihenfolge gespeichert ist und aktualisiere sie
+    const defaultOrder = loadDefaultColumnOrder()
+    if (defaultOrder && JSON.stringify(defaultOrder) === JSON.stringify(newColumns)) {
+      // Reihenfolge entspricht bereits dem Standard, nichts zu tun
+    } else if (defaultOrder) {
+      // Standard existiert, aber aktuelle Reihenfolge ist anders
+      // Optional: Automatisch als Standard speichern? Nein, nur auf explizite Aktion
+    }
     
     setDraggedColumn(null)
     setDragOverColumn(null)
@@ -453,12 +496,20 @@ export default function GuestsPage() {
       }
     })
     
-    // Lade gespeicherte Reihenfolge aus localStorage
+    // Lade gespeicherte Reihenfolge aus localStorage (Standard hat Priorität)
     let savedOrder: string[] = []
     try {
-      const savedOrderStr = localStorage.getItem('guestColumnsOrder')
-      if (savedOrderStr) {
-        savedOrder = JSON.parse(savedOrderStr)
+      // Zuerst versuche Standard-Reihenfolge zu laden
+      const defaultOrder = loadDefaultColumnOrder()
+      if (defaultOrder && defaultOrder.length > 0) {
+        savedOrder = defaultOrder
+        console.log('📌 Verwende Standard-Spaltenreihenfolge')
+      } else {
+        // Fallback: Aktuelle gespeicherte Reihenfolge
+        const savedOrderStr = localStorage.getItem('guestColumnsOrder')
+        if (savedOrderStr) {
+          savedOrder = JSON.parse(savedOrderStr)
+        }
       }
     } catch (e) {
       console.error('Fehler beim Laden der gespeicherten Spaltenreihenfolge:', e)
@@ -1618,6 +1669,15 @@ export default function GuestsPage() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Misafir Listesi</h2>
               <div className="flex items-center gap-4">
+                {allColumns.length > 2 && (
+                  <button
+                    onClick={handleSaveAsDefault}
+                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                    title="Aktuelle Spaltenreihenfolge als Standard speichern"
+                  >
+                    💾 Reihenfolge als Standard speichern
+                  </button>
+                )}
                 {guests.length > 0 && (
                   <>
                     <button
