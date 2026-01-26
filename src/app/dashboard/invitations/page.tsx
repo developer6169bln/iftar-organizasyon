@@ -676,9 +676,31 @@ export default function InvitationsPage() {
       return
     }
 
-    if (!eventId) {
-      alert('Kein Event ausgewählt')
-      return
+    // Lade Event, falls nicht vorhanden
+    let currentEventId = eventId
+    if (!currentEventId) {
+      try {
+        const eventsRes = await fetch('/api/events')
+        if (!eventsRes.ok) {
+          throw new Error('Fehler beim Laden der Events')
+        }
+        const events = await eventsRes.json()
+        if (!events || events.length === 0) {
+          alert('Kein Event gefunden. Bitte erstellen Sie zuerst ein Event.')
+          return
+        }
+        currentEventId = events[0]?.id
+        setEventId(currentEventId)
+        
+        if (!currentEventId) {
+          alert('Kein Event gefunden. Bitte erstellen Sie zuerst ein Event.')
+          return
+        }
+      } catch (error) {
+        console.error('Fehler beim Laden der Events:', error)
+        alert('Fehler beim Laden der Events. Bitte versuchen Sie es erneut.')
+        return
+      }
     }
 
     setSendingTestEmail(true)
@@ -689,7 +711,7 @@ export default function InvitationsPage() {
         body: JSON.stringify({
           email: testEmailForm.email,
           templateId: testEmailForm.templateId,
-          eventId,
+          eventId: currentEventId,
           includeLinks: testEmailForm.includeLinks,
         }),
       })
