@@ -418,16 +418,21 @@ export default function GuestsPage() {
     
     // Felder, die nicht aus additionalData in die Spaltenliste aufgenommen werden sollen
     // Case-insensitive Prüfung
+    // Diese Felder sind hardcodierte Checkbox-Spalten und sollen nicht als importierte Spalten erscheinen
     const shouldIgnoreColumn = (key: string): boolean => {
       const normalized = key.toLowerCase().trim()
       if (normalized === 'nummer') return true
-      // Prüfe auf exakte Übereinstimmungen
+      // Hardcodierte Checkbox-Spalten (sollen nicht aus additionalData erscheinen)
       if (
         normalized === 'auswahl' ||
         normalized === 'einladung e-mail' ||
         normalized === 'einladung e-mail' ||
         normalized === 'einladung post' ||
-        normalized === 'einladungspost'
+        normalized === 'einladungspost' ||
+        normalized === 'nimmt teil' ||
+        normalized === 'abgesagt' ||
+        normalized === 'mail-liste' ||
+        normalized === 'mail liste'
       ) {
         return true
       }
@@ -435,7 +440,10 @@ export default function GuestsPage() {
       if (
         normalized.includes('auswahl') ||
         (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
-        (normalized.includes('einladung') && normalized.includes('post'))
+        (normalized.includes('einladung') && normalized.includes('post')) ||
+        normalized.includes('nimmt teil') ||
+        normalized.includes('abgesagt') ||
+        (normalized.includes('mail') && normalized.includes('liste'))
       ) {
         return true
       }
