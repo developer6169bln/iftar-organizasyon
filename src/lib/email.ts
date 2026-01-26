@@ -41,15 +41,22 @@ export async function getEmailTransporter() {
       throw new Error('Gmail-App-Passwort fehlt. Bitte erstellen Sie ein App-Passwort in Ihrem Google-Konto.')
     }
     
+    // Verwende explizite SMTP-Konfiguration für Gmail (zuverlässiger als 'service: gmail')
     transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true für 465, false für andere Ports
       auth: {
         user: config.email,
         pass: password,
       },
+      tls: {
+        // Erlaube selbst-signierte Zertifikate nicht (Gmail hat gültige Zertifikate)
+        rejectUnauthorized: true,
+      },
     } as any)
     
-    console.log('📧 Gmail-Transporter erstellt für:', config.email)
+    console.log('📧 Gmail-Transporter erstellt (SMTP) für:', config.email)
   } else {
     // IMAP/SMTP Konfiguration
     transporter = nodemailer.createTransport({

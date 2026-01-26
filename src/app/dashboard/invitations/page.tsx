@@ -51,6 +51,8 @@ export default function InvitationsPage() {
     includeLinks: true,
   })
   const [sendingTestEmail, setSendingTestEmail] = useState(false)
+  const [testingConfig, setTestingConfig] = useState(false)
+  const [testConfigEmail, setTestConfigEmail] = useState('')
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -290,6 +292,41 @@ export default function InvitationsPage() {
       imapPort: config.imapPort || 993,
       isActive: config.isActive || false,
     })
+  }
+
+  const handleTestConfig = async (configId?: string) => {
+    if (!testConfigEmail) {
+      alert('Bitte geben Sie eine Test-E-Mail-Adresse ein')
+      return
+    }
+
+    setTestingConfig(true)
+    try {
+      const response = await fetch('/api/email-config/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          configId: configId || undefined,
+          testEmail: testConfigEmail,
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        alert('✅ Test-E-Mail erfolgreich gesendet!\n\nDie Email-Konfiguration funktioniert korrekt.')
+        setTestConfigEmail('')
+      } else {
+        const errorMsg = result.error || 'Unbekannter Fehler'
+        const detailsMsg = result.details ? `\n\nDetails: ${result.details}` : ''
+        alert(`❌ Fehler: ${errorMsg}${detailsMsg}`)
+      }
+    } catch (error) {
+      console.error('Fehler beim Testen der Email-Konfiguration:', error)
+      alert('Fehler beim Testen der Email-Konfiguration')
+    } finally {
+      setTestingConfig(false)
+    }
   }
 
   const handleDeleteConfig = async (id: string) => {
@@ -2047,6 +2084,19 @@ export default function InvitationsPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const email = prompt('Bitte geben Sie eine Test-E-Mail-Adresse ein:', testConfigEmail || '')
+                            if (email) {
+                              setTestConfigEmail(email)
+                              handleTestConfig(config.id)
+                            }
+                          }}
+                          className="rounded-lg bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700"
+                          title="Konfiguration testen"
+                        >
+                          {testingConfig ? '⏳ Teste...' : '🧪 Testen'}
+                        </button>
                         <button
                           onClick={() => handleEditConfig(config)}
                           className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
