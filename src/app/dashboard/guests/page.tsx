@@ -24,8 +24,8 @@ export default function GuestsPage() {
   const [editingValue, setEditingValue] = useState<string>('')
   const [invitations, setInvitations] = useState<Record<string, any>>({}) // guestId -> invitation
   
-  // Geschützte Spalten (können nicht gelöscht werden)
-  const protectedColumns = ['Nummer', 'İşlemler']
+  // Geschützte Spalten (können nicht gelöscht werden) - nur "ID" und "İşlemler"
+  const protectedColumns = ['ID', 'İşlemler']
   
   // Standard-Spalten (immer vorhanden)
   const standardColumns = [
@@ -71,7 +71,7 @@ export default function GuestsPage() {
   ]
   
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
-  const getColumnValue = (guest: any, columnName: string, index?: number): string => {
+  const getColumnValue = (guest: any, columnName: string, index?: number): any => {
     // Nummer-Spalte: Automatisch generierte fortlaufende Nummer
     if (columnName === 'Nummer') {
       return index !== undefined ? index.toString() : ''
@@ -84,7 +84,8 @@ export default function GuestsPage() {
         // Wenn die Spalte in additionalData existiert, verwende diesen Wert
         if (additional.hasOwnProperty(columnName)) {
           const value = additional[columnName]
-          return value !== null && value !== undefined ? String(value) : ''
+          // Behalte den ursprünglichen Typ (Boolean bleibt Boolean)
+          return value !== null && value !== undefined ? value : ''
         }
       } catch (e) {
         console.error('Fehler beim Parsen von additionalData:', e)
@@ -191,7 +192,7 @@ export default function GuestsPage() {
     if (savedOrder.length === 0 || allColumns.length === 0) return
     
     // Stelle sicher, dass nur "Nummer" und "İşlemler" geschützt sind
-    const protectedCols = ['Nummer', 'İşlemler']
+    const protectedCols = ['ID', 'İşlemler']
     
     // Filtere gespeicherte Reihenfolge: Nur Spalten, die auch in allColumns existieren
     const validSavedOrder = savedOrder.filter(col => allColumns.includes(col))
@@ -397,71 +398,49 @@ export default function GuestsPage() {
 
   // ENTFERNT: loadSheetHeaders - komplett entfernt
 
-  // Sammle NUR Spalten aus additionalData (direkter Import, kein Abgleich)
+  // Hilfsfunktion: Prüft ob ein Wert TRUE/FALSE ist (für automatische Checkbox-Erkennung)
+  const isBooleanValue = (value: any): boolean => {
+    if (value === null || value === undefined) return false
+    if (typeof value === 'boolean') return true
+    const str = String(value).trim().toLowerCase()
+    return str === 'true' || str === 'false' || str === '1' || str === '0' || str === 'ja' || str === 'nein' || str === 'yes' || str === 'no'
+  }
+
+  // Hilfsfunktion: Konvertiert einen Wert zu einem Boolean
+  const toBoolean = (value: any): boolean => {
+    if (value === null || value === undefined) return false
+    if (typeof value === 'boolean') return value
+    const str = String(value).trim().toLowerCase()
+    return str === 'true' || str === '1' || str === 'ja' || str === 'yes' || str === 'y'
+  }
+
+  // Sammle NUR importierte Spalten aus additionalData (keine "gesammelten" Spalten)
   useEffect(() => {
     // Wenn keine Gäste vorhanden, setze minimale Struktur (nur Nummer)
     if (guests.length === 0) {
-      // Wenn bereits minimale Struktur (nur Nummer), behalte sie
       if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
         return // Behalte minimale Struktur
       }
-      // Setze minimale Struktur mit Checkbox-Spalten (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
-      const minimalColumns = ['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste', 'İşlemler']
+      const minimalColumns = ['Nummer', 'İşlemler']
       setAllColumns(minimalColumns)
       saveColumnOrder(minimalColumns)
       return
     }
     
     // Sammle NUR Spalten aus additionalData (direkter Import, KEINE Standard-Spalten)
-    // Füge nur Checkbox-Spalten und "Nummer" hinzu (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
-    const columnsSet = new Set<string>(['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
+    const columnsSet = new Set<string>(['Nummer'])
     
-    // Felder, die nicht aus additionalData in die Spaltenliste aufgenommen werden sollen
-    // Case-insensitive Prüfung
-    // Diese Felder sind hardcodierte Checkbox-Spalten und sollen nicht als importierte Spalten erscheinen
-    const shouldIgnoreColumn = (key: string): boolean => {
-      const normalized = key.toLowerCase().trim()
-      if (normalized === 'nummer') return true
-      // Hardcodierte Checkbox-Spalten (sollen nicht aus additionalData erscheinen)
-      if (
-        normalized === 'auswahl' ||
-        normalized === 'einladung e-mail' ||
-        normalized === 'einladung e-mail' ||
-        normalized === 'einladung post' ||
-        normalized === 'einladungspost' ||
-        normalized === 'nimmt teil' ||
-        normalized === 'abgesagt' ||
-        normalized === 'mail-liste' ||
-        normalized === 'mail liste'
-      ) {
-        return true
-      }
-      // Prüfe auf Teilstrings
-      if (
-        normalized.includes('auswahl') ||
-        (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
-        (normalized.includes('einladung') && normalized.includes('post')) ||
-        normalized.includes('nimmt teil') ||
-        normalized.includes('abgesagt') ||
-        (normalized.includes('mail') && normalized.includes('liste'))
-      ) {
-        return true
-      }
-      return false
-    }
-
-    // Sammle NUR Spalten aus additionalData von ALLEN Gästen (keine Standard-Spalten)
+    // Sammle NUR Spalten aus additionalData von ALLEN Gästen
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
           const additional = JSON.parse(guest.additionalData)
-          // Füge ALLE Spalten aus additionalData hinzu (direkter Import), aber ignoriere bestimmte Felder
+          // Füge ALLE Spalten aus additionalData hinzu (direkter Import)
           Object.keys(additional).forEach(key => {
             if (key && key.trim()) {
-              // Normalisiere den Spaltennamen (trim whitespace)
               const normalizedKey = key.trim()
-              // Ignoriere Felder, die nicht in der Tabelle erscheinen sollen (case-insensitive)
-              if (!shouldIgnoreColumn(normalizedKey)) {
+              // Ignoriere nur "Nummer" (wird separat behandelt)
+              if (normalizedKey.toLowerCase() !== 'nummer') {
                 columnsSet.add(normalizedKey)
               }
             }
@@ -472,61 +451,20 @@ export default function GuestsPage() {
       }
     })
     
-    // Debug: Zeige welche Spalten gesammelt wurden
-    console.log('🔍 Gesammelte Spalten (vor Sortierung):', Array.from(columnsSet))
+    // Baue finale Reihenfolge: Nummer, dann NUR importierte Spalten
+    const importedColumns = Array.from(columnsSet).filter(col => col !== 'Nummer' && col !== 'İşlemler')
+    const orderedColumns = ['Nummer', ...importedColumns, 'İşlemler']
     
-    // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer vorhanden sind und an den richtigen Stellen
-    const finalColumns = Array.from(columnsSet)
-    
-    // Entferne Checkbox-Spalten und Nummer aus der Liste (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
-    const checkboxColumns = ['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
-    const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
-    
-    // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann NUR importierte Spalten (keine Standard-Spalten)
-    // OHNE "Auswahl", "Einladung E-Mail", "Einladung Post"
-    const orderedColumns = [
-      'Nummer',
-      'VIP',
-      'Nimmt Teil',
-      'Abgesagt',
-      'Mail-Liste',
-      ...otherColumns // NUR importierte Spalten, keine Standard-Spalten
-    ]
-    
-    // Füge "İşlemler" am Ende hinzu (für Aktionen)
-    if (!orderedColumns.includes('İşlemler')) {
-      orderedColumns.push('İşlemler')
-    }
-    
-    // WICHTIG: Setze Spalten direkt, ohne gespeicherte Reihenfolge zu verwenden
-    // Die gespeicherte Reihenfolge könnte alte Spalten enthalten, die nicht mehr existieren
+    // Setze Spalten direkt
     setAllColumns(orderedColumns)
-    
-    // Speichere die neue Reihenfolge
     saveColumnOrder(orderedColumns)
     
-    // Debug: Log alle gefundenen Spalten
-    console.log('📊 Gefundene Spalten:', {
+    console.log('📊 Importierte Spalten:', {
       total: orderedColumns.length,
-      checkbox: checkboxColumns.length,
-      imported: otherColumns.length,
-      importedColumns: otherColumns,
+      imported: importedColumns.length,
+      importedColumns: importedColumns,
       allColumns: orderedColumns
     })
-    
-    // Debug: Zeige auch, welche Spalten aus additionalData gefunden wurden
-    const allAdditionalKeys = new Set<string>()
-    guests.forEach(guest => {
-      if (guest?.additionalData) {
-        try {
-          const additional = JSON.parse(guest.additionalData)
-          Object.keys(additional).forEach(key => allAdditionalKeys.add(key))
-        } catch (e) {
-          // Ignoriere Parse-Fehler
-        }
-      }
-    })
-    console.log('📋 Spalten aus additionalData:', Array.from(allAdditionalKeys))
   }, [guests])
 
   useEffect(() => {
@@ -1580,7 +1518,7 @@ export default function GuestsPage() {
                                   </svg>
                                 )}
                               </span>
-                              {!isStandardColumn && !protectedColumns.includes(column) && (
+                              {!isStandardColumn && !protectedColumns.includes(column) && column !== 'Nummer' && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -1593,7 +1531,7 @@ export default function GuestsPage() {
                                   🗑️
                                 </button>
                               )}
-                              {protectedColumns.includes(column) && (
+                              {(protectedColumns.includes(column) || column === 'Nummer') && (
                                 <span className="text-xs text-gray-400" title="Geschützte Spalte">
                                   🔒
                                 </span>
@@ -1648,264 +1586,6 @@ export default function GuestsPage() {
                         className={`border-b border-gray-100 hover:bg-gray-50 ${guest.isVip ? 'bg-yellow-50' : ''}`}
                       >
                         {allColumns.map((column) => {
-                          // Checkbox-Spalten
-                          if (column === 'Auswahl') {
-                            return (
-                              <td key={column} className="px-4 py-3 text-center">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedGuests.includes(guest.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedGuests([...selectedGuests, guest.id])
-                                    } else {
-                                      setSelectedGuests(selectedGuests.filter(id => id !== guest.id))
-                                    }
-                                  }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'VIP') {
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={guest.isVip || false}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    handleCheckboxChange(guest.id, 'vip', e.target.checked)
-                                  }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Einladung E-Mail') {
-                            // Prüfe zuerst Invitation, dann additionalData
-                            const invitation = invitations[guest.id]
-                            let checked = false
-                            
-                            if (invitation?.sentAt) {
-                              checked = true
-                            } else if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                checked = additional['Einladung E-Mail'] === true || additional['Einladung E-Mail'] === 'true' || additional['Einladung E-Mail'] === 1
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
-                              }
-                            }
-                            
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => {
-                                  // Verhindere, dass der Klick auf die Zelle die Checkbox beeinflusst
-                                  e.stopPropagation()
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    // Speichere in additionalData
-                                    const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
-                                    additional['Einladung E-Mail'] = e.target.checked
-                                    if (e.target.checked) {
-                                      additional['Einladung E-Mail Datum'] = new Date().toISOString()
-                                    }
-                                    
-                                    fetch('/api/guests', {
-                                      method: 'PATCH',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        id: guest.id,
-                                        additionalData: JSON.stringify(additional)
-                                      }),
-                                    }).then(res => res.json()).then(updated => {
-                                      setGuests(guests.map(g => g.id === guest.id ? updated : g))
-                                    }).catch(err => {
-                                      console.error('Fehler beim Speichern:', err)
-                                      alert('Fehler beim Speichern')
-                                    })
-                                  }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
-                                  title={invitation?.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Einladung Post') {
-                            // Prüfe zuerst Invitation, dann additionalData
-                            const invitation = invitations[guest.id]
-                            let checked = false
-                            
-                            if (invitation?.sentByPost) {
-                              checked = true
-                            } else if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                checked = additional['Einladung Post'] === true || additional['Einladung Post'] === 'true' || additional['Einladung Post'] === 1
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
-                              }
-                            }
-                            
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    handleCheckboxChange(guest.id, 'sentByPost', e.target.checked)
-                                  }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Nimmt Teil') {
-                            // Prüfe zuerst Invitation, dann additionalData
-                            const invitation = invitations[guest.id]
-                            let checked = false
-                            
-                            if (invitation?.response === 'ACCEPTED') {
-                              checked = true
-                            } else if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                checked = additional['Nimmt Teil'] === true || additional['Nimmt Teil'] === 'true' || additional['Nimmt Teil'] === 1
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
-                              }
-                            }
-                            
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  e.preventDefault()
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                style={{ pointerEvents: 'auto' }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    e.preventDefault()
-                                    handleCheckboxChange(guest.id, 'nimmtTeil', e.target.checked)
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                  }}
-                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Abgesagt') {
-                            // Prüfe zuerst Invitation, dann additionalData
-                            const invitation = invitations[guest.id]
-                            let checked = false
-                            
-                            if (invitation?.response === 'DECLINED') {
-                              checked = true
-                            } else if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                checked = additional['Abgesagt'] === true || additional['Abgesagt'] === 'true' || additional['Abgesagt'] === 1
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
-                              }
-                            }
-                            
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  e.preventDefault()
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                style={{ pointerEvents: 'auto' }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    e.preventDefault()
-                                    handleCheckboxChange(guest.id, 'abgesagt', e.target.checked)
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                  }}
-                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
-                                />
-                              </td>
-                            )
-                          }
-                          
-                          if (column === 'Mail-Liste') {
-                            // Hole Wert aus additionalData
-                            let mailListeValue = false
-                            if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                mailListeValue = additional['Mail-Liste'] === true || additional['Mail-Liste'] === 'true' || additional['Mail-Liste'] === 1
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
-                              }
-                            }
-                            
-                            return (
-                              <td 
-                                key={column} 
-                                className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={mailListeValue}
-                                  onChange={(e) => {
-                                    e.stopPropagation()
-                                    handleCheckboxChange(guest.id, 'mailListe', e.target.checked)
-                                  }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
-                                />
-                              </td>
-                            )
-                          }
-                          
                           // Nummer-Spalte: Automatisch generierte fortlaufende Nummer (0, 1, 2, ...)
                           if (column === 'Nummer') {
                             return (
@@ -1915,9 +1595,7 @@ export default function GuestsPage() {
                             )
                           }
                           
-                          // KEINE Spezialbehandlung mehr für Standard-Spalten
-                          // Alle Spalten werden jetzt über getColumnValue und das Standard-Rendering behandelt
-                          
+                          // İşlemler-Spalte: Aktionen
                           if (column === 'İşlemler') {
                             return (
                               <td key={column} className="px-4 py-3">
@@ -1953,15 +1631,97 @@ export default function GuestsPage() {
                             )
                           }
                           
-                          // Standard-Spalten und zusätzliche Spalten aus additionalData - alle editierbar
-                          // Überspringe Checkbox-Spalten (werden bereits oben behandelt)
-                          // OHNE "Auswahl", "Einladung E-Mail", "Einladung Post" - diese werden nicht mehr gerendert
-                          const checkboxColumns = ['VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
-                          if (checkboxColumns.includes(column)) {
-                            return null // Sollte nicht hier ankommen, aber als Sicherheit
+                          // ID-Spalte: Nicht editierbar
+                          if (column === 'ID') {
+                            const value = getColumnValue(guest, column)
+                            return (
+                              <td key={column} className="px-4 py-3 text-sm text-gray-500">
+                                {value || '-'}
+                              </td>
+                            )
                           }
                           
-                          const value = getColumnValue(guest, column)
+                          // Hole Wert für diese Spalte
+                          const rawValue = getColumnValue(guest, column, index)
+                          
+                          // Prüfe ob dieser Wert TRUE/FALSE ist (automatische Checkbox-Erkennung)
+                          // Prüfe auch ob alle Werte dieser Spalte bei allen Gästen TRUE/FALSE sind
+                          const isBooleanColumn = (() => {
+                            // Prüfe den aktuellen Wert
+                            if (isBooleanValue(rawValue)) {
+                              // Prüfe ob alle anderen Gäste auch Boolean-Werte in dieser Spalte haben
+                              const allValues = filteredGuests.map(g => {
+                                const val = getColumnValue(g, column)
+                                return val
+                              })
+                              // Wenn mindestens 80% der Werte Boolean sind, behandle die Spalte als Boolean
+                              const booleanCount = allValues.filter(v => isBooleanValue(v)).length
+                              return booleanCount >= allValues.length * 0.8
+                            }
+                            return false
+                          })()
+                          
+                          // Wenn Boolean-Spalte: Rendere Checkbox
+                          if (isBooleanColumn) {
+                            const checked = toBoolean(rawValue)
+                            const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
+                            
+                            return (
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                style={{ pointerEvents: 'auto' }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={async (e) => {
+                                    e.stopPropagation()
+                                    e.preventDefault()
+                                    
+                                    // Speichere in additionalData
+                                    const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+                                    additional[column] = e.target.checked
+                                    
+                                    try {
+                                      const response = await fetch('/api/guests', {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          id: guest.id,
+                                          additionalData: JSON.stringify(additional)
+                                        }),
+                                      })
+                                      
+                                      if (response.ok) {
+                                        const updated = await response.json()
+                                        setGuests(guests.map(g => g.id === guest.id ? updated : g))
+                                      } else {
+                                        const error = await response.json()
+                                        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+                                      }
+                                    } catch (error) {
+                                      console.error('Fehler beim Speichern:', error)
+                                      alert('Fehler beim Speichern')
+                                    }
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
+                                />
+                              </td>
+                            )
+                          }
+                          
+                          // Normale Text-Spalte: Editierbar (außer ID)
+                          const value = rawValue
                           const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
                           
                           return (
@@ -1969,12 +1729,7 @@ export default function GuestsPage() {
                               key={column} 
                               className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50"
                               onClick={(e) => {
-                                // Verhindere Klick auf Checkbox-Spalten
-                                if (checkboxColumns.includes(column)) {
-                                  e.stopPropagation()
-                                  return
-                                }
-                                if (!isEditing) {
+                                if (!isEditing && column !== 'ID') {
                                   handleCellEdit(guest.id, column, value)
                                 }
                               }}
