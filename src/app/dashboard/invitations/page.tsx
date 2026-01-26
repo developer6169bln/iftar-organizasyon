@@ -740,7 +740,9 @@ export default function InvitationsPage() {
           includeLinks: true,
         })
       } else {
-        alert('Fehler: ' + (result.error || 'Unbekannter Fehler'))
+        const errorMsg = result.error || 'Unbekannter Fehler'
+        const detailsMsg = result.details ? `\n\nDetails: ${result.details}` : ''
+        alert(`❌ Fehler: ${errorMsg}${detailsMsg}`)
       }
     } catch (error) {
       console.error('Fehler beim Senden der Test-E-Mail:', error)

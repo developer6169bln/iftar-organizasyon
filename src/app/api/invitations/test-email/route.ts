@@ -47,7 +47,41 @@ export async function POST(request: NextRequest) {
 
     if (!emailConfig) {
       return NextResponse.json(
-        { error: 'Keine aktive Email-Konfiguration gefunden' },
+        { 
+          error: 'Keine aktive Email-Konfiguration gefunden',
+          details: 'Bitte konfigurieren Sie zuerst eine Email-Konfiguration im Bereich "Email-Konfiguration"'
+        },
+        { status: 400 }
+      )
+    }
+
+    // Prüfe ob Email-Konfiguration vollständig ist
+    if (!emailConfig.email) {
+      return NextResponse.json(
+        { 
+          error: 'Email-Konfiguration unvollständig',
+          details: 'Bitte geben Sie eine E-Mail-Adresse in der Email-Konfiguration ein'
+        },
+        { status: 400 }
+      )
+    }
+
+    if (emailConfig.type === 'GMAIL' && !emailConfig.appPassword && !emailConfig.password) {
+      return NextResponse.json(
+        { 
+          error: 'Gmail-Konfiguration unvollständig',
+          details: 'Bitte geben Sie ein App-Passwort für Gmail in der Email-Konfiguration ein'
+        },
+        { status: 400 }
+      )
+    }
+
+    if (emailConfig.type === 'IMAP' && (!emailConfig.smtpHost || !emailConfig.password)) {
+      return NextResponse.json(
+        { 
+          error: 'SMTP-Konfiguration unvollständig',
+          details: 'Bitte geben Sie SMTP-Host und Passwort in der Email-Konfiguration ein'
+        },
         { status: 400 }
       )
     }
@@ -93,26 +127,58 @@ export async function POST(request: NextRequest) {
       .replace(/{{EVENT_TITLE}}/g, event.title)
 
     // Sende Test-E-Mail
-    await sendInvitationEmail(
-      email,
-      personalizedSubject,
-      personalizedBody,
-      acceptLink,
-      declineLink,
-      trackingPixelUrl
-    )
+    try {
+      await sendInvitationEmail(
+        email,
+        personalizedSubject,
+        personalizedBody,
+        acceptLink,
+        declineLink,
+        trackingPixelUrl
+      )
 
-    return NextResponse.json({
-      success: true,
-      message: 'Test-E-Mail erfolgreich gesendet',
-      acceptLink,
-      declineLink,
-    })
+      return NextResponse.json({
+        success: true,
+        message: 'Test-E-Mail erfolgreich gesendet',
+        acceptLink,
+        declineLink,
+      })
+    } catch (emailError) {
+      console.error('Fehler beim Senden der E-Mail:', emailError)
+      
+      // Detaillierte Fehlermeldung basierend auf Fehlertyp
+      let errorDetails = 'Unbekannter Fehler beim Senden der E-Mail'
+      
+      if (emailError instanceof Error) {
+        const errorMessage = emailError.message.toLowerCase()
+        
+        if (errorMessage.includes('invalid login') || errorMessage.includes('authentication failed')) {
+          errorDetails = 'Email-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Email-Konfiguration (E-Mail-Adresse und Passwort/App-Passwort).'
+        } else if (errorMessage.includes('connection') || errorMessage.includes('timeout')) {
+          errorDetails = 'Verbindung zum Email-Server fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Einstellungen.'
+        } else if (errorMessage.includes('email-server verbindung')) {
+          errorDetails = 'Email-Server Verbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Email-Konfiguration.'
+        } else {
+          errorDetails = emailError.message
+        }
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'Fehler beim Senden der Test-E-Mail',
+          details: errorDetails
+        },
+        { status: 500 }
+      )
+    }
   } catch (error) {
-    console.error('Fehler beim Senden der Test-E-Mail:', error)
+    console.error('Fehler in Test-E-Mail API:', error)
     const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
     return NextResponse.json(
-      { error: 'Fehler beim Senden der Test-E-Mail', details: errorMessage },
+      { 
+        error: 'Fehler beim Verarbeiten der Anfrage', 
+        details: errorMessage 
+      },
       { status: 500 }
     )
   }
