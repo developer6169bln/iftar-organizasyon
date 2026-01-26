@@ -13,6 +13,22 @@ export default function VIPNamensschilderPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [namensschildCount, setNamensschildCount] = useState<number>(4) // Standard: 4 pro A4
   const [generatingPDF, setGeneratingPDF] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewSettings, setPreviewSettings] = useState({
+    logoX: 10,
+    logoY: 10,
+    logoSize: 30,
+    institutionX: 50,
+    institutionY: 50,
+    institutionSize: 10,
+    institutionRotation: 0,
+    nameX: 50,
+    nameY: 70,
+    nameSize: 14,
+    nameRotation: 0,
+  })
+  const [draggingElement, setDraggingElement] = useState<string | null>(null)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     const checkAuth = () => {
@@ -30,6 +46,43 @@ export default function VIPNamensschilderPage() {
     checkAuth()
     loadVIPGuests()
   }, [router])
+
+  useEffect(() => {
+    // Global mouse event handlers für Drag & Drop
+    if (draggingElement) {
+      const handleGlobalMouseMove = (e: MouseEvent) => {
+        if (!draggingElement) return
+        
+        const deltaX = e.clientX - dragStart.x
+        const deltaY = e.clientY - dragStart.y
+        
+        setPreviewSettings(prev => {
+          if (draggingElement === 'logo') {
+            return { ...prev, logoX: Math.max(0, Math.min(prev.logoX + deltaX, 200 - prev.logoSize)), logoY: Math.max(0, Math.min(prev.logoY - deltaY, 100 - prev.logoSize)) }
+          } else if (draggingElement === 'institution') {
+            return { ...prev, institutionX: Math.max(0, Math.min(prev.institutionX + deltaX, 200)), institutionY: Math.max(0, Math.min(prev.institutionY - deltaY, 100)) }
+          } else if (draggingElement === 'name') {
+            return { ...prev, nameX: Math.max(0, Math.min(prev.nameX + deltaX, 200)), nameY: Math.max(0, Math.min(prev.nameY - deltaY, 100)) }
+          }
+          return prev
+        })
+        
+        setDragStart({ x: e.clientX, y: e.clientY })
+      }
+
+      const handleGlobalMouseUp = () => {
+        setDraggingElement(null)
+      }
+
+      window.addEventListener('mousemove', handleGlobalMouseMove)
+      window.addEventListener('mouseup', handleGlobalMouseUp)
+
+      return () => {
+        window.removeEventListener('mousemove', handleGlobalMouseMove)
+        window.removeEventListener('mouseup', handleGlobalMouseUp)
+      }
+    }
+  }, [draggingElement, dragStart])
 
   const loadVIPGuests = async () => {
     try {
@@ -95,6 +148,24 @@ export default function VIPNamensschilderPage() {
       return guest.tableNumber ? String(guest.tableNumber) : ''
     }
     if (fieldName === 'Staat/Institution' || fieldName === 'Staat / Institution') {
+      // Zuerst in additionalData suchen
+      if (guest.additionalData) {
+        try {
+          const additional = JSON.parse(guest.additionalData)
+          // Prüfe verschiedene mögliche Feldnamen
+          if (additional.hasOwnProperty('Staat/Institution')) {
+            return String(additional['Staat/Institution'] || '')
+          }
+          if (additional.hasOwnProperty('Staat / Institution')) {
+            return String(additional['Staat / Institution'] || '')
+          }
+          if (additional.hasOwnProperty('Staat/Institution')) {
+            return String(additional['Staat/Institution'] || '')
+          }
+        } catch (e) {
+          // Ignoriere Parse-Fehler
+        }
+      }
       return guest.organization || ''
     }
     
@@ -120,6 +191,7 @@ export default function VIPNamensschilderPage() {
       const formData = new FormData()
       formData.append('guests', JSON.stringify(guestsToGenerate))
       formData.append('count', String(namensschildCount))
+      formData.append('settings', JSON.stringify(previewSettings))
       if (logoFile) {
         formData.append('logo', logoFile)
       }
@@ -151,6 +223,24 @@ export default function VIPNamensschilderPage() {
     } finally {
       setGeneratingPDF(false)
     }
+  }
+
+  const handleMouseDown = (element: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    setDraggingElement(element)
+    setDragStart({ x: e.clientX, y: e.clientY })
+  }
+
+
+  const handleRotationChange = (element: string, rotation: number) => {
+    setPreviewSettings(prev => {
+      if (element === 'institution') {
+        return { ...prev, institutionRotation: rotation }
+      } else if (element === 'name') {
+        return { ...prev, nameRotation: rotation }
+      }
+      return prev
+    })
   }
 
   const toggleGuestSelection = (guestId: string) => {
@@ -258,6 +348,12 @@ export default function VIPNamensschilderPage() {
               Auswahl aufheben
             </button>
             <button
+              onClick={() => setShowPreview(!showPreview)}
+              className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+            >
+              {showPreview ? '❌ Vorschau schließen' : '👁️ Vorschau öffnen'}
+            </button>
+            <button
               onClick={handleGeneratePDF}
               disabled={generatingPDF || vipGuests.length === 0}
               className="ml-auto rounded-lg bg-green-600 px-6 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
@@ -266,6 +362,145 @@ export default function VIPNamensschilderPage() {
             </button>
           </div>
         </div>
+
+        {/* Vorschau */}
+        {showPreview && vipGuests.length > 0 && (
+          <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-xl font-semibold">Vorschau Namensschild</h2>
+            <div className="mb-4 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+              <div 
+                className="relative mx-auto bg-white shadow-lg"
+                style={{ 
+                  width: '200px', 
+                  height: '100px',
+                  border: '1px solid #ccc'
+                }}
+              >
+                {/* Logo */}
+                {logoPreview && (
+                  <img
+                    src={logoPreview}
+                    alt="Logo"
+                    style={{
+                      position: 'absolute',
+                      left: `${previewSettings.logoX}px`,
+                      top: `${previewSettings.logoY}px`,
+                      width: `${previewSettings.logoSize}px`,
+                      height: `${previewSettings.logoSize}px`,
+                      cursor: draggingElement === 'logo' ? 'grabbing' : 'grab',
+                      border: draggingElement === 'logo' ? '2px solid blue' : '1px dashed gray',
+                    }}
+                    onMouseDown={(e) => handleMouseDown('logo', e)}
+                    draggable={false}
+                  />
+                )}
+                
+                {/* Institution Text */}
+                {vipGuests[0] && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${previewSettings.institutionX}px`,
+                      top: `${previewSettings.institutionY}px`,
+                      fontSize: `${previewSettings.institutionSize}px`,
+                      transform: `rotate(${previewSettings.institutionRotation}deg)`,
+                      cursor: draggingElement === 'institution' ? 'grabbing' : 'grab',
+                      border: draggingElement === 'institution' ? '2px solid blue' : '1px dashed gray',
+                      padding: '2px',
+                      backgroundColor: draggingElement === 'institution' ? 'rgba(0,0,255,0.1)' : 'transparent',
+                    }}
+                    onMouseDown={(e) => handleMouseDown('institution', e)}
+                  >
+                    {getFieldValue(vipGuests[0], 'Staat/Institution') || getFieldValue(vipGuests[0], 'Staat / Institution') || 'Staat/Institution'}
+                  </div>
+                )}
+                
+                {/* Name Text */}
+                {vipGuests[0] && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${previewSettings.nameX}px`,
+                      top: `${previewSettings.nameY}px`,
+                      fontSize: `${previewSettings.nameSize}px`,
+                      fontWeight: 'bold',
+                      transform: `rotate(${previewSettings.nameRotation}deg)`,
+                      cursor: draggingElement === 'name' ? 'grabbing' : 'grab',
+                      border: draggingElement === 'name' ? '2px solid blue' : '1px dashed gray',
+                      padding: '2px',
+                      backgroundColor: draggingElement === 'name' ? 'rgba(0,0,255,0.1)' : 'transparent',
+                    }}
+                    onMouseDown={(e) => handleMouseDown('name', e)}
+                  >
+                    {[getFieldValue(vipGuests[0], 'Vorname'), getFieldValue(vipGuests[0], 'Name')].filter(n => n).join(' ') || 'Vorname Name'}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Einstellungen */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Institution Schriftgröße</label>
+                <input
+                  type="number"
+                  value={previewSettings.institutionSize}
+                  onChange={(e) => setPreviewSettings({ ...previewSettings, institutionSize: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="8"
+                  max="24"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Institution Rotation (°)</label>
+                <input
+                  type="number"
+                  value={previewSettings.institutionRotation}
+                  onChange={(e) => handleRotationChange('institution', Number(e.target.value))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="-180"
+                  max="180"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Name Schriftgröße</label>
+                <input
+                  type="number"
+                  value={previewSettings.nameSize}
+                  onChange={(e) => setPreviewSettings({ ...previewSettings, nameSize: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="8"
+                  max="24"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Name Rotation (°)</label>
+                <input
+                  type="number"
+                  value={previewSettings.nameRotation}
+                  onChange={(e) => handleRotationChange('name', Number(e.target.value))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="-180"
+                  max="180"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Logo Größe</label>
+                <input
+                  type="number"
+                  value={previewSettings.logoSize}
+                  onChange={(e) => setPreviewSettings({ ...previewSettings, logoSize: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="10"
+                  max="100"
+                />
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-gray-500">
+              💡 Tipp: Ziehen Sie Logo und Texte per Drag & Drop an die gewünschte Position. Verwenden Sie die Rotation, um Texte zu drehen.
+            </p>
+          </div>
+        )}
 
         {/* VIP-Gäste Liste */}
         <div className="rounded-xl bg-white p-6 shadow-md">

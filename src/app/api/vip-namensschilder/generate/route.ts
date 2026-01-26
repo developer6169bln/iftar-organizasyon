@@ -51,7 +51,8 @@ async function drawNamensschild(
   height: number,
   logoImage: PDFImage | undefined,
   helveticaFont: any,
-  helveticaBoldFont: any
+  helveticaBoldFont: any,
+  settings: any
 ) {
   // Berechne die Mitte des Namensschilds für die Faltlinie
   const foldLineX = x + width / 2
@@ -95,135 +96,109 @@ async function drawNamensschild(
     }
   }
 
-  // Text-Inhalte
-  const textStartY = y + height - 40
-  let currentY = textStartY
+  // Hilfsfunktion: Sanitize Text für PDF
+  const sanitizeText = (text: string): string => {
+    if (!text) return ''
+    return text
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .trim()
+  }
 
-  // Anreden (falls vorhanden)
-  const anrede1 = getFieldValue(guest, 'Anrede 1')
-  const anrede2 = getFieldValue(guest, 'Anrede 2')
-  const anrede3 = getFieldValue(guest, 'Anrede 3')
-  const anrede4 = getFieldValue(guest, 'Anrede 4')
+  // Nur: Staat/Institution, Vorname, Name
   
-  const anreden = [anrede1, anrede2, anrede3, anrede4]
-    .filter(a => a && a.trim() !== '')
-    .join(' ')
+  // Staat/Institution
+  const institution = getFieldValue(guest, 'Staat/Institution') || 
+                     getFieldValue(guest, 'Staat / Institution') || ''
 
   // Name
   const vorname = getFieldValue(guest, 'Vorname')
   const nachname = getFieldValue(guest, 'Name')
   const fullName = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
 
-  // Staat/Institution
-  const institution = getFieldValue(guest, 'Staat/Institution') || 
-                     getFieldValue(guest, 'Staat / Institution') || ''
-
-  // Tisch-Nummer
-  const tischNummer = getFieldValue(guest, 'Tisch-Nummer') || 
-                      getFieldValue(guest, 'Tischnummer') || ''
-
-  // Zeichne Text
-  const fontSize = 10
-  const titleFontSize = 14
-  const lineHeight = 16
-
-  // Hilfsfunktion: Sanitize Text für PDF (behalte Umlaute, entferne nur wirklich problematische Zeichen)
-  const sanitizeText = (text: string): string => {
-    if (!text) return ''
-    // Entferne nur Steuerzeichen und sehr problematische Zeichen, behalte Umlaute
-    return text
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Entferne Steuerzeichen
-      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Entferne unsichtbare Zeichen
-      .trim()
-  }
-
-  // Anreden (kleiner, oben)
-  if (anreden && anreden.trim()) {
-    try {
-      const sanitizedAnrede = sanitizeText(anreden)
-      if (sanitizedAnrede) {
-        const anredeWidth = helveticaFont.widthOfTextAtSize(sanitizedAnrede, fontSize - 2)
-        page.drawText(sanitizedAnrede, {
-          x: x + width / 2 - anredeWidth / 2,
-          y: currentY,
-          size: fontSize - 2,
-          color: rgb(0.4, 0.4, 0.4),
-          font: helveticaFont,
-        })
-        currentY -= lineHeight
-      }
-    } catch (e) {
-      console.error('Fehler beim Zeichnen der Anrede:', e)
-    }
-  }
-
-  // Name (größer, fett)
-  if (fullName && fullName.trim()) {
-    try {
-      const sanitizedName = sanitizeText(fullName)
-      if (sanitizedName) {
-        const nameWidth = helveticaBoldFont.widthOfTextAtSize(sanitizedName, titleFontSize)
-        page.drawText(sanitizedName, {
-          x: x + width / 2 - nameWidth / 2,
-          y: currentY,
-          size: titleFontSize,
-          color: rgb(0, 0, 0),
-          font: helveticaBoldFont,
-        })
-        currentY -= lineHeight + 5
-      }
-    } catch (e) {
-      console.error('Fehler beim Zeichnen des Namens:', e)
-      // Fallback: Zeichne Name ohne Zentrierung
-      try {
-        page.drawText(sanitizeText(fullName), {
-          x: x + 10,
-          y: currentY,
-          size: titleFontSize,
-          color: rgb(0, 0, 0),
-          font: helveticaBoldFont,
-        })
-        currentY -= lineHeight + 5
-      } catch (e2) {
-        console.error('Fehler beim Fallback-Zeichnen des Namens:', e2)
-      }
-    }
-  }
-
-  // Institution (falls vorhanden)
+  // Institution Text (mit Rotation)
   if (institution && institution.trim()) {
     try {
       const sanitizedInst = sanitizeText(institution)
       if (sanitizedInst) {
-        const instWidth = helveticaFont.widthOfTextAtSize(sanitizedInst, fontSize - 1)
-        page.drawText(sanitizedInst, {
-          x: x + width / 2 - instWidth / 2,
-          y: currentY,
-          size: fontSize - 1,
-          color: rgb(0.3, 0.3, 0.3),
-          font: helveticaFont,
-        })
-        currentY -= lineHeight
+        const instSize = settings?.institutionSize || 10
+        const instX = x + (settings?.institutionX || 50)
+        const instY = y + height - (settings?.institutionY || 50)
+        const rotation = settings?.institutionRotation || 0
+        
+        if (rotation !== 0) {
+          // Rotation mit Transformation
+          const radians = (rotation * Math.PI) / 180
+          page.pushOperators()
+          page.translateContent(instX, instY)
+          page.rotateContent(radians)
+          page.translateContent(-instX, -instY)
+          
+          page.drawText(sanitizedInst, {
+            x: instX,
+            y: instY,
+            size: instSize,
+            color: rgb(0, 0, 0),
+            font: helveticaFont,
+          })
+          
+          page.popOperators()
+        } else {
+          // Keine Rotation
+          page.drawText(sanitizedInst, {
+            x: instX,
+            y: instY,
+            size: instSize,
+            color: rgb(0, 0, 0),
+            font: helveticaFont,
+          })
+        }
       }
     } catch (e) {
       console.error('Fehler beim Zeichnen der Institution:', e)
     }
   }
 
-  // Tisch-Nummer (unten)
-  if (tischNummer && tischNummer.trim()) {
+  // Name Text (mit Rotation)
+  if (fullName && fullName.trim()) {
     try {
-      const tischText = `Tisch ${sanitizeText(tischNummer)}`
-      const tischWidth = helveticaFont.widthOfTextAtSize(tischText, fontSize)
-      page.drawText(tischText, {
-        x: x + width / 2 - tischWidth / 2,
-        y: y + 15,
-        size: fontSize,
-        color: rgb(0.5, 0.5, 0.5),
-        font: helveticaFont,
-      })
+      const sanitizedName = sanitizeText(fullName)
+      if (sanitizedName) {
+        const nameSize = settings?.nameSize || 14
+        const nameX = x + (settings?.nameX || 50)
+        const nameY = y + height - (settings?.nameY || 70)
+        const rotation = settings?.nameRotation || 0
+        
+        if (rotation !== 0) {
+          // Rotation mit Transformation
+          const radians = (rotation * Math.PI) / 180
+          page.pushOperators()
+          page.translateContent(nameX, nameY)
+          page.rotateContent(radians)
+          page.translateContent(-nameX, -nameY)
+          
+          page.drawText(sanitizedName, {
+            x: nameX,
+            y: nameY,
+            size: nameSize,
+            color: rgb(0, 0, 0),
+            font: helveticaBoldFont,
+          })
+          
+          page.popOperators()
+        } else {
+          // Keine Rotation
+          page.drawText(sanitizedName, {
+            x: nameX,
+            y: nameY,
+            size: nameSize,
+            color: rgb(0, 0, 0),
+            font: helveticaBoldFont,
+          })
+        }
+      }
     } catch (e) {
-      console.error('Fehler beim Zeichnen der Tisch-Nummer:', e)
+      console.error('Fehler beim Zeichnen des Namens:', e)
     }
   }
 }
@@ -235,6 +210,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const guestsJson = formData.get('guests') as string
     const countStr = formData.get('count') as string
+    const settingsJson = formData.get('settings') as string
     const logoFile = formData.get('logo') as File | null
 
     if (!guestsJson) {
@@ -254,6 +230,16 @@ export async function POST(request: NextRequest) {
         { error: 'Ungültige Gäste-Daten' },
         { status: 400 }
       )
+    }
+
+    let settings = null
+    if (settingsJson) {
+      try {
+        settings = JSON.parse(settingsJson)
+      } catch (e) {
+        console.error('❌ Fehler beim Parsen der Einstellungen:', e)
+        // Weiter mit Standard-Einstellungen
+      }
     }
 
     const namensschildCount = parseInt(countStr || '4', 10)
@@ -337,17 +323,18 @@ export async function POST(request: NextRequest) {
           const y = A4_HEIGHT - margin - (row + 1) * namensschildHeight + row * spacing
 
           try {
-            await drawNamensschild(
-              page,
-              guests[guestIndex],
-              x,
-              y,
-              namensschildWidth,
-              namensschildHeight,
-              logoImage,
-              helveticaFont,
-              helveticaBoldFont
-            )
+          await drawNamensschild(
+            page,
+            guests[guestIndex],
+            x,
+            y,
+            namensschildWidth,
+            namensschildHeight,
+            logoImage,
+            helveticaFont,
+            helveticaBoldFont,
+            settings
+          )
             console.log(`✅ Namensschild ${guestIndex + 1} erstellt für: ${guests[guestIndex].name || 'Unbekannt'}`)
           } catch (e) {
             console.error(`❌ Fehler beim Erstellen des Namensschilds für Gast ${guestIndex + 1}:`, e)
