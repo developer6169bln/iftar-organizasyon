@@ -516,6 +516,23 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          <Link
+            href="/dashboard/vip-namensschilder"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-600 text-2xl text-white">
+                👑
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">VIP Liste und Namensschilder</h3>
+                <p className="text-sm text-gray-600">
+                  VIP-Gäste verwalten und Namensschilder als PDF erstellen
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
         </div>
 
         {/* Push Notifications Setup */}
