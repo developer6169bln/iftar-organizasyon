@@ -59,7 +59,7 @@ export default function VIPNamensschilderPage() {
         
         setPreviewSettings(prev => {
           if (draggingElement === 'logo') {
-            return { ...prev, logoX: Math.max(0, Math.min(prev.logoX + deltaX, 200 - prev.logoSize)), logoY: Math.max(0, Math.min(prev.logoY - deltaY, 100 - prev.logoSize)) }
+            return { ...prev, logoX: Math.max(0, Math.min(prev.logoX + deltaX, 200 - prev.logoWidth)), logoY: Math.max(0, Math.min(prev.logoY - deltaY, 100 - prev.logoHeight)) }
           } else if (draggingElement === 'institution') {
             return { ...prev, institutionX: Math.max(0, Math.min(prev.institutionX + deltaX, 200)), institutionY: Math.max(0, Math.min(prev.institutionY - deltaY, 100)) }
           } else if (draggingElement === 'name') {
