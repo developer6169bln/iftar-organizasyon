@@ -1698,12 +1698,22 @@ export default function GuestsPage() {
                             const hasLocalState = checkboxKey in checkboxStates
                             
                             // Hole Wert aus Datenbank
-                            let dbValue = rawValue
+                            let dbValue: any = rawValue
                             if (guest?.additionalData) {
                               try {
                                 const additional = JSON.parse(guest.additionalData)
                                 if (additional.hasOwnProperty(column)) {
                                   dbValue = additional[column]
+                                  
+                                  // Konvertiere String-Booleans zu echten Booleans
+                                  if (typeof dbValue === 'string') {
+                                    const lowerValue = dbValue.toLowerCase().trim()
+                                    if (lowerValue === 'true') {
+                                      dbValue = true
+                                    } else if (lowerValue === 'false') {
+                                      dbValue = false
+                                    }
+                                  }
                                 }
                               } catch (e) {
                                 // Ignoriere Parse-Fehler
@@ -1712,7 +1722,7 @@ export default function GuestsPage() {
                             
                             const checked = hasLocalState 
                               ? checkboxStates[checkboxKey]
-                              : toBoolean(dbValue)
+                              : (typeof dbValue === 'boolean' ? dbValue : toBoolean(dbValue))
                             
                             return (
                               <td 
@@ -1763,12 +1773,22 @@ export default function GuestsPage() {
                                         const updated = await response.json()
                                         
                                         // Prüfe ob der Wert korrekt gespeichert wurde
-                                        let savedValue = false
+                                        let savedValue: any = false
                                         if (updated?.additionalData) {
                                           try {
                                             const savedAdditional = JSON.parse(updated.additionalData)
                                             savedValue = savedAdditional[column]
                                             console.log(`💾 Gespeicherter Wert für ${column}:`, savedValue, typeof savedValue)
+                                            
+                                            // Konvertiere String-Booleans zu echten Booleans
+                                            if (typeof savedValue === 'string') {
+                                              const lowerValue = savedValue.toLowerCase().trim()
+                                              if (lowerValue === 'true') {
+                                                savedValue = true
+                                              } else if (lowerValue === 'false') {
+                                                savedValue = false
+                                              }
+                                            }
                                           } catch (e) {
                                             console.error('Fehler beim Parsen des gespeicherten additionalData:', e)
                                           }
@@ -1778,16 +1798,17 @@ export default function GuestsPage() {
                                         setGuests(prevGuests => prevGuests.map(g => g.id === guest.id ? updated : g))
                                         
                                         // Entferne lokalen State NUR wenn der Wert korrekt gespeichert wurde
-                                        // Wenn nicht, behalte den lokalen State
-                                        if (savedValue === newValue || toBoolean(savedValue) === newValue) {
+                                        // Vergleiche sowohl direkten Wert als auch toBoolean-Konvertierung
+                                        const savedBoolean = typeof savedValue === 'boolean' ? savedValue : toBoolean(savedValue)
+                                        if (savedBoolean === newValue) {
                                           setCheckboxStates(prev => {
                                             const newState = { ...prev }
                                             delete newState[checkboxKey]
                                             return newState
                                           })
-                                          console.log('✅ Checkbox gespeichert und State entfernt:', { guestId: guest.id, column, checked: newValue, savedValue })
+                                          console.log('✅ Checkbox gespeichert und State entfernt:', { guestId: guest.id, column, checked: newValue, savedValue, savedBoolean })
                                         } else {
-                                          console.warn('⚠️ Wert nicht korrekt gespeichert, behalte lokalen State:', { guestId: guest.id, column, expected: newValue, saved: savedValue })
+                                          console.warn('⚠️ Wert nicht korrekt gespeichert, behalte lokalen State:', { guestId: guest.id, column, expected: newValue, saved: savedValue, savedBoolean })
                                         }
                                       } else {
                                         const error = await response.json()

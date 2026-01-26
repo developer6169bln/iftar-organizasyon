@@ -186,6 +186,47 @@ export async function PATCH(request: NextRequest) {
     if (updateData.receptionBy !== undefined) {
       dataToUpdate.receptionBy = updateData.receptionBy && updateData.receptionBy !== '' ? updateData.receptionBy : null
     }
+    
+    // Behandle additionalData: Parse JSON und konvertiere Boolean-Strings zu echten Booleans
+    if (updateData.additionalData !== undefined) {
+      try {
+        // Wenn es bereits ein String ist, parse es
+        const additionalDataStr = typeof updateData.additionalData === 'string' 
+          ? updateData.additionalData 
+          : JSON.stringify(updateData.additionalData)
+        
+        const additional = JSON.parse(additionalDataStr)
+        
+        // Konvertiere Boolean-Strings zu echten Booleans
+        const normalizedAdditional: Record<string, any> = {}
+        for (const [key, value] of Object.entries(additional)) {
+          if (typeof value === 'string') {
+            const lowerValue = value.toLowerCase().trim()
+            // Konvertiere String-Booleans zu echten Booleans
+            if (lowerValue === 'true') {
+              normalizedAdditional[key] = true
+            } else if (lowerValue === 'false') {
+              normalizedAdditional[key] = false
+            } else {
+              normalizedAdditional[key] = value
+            }
+          } else if (typeof value === 'boolean') {
+            // Behalte echte Booleans
+            normalizedAdditional[key] = value
+          } else {
+            normalizedAdditional[key] = value
+          }
+        }
+        
+        dataToUpdate.additionalData = JSON.stringify(normalizedAdditional)
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData:', e)
+        // Falls Parsing fehlschlägt, speichere als String
+        dataToUpdate.additionalData = typeof updateData.additionalData === 'string' 
+          ? updateData.additionalData 
+          : JSON.stringify(updateData.additionalData)
+      }
+    }
 
     // Hole alten Gast für Logging
     const oldGuest = await prisma.guest.findUnique({
