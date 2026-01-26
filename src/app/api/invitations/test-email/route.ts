@@ -144,7 +144,14 @@ export async function POST(request: NextRequest) {
         declineLink,
       })
     } catch (emailError) {
-      console.error('Fehler beim Senden der E-Mail:', emailError)
+      console.error('❌ Fehler beim Senden der E-Mail:', emailError)
+      
+      // Detailliertes Logging
+      if (emailError instanceof Error) {
+        console.error('❌ Fehler-Stack:', emailError.stack)
+        console.error('❌ Fehler-Code:', (emailError as any).code)
+        console.error('❌ Response-Code:', (emailError as any).responseCode)
+      }
       
       // Die Fehlermeldung kommt bereits von sendInvitationEmail (benutzerfreundlich formatiert)
       const errorDetails = emailError instanceof Error ? emailError.message : 'Unbekannter Fehler beim Senden der E-Mail'
@@ -152,7 +159,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'Fehler beim Senden der Test-E-Mail',
-          details: errorDetails
+          details: errorDetails,
+          // In Development: Mehr Details
+          ...(process.env.NODE_ENV === 'development' && emailError instanceof Error ? {
+            stack: emailError.stack,
+            code: (emailError as any).code,
+            responseCode: (emailError as any).responseCode,
+          } : {})
         },
         { status: 500 }
       )
