@@ -45,13 +45,14 @@ export async function getEmailTransporter() {
     } as any)
   }
 
-  // Teste Verbindung
+  // Teste Verbindung (optional - Fehler werden beim Senden abgefangen)
   try {
     await transporter.verify()
     console.log('Email-Server Verbindung erfolgreich')
   } catch (error) {
-    console.error('Email-Server Verbindung fehlgeschlagen:', error)
-    throw new Error('Email-Server Verbindung fehlgeschlagen')
+    console.warn('Email-Server Verbindungstest fehlgeschlagen (wird beim Senden erneut versucht):', error)
+    // Wir werfen hier keinen Fehler, da die Verbindung beim tatsächlichen Senden noch funktionieren könnte
+    // Der Fehler wird dann beim sendMail() abgefangen
   }
 
   return transporter
@@ -94,6 +95,30 @@ export async function sendInvitationEmail(
     return { success: true, messageId: info.messageId }
   } catch (error) {
     console.error('Email-Versand fehlgeschlagen:', error)
-    throw error
+    
+    // Erstelle eine benutzerfreundliche Fehlermeldung
+    let errorMessage = 'Unbekannter Fehler beim Senden der E-Mail'
+    
+    if (error instanceof Error) {
+      const errorMsg = error.message.toLowerCase()
+      
+      if (errorMsg.includes('invalid login') || errorMsg.includes('authentication failed') || errorMsg.includes('invalid credentials')) {
+        errorMessage = 'Email-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Email-Konfiguration (E-Mail-Adresse und Passwort/App-Passwort).'
+      } else if (errorMsg.includes('connection') || errorMsg.includes('timeout') || errorMsg.includes('econnrefused')) {
+        errorMessage = 'Verbindung zum Email-Server fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Einstellungen (Host, Port).'
+      } else if (errorMsg.includes('self signed certificate') || errorMsg.includes('certificate')) {
+        errorMessage = 'SSL/TLS-Zertifikatsfehler. Bitte überprüfen Sie Ihre SMTP-Einstellungen.'
+      } else if (errorMsg.includes('rate limit') || errorMsg.includes('quota')) {
+        errorMessage = 'Email-Limit erreicht. Bitte versuchen Sie es später erneut.'
+      } else {
+        errorMessage = error.message
+      }
+    }
+    
+    const enhancedError = new Error(errorMessage)
+    if (error instanceof Error) {
+      enhancedError.stack = error.stack
+    }
+    throw enhancedError
   }
 }

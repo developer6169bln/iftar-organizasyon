@@ -146,22 +146,8 @@ export async function POST(request: NextRequest) {
     } catch (emailError) {
       console.error('Fehler beim Senden der E-Mail:', emailError)
       
-      // Detaillierte Fehlermeldung basierend auf Fehlertyp
-      let errorDetails = 'Unbekannter Fehler beim Senden der E-Mail'
-      
-      if (emailError instanceof Error) {
-        const errorMessage = emailError.message.toLowerCase()
-        
-        if (errorMessage.includes('invalid login') || errorMessage.includes('authentication failed')) {
-          errorDetails = 'Email-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Email-Konfiguration (E-Mail-Adresse und Passwort/App-Passwort).'
-        } else if (errorMessage.includes('connection') || errorMessage.includes('timeout')) {
-          errorDetails = 'Verbindung zum Email-Server fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Einstellungen.'
-        } else if (errorMessage.includes('email-server verbindung')) {
-          errorDetails = 'Email-Server Verbindung fehlgeschlagen. Bitte überprüfen Sie Ihre Email-Konfiguration.'
-        } else {
-          errorDetails = emailError.message
-        }
-      }
+      // Die Fehlermeldung kommt bereits von sendInvitationEmail (benutzerfreundlich formatiert)
+      const errorDetails = emailError instanceof Error ? emailError.message : 'Unbekannter Fehler beim Senden der E-Mail'
       
       return NextResponse.json(
         { 
