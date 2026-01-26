@@ -5,15 +5,18 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    // Hole Event
-    const eventResponse = await fetch(`${request.nextUrl.origin}/api/events`)
-    if (!eventResponse.ok) {
+    // Hole Event direkt aus der Datenbank
+    const event = await prisma.event.findFirst({
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    if (!event) {
       return NextResponse.json(
         { error: 'Event nicht gefunden' },
         { status: 404 }
       )
     }
-    const event = await eventResponse.json()
+    
     const eventId = event.id
 
     // Hole alle Gäste
