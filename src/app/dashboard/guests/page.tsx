@@ -23,6 +23,7 @@ export default function GuestsPage() {
   const [editingCell, setEditingCell] = useState<{ guestId: string; column: string } | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
   const [invitations, setInvitations] = useState<Record<string, any>>({}) // guestId -> invitation
+  const [checkboxStates, setCheckboxStates] = useState<Record<string, boolean>>({}) // key: `${guestId}-${column}` -> boolean
   
   // Geschützte Spalten (können nicht gelöscht werden) - nur "ID" und "İşlemler"
   const protectedColumns = ['ID', 'İşlemler']
@@ -481,6 +482,11 @@ export default function GuestsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guests]) // Nur guests als Dependency, nicht allColumns (verhindert Endlosschleife)
+
+  // Reset checkbox states when guests change (to sync with database)
+  useEffect(() => {
+    setCheckboxStates({})
+  }, [guests])
 
   useEffect(() => {
     // Filter guests based on search query and column filters
@@ -1674,7 +1680,12 @@ export default function GuestsPage() {
                           
                           // Wenn Boolean-Spalte: Rendere Checkbox
                           if (isBooleanColumn) {
-                            const checked = toBoolean(rawValue)
+                            // Prüfe zuerst lokalen State (optimistic update), dann Datenbank-Wert
+                            const checkboxKey = `${guest.id}-${column}`
+                            const hasLocalState = checkboxKey in checkboxStates
+                            const checked = hasLocalState 
+                              ? checkboxStates[checkboxKey]
+                              : toBoolean(rawValue)
                             
                             return (
                               <td 
@@ -1694,10 +1705,17 @@ export default function GuestsPage() {
                                   checked={checked}
                                   onChange={async (e) => {
                                     // WICHTIG: Nur stopPropagation, NICHT preventDefault!
-                                    // preventDefault würde die Checkbox daran hindern, ihren Zustand zu ändern
                                     e.stopPropagation()
                                     
                                     const newValue = e.target.checked
+                                    const checkboxKey = `${guest.id}-${column}`
+                                    
+                                    // Optimistic Update: Setze sofort den lokalen State
+                                    setCheckboxStates(prev => ({
+                                      ...prev,
+                                      [checkboxKey]: newValue
+                                    }))
+                                    
                                     console.log('🔘 Checkbox geändert:', { guestId: guest.id, column, checked: newValue })
                                     
                                     // Speichere in additionalData
@@ -1716,20 +1734,35 @@ export default function GuestsPage() {
                                       
                                       if (response.ok) {
                                         const updated = await response.json()
-                                        setGuests(guests.map(g => g.id === guest.id ? updated : g))
+                                        // Aktualisiere den Gast im State
+                                        setGuests(prevGuests => prevGuests.map(g => g.id === guest.id ? updated : g))
+                                        // Entferne lokalen State (wird jetzt aus Datenbank gelesen)
+                                        setCheckboxStates(prev => {
+                                          const newState = { ...prev }
+                                          delete newState[checkboxKey]
+                                          return newState
+                                        })
                                         console.log('✅ Checkbox gespeichert:', { guestId: guest.id, column, checked: newValue })
                                       } else {
                                         const error = await response.json()
                                         console.error('❌ Fehler beim Speichern:', error)
+                                        // Setze lokalen State zurück bei Fehler
+                                        setCheckboxStates(prev => {
+                                          const newState = { ...prev }
+                                          delete newState[checkboxKey]
+                                          return newState
+                                        })
                                         alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
-                                        // Setze Checkbox zurück bei Fehler
-                                        e.target.checked = !newValue
                                       }
                                     } catch (error) {
                                       console.error('❌ Fehler beim Speichern:', error)
+                                      // Setze lokalen State zurück bei Fehler
+                                      setCheckboxStates(prev => {
+                                        const newState = { ...prev }
+                                        delete newState[checkboxKey]
+                                        return newState
+                                      })
                                       alert('Fehler beim Speichern')
-                                      // Setze Checkbox zurück bei Fehler
-                                      e.target.checked = !newValue
                                     }
                                   }}
                                   onClick={(e) => {
