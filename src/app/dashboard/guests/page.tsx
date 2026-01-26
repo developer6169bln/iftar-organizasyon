@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 
 export default function GuestsPage() {
   const router = useRouter()
@@ -1207,6 +1208,103 @@ export default function GuestsPage() {
     }
   }
 
+  // Export-Funktion für XLS und CSV
+  const handleExport = (format: 'xls' | 'csv') => {
+    try {
+      // Bereite Daten vor: Verwende gefilterte Gäste oder alle Gäste
+      const guestsToExport = filteredGuests.length > 0 ? filteredGuests : guests
+      
+      if (guestsToExport.length === 0) {
+        alert('Keine Daten zum Exportieren vorhanden')
+        return
+      }
+
+      // Erstelle Array von Objekten mit allen Spalten
+      const exportData = guestsToExport.map((guest, index) => {
+        const row: Record<string, any> = {}
+        
+        // Durchlaufe alle Spalten
+        allColumns.forEach(column => {
+          if (column === 'Nummer') {
+            row[column] = index
+          } else if (column === 'İşlemler') {
+            // Überspringe Aktionen-Spalte
+            return
+          } else {
+            // Hole Wert für diese Spalte
+            const value = getColumnValue(guest, column, index)
+            
+            // Konvertiere Boolean zu String für bessere Lesbarkeit
+            if (typeof value === 'boolean') {
+              row[column] = value ? 'Ja' : 'Nein'
+            } else {
+              row[column] = value || ''
+            }
+          }
+        })
+        
+        return row
+      })
+
+      if (format === 'xls') {
+        // Erstelle Workbook
+        const wb = XLSX.utils.book_new()
+        const ws = XLSX.utils.json_to_sheet(exportData)
+        
+        // Füge Sheet zum Workbook hinzu
+        XLSX.utils.book_append_sheet(wb, ws, 'Gästeliste')
+        
+        // Exportiere als XLSX
+        const fileName = `Gästeliste_${new Date().toISOString().split('T')[0]}.xlsx`
+        XLSX.writeFile(wb, fileName)
+      } else {
+        // CSV Export
+        if (exportData.length === 0) {
+          alert('Keine Daten zum Exportieren')
+          return
+        }
+
+        // Hole alle Spalten (außer İşlemler)
+        const columns = allColumns.filter(col => col !== 'İşlemler')
+        
+        // Erstelle CSV-Header
+        const headers = columns.join(',')
+        
+        // Erstelle CSV-Zeilen
+        const rows = exportData.map(row => {
+          return columns.map(column => {
+            const value = row[column] || ''
+            // Escape Kommas und Anführungszeichen
+            const stringValue = String(value)
+            if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+              return `"${stringValue.replace(/"/g, '""')}"`
+            }
+            return stringValue
+          }).join(',')
+        })
+        
+        // Kombiniere Header und Zeilen
+        const csvContent = [headers, ...rows].join('\n')
+        
+        // Erstelle Blob und Download
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' }) // BOM für Excel
+        const link = document.createElement('a')
+        const url = URL.createObjectURL(blob)
+        link.setAttribute('href', url)
+        link.setAttribute('download', `Gästeliste_${new Date().toISOString().split('T')[0]}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
+      
+      console.log(`✅ Export erfolgreich: ${exportData.length} Zeilen als ${format.toUpperCase()}`)
+    } catch (error) {
+      console.error('Fehler beim Exportieren:', error)
+      alert('Fehler beim Exportieren: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -1260,6 +1358,23 @@ export default function GuestsPage() {
                     </button>
                   </div>
                 )}
+              </div>
+              {/* Export Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleExport('xls')}
+                  className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+                  title="Als Excel-Datei exportieren"
+                >
+                  📊 Excel Export
+                </button>
+                <button
+                  onClick={() => handleExport('csv')}
+                  className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700"
+                  title="Als CSV-Datei exportieren"
+                >
+                  📄 CSV Export
+                </button>
               </div>
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
