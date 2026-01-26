@@ -719,6 +719,10 @@ export default function InvitationsPage() {
 
     setSendingTestEmail(true)
     try {
+      // Erstelle AbortController für Timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 Sekunden Timeout
+      
       const response = await fetch('/api/invitations/test-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -728,8 +732,10 @@ export default function InvitationsPage() {
           eventId: currentEventId,
           includeLinks: testEmailForm.includeLinks,
         }),
+        signal: controller.signal,
       })
 
+      clearTimeout(timeoutId)
       const result = await response.json()
       
       if (response.ok) {
@@ -746,7 +752,20 @@ export default function InvitationsPage() {
       }
     } catch (error) {
       console.error('Fehler beim Senden der Test-E-Mail:', error)
-      alert('Fehler beim Senden der Test-E-Mail')
+      
+      let errorMessage = 'Fehler beim Senden der Test-E-Mail'
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Zeitüberschreitung: Die Anfrage hat zu lange gedauert. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre Internetverbindung.'
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('ERR_NETWORK')) {
+          errorMessage = 'Netzwerkfehler: Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.'
+        } else {
+          errorMessage = `Fehler: ${error.message}`
+        }
+      }
+      
+      alert(`❌ ${errorMessage}`)
     } finally {
       setSendingTestEmail(false)
     }

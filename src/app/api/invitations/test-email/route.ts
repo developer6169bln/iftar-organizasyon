@@ -4,9 +4,14 @@ import { sendInvitationEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
+export const maxDuration = 30 // 30 Sekunden Timeout für diese Route
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
   try {
+    console.log('📧 Test-E-Mail Anfrage erhalten:', {
+      timestamp: new Date().toISOString(),
+    })
     const { email, templateId, eventId, includeLinks = true } = await request.json()
 
     if (!email || !templateId || !eventId) {
@@ -128,6 +133,9 @@ export async function POST(request: NextRequest) {
 
     // Sende Test-E-Mail
     try {
+      console.log('📧 Starte E-Mail-Versand...')
+      const emailStartTime = Date.now()
+      
       await sendInvitationEmail(
         email,
         personalizedSubject,
@@ -136,6 +144,10 @@ export async function POST(request: NextRequest) {
         declineLink,
         trackingPixelUrl
       )
+      
+      const emailDuration = Date.now() - emailStartTime
+      const totalDuration = Date.now() - startTime
+      console.log(`✅ E-Mail erfolgreich gesendet (Dauer: ${emailDuration}ms, Gesamt: ${totalDuration}ms)`)
 
       return NextResponse.json({
         success: true,
@@ -171,8 +183,22 @@ export async function POST(request: NextRequest) {
       )
     }
   } catch (error) {
-    console.error('Fehler in Test-E-Mail API:', error)
+    const totalDuration = Date.now() - startTime
+    console.error(`❌ Fehler in Test-E-Mail API (Dauer: ${totalDuration}ms):`, error)
+    
     const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
+    
+    // Prüfe ob es ein Timeout-Fehler ist
+    if (errorMessage.includes('timeout') || errorMessage.includes('aborted')) {
+      return NextResponse.json(
+        { 
+          error: 'Zeitüberschreitung beim Senden der E-Mail',
+          details: 'Die E-Mail-Versand hat zu lange gedauert. Bitte versuchen Sie es erneut oder überprüfen Sie Ihre Email-Konfiguration.'
+        },
+        { status: 504 }
+      )
+    }
+    
     return NextResponse.json(
       { 
         error: 'Fehler beim Verarbeiten der Anfrage', 
