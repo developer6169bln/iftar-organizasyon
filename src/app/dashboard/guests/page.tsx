@@ -409,16 +409,16 @@ export default function GuestsPage() {
       if (allColumns.length === 2 && allColumns.includes('Nummer') && allColumns.includes('İşlemler')) {
         return // Behalte minimale Struktur
       }
-      // Setze minimale Struktur mit Checkbox-Spalten
-      const minimalColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste', 'İşlemler']
+      // Setze minimale Struktur mit Checkbox-Spalten (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
+      const minimalColumns = ['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste', 'İşlemler']
       setAllColumns(minimalColumns)
       saveColumnOrder(minimalColumns)
       return
     }
     
     // Sammle NUR Spalten aus additionalData (direkter Import, KEINE Standard-Spalten)
-    // Füge nur Checkbox-Spalten und "Nummer" hinzu
-    const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
+    // Füge nur Checkbox-Spalten und "Nummer" hinzu (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
+    const columnsSet = new Set<string>(['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
     
     // Felder, die nicht aus additionalData in die Spaltenliste aufgenommen werden sollen
     // Case-insensitive Prüfung
@@ -474,17 +474,15 @@ export default function GuestsPage() {
     // Stelle sicher, dass Checkbox-Spalten und "Nummer" immer vorhanden sind und an den richtigen Stellen
     const finalColumns = Array.from(columnsSet)
     
-    // Entferne Checkbox-Spalten und Nummer aus der Liste
-    const checkboxColumns = ['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
+    // Entferne Checkbox-Spalten und Nummer aus der Liste (ohne "Auswahl", "Einladung E-Mail", "Einladung Post")
+    const checkboxColumns = ['Nummer', 'VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
     const otherColumns = finalColumns.filter(col => !checkboxColumns.includes(col))
     
     // Baue finale Reihenfolge: Checkbox-Spalten, dann Nummer, dann NUR importierte Spalten (keine Standard-Spalten)
+    // OHNE "Auswahl", "Einladung E-Mail", "Einladung Post"
     const orderedColumns = [
-      'Auswahl',
       'Nummer',
       'VIP',
-      'Einladung E-Mail',
-      'Einladung Post',
       'Nimmt Teil',
       'Abgesagt',
       'Mail-Liste',
@@ -1935,7 +1933,8 @@ export default function GuestsPage() {
                           
                           // Standard-Spalten und zusätzliche Spalten aus additionalData - alle editierbar
                           // Überspringe Checkbox-Spalten (werden bereits oben behandelt)
-                          const checkboxColumns = ['Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
+                          // OHNE "Auswahl", "Einladung E-Mail", "Einladung Post" - diese werden nicht mehr gerendert
+                          const checkboxColumns = ['VIP', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
                           if (checkboxColumns.includes(column)) {
                             return null // Sollte nicht hier ankommen, aber als Sicherheit
                           }
