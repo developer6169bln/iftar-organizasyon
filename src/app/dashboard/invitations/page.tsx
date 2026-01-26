@@ -73,6 +73,70 @@ export default function InvitationsPage() {
     loadData()
   }, [router])
 
+  // Lade Einladungen neu, wenn Tab "list" aktiviert wird
+  useEffect(() => {
+    if (activeTab === 'list' && eventId) {
+      loadInvitations(eventId)
+    }
+  }, [activeTab, eventId])
+
+  // Polling: Lade Einladungen alle 5 Sekunden, wenn Tab "list" aktiv ist
+  useEffect(() => {
+    if (activeTab !== 'list' || !eventId) return
+
+    const interval = setInterval(() => {
+      loadInvitations(eventId)
+    }, 5000) // Alle 5 Sekunden
+
+    return () => clearInterval(interval)
+  }, [activeTab, eventId])
+
+  // Lade Einladungen neu, wenn Fenster fokussiert wird
+  useEffect(() => {
+    const handleFocus = () => {
+      if (activeTab === 'list' && eventId) {
+        loadInvitations(eventId)
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [activeTab, eventId])
+
+  // Lade Einladungen sofort neu, wenn eine neue Einladung erstellt wurde (von Gästeliste)
+  useEffect(() => {
+    const handleInvitationUpdate = () => {
+      if (activeTab === 'list' && eventId) {
+        loadInvitations(eventId)
+      }
+    }
+
+    window.addEventListener('invitation-updated', handleInvitationUpdate)
+    
+    // Prüfe auch localStorage für Updates (für Cross-Tab-Kommunikation)
+    const checkForUpdates = () => {
+      const lastUpdate = localStorage.getItem('invitation-updated')
+      if (lastUpdate) {
+        const updateTime = parseInt(lastUpdate, 10)
+        const now = Date.now()
+        // Wenn Update weniger als 10 Sekunden alt ist, lade neu
+        if (now - updateTime < 10000) {
+          if (activeTab === 'list' && eventId) {
+            loadInvitations(eventId)
+          }
+        }
+      }
+    }
+
+    // Prüfe alle 2 Sekunden auf Updates
+    const updateCheckInterval = setInterval(checkForUpdates, 2000)
+
+    return () => {
+      window.removeEventListener('invitation-updated', handleInvitationUpdate)
+      clearInterval(updateCheckInterval)
+    }
+  }, [activeTab, eventId])
+
   const loadData = async () => {
     try {
       setLoading(true)
@@ -750,7 +814,16 @@ export default function InvitationsPage() {
 
         {activeTab === 'list' && (
           <div className="rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-xl font-semibold">Einladungsliste</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Einladungsliste</h2>
+              <button
+                onClick={() => eventId && loadInvitations(eventId)}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                title="Liste aktualisieren"
+              >
+                🔄 Aktualisieren
+              </button>
+            </div>
             
             {/* Auswahl-Info und Bulk-Aktionen */}
             {selectedInvitations.length > 0 && (
@@ -882,7 +955,19 @@ export default function InvitationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {invitations.map((invitation) => (
+                  {invitations.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-500">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
+                          <p className="text-sm text-gray-400">
+                            Aktivieren Sie die Checkbox "Einladungsliste" in der Gästeliste, um Gäste zur Einladungsliste hinzuzufügen.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    invitations.map((invitation) => (
                     <tr key={invitation.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input
@@ -1161,7 +1246,8 @@ export default function InvitationsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

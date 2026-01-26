@@ -1908,6 +1908,12 @@ export default function GuestsPage() {
                                             const newInvitation = await createInvitationRes.json()
                                             setInvitations(prev => ({ ...prev, [guest.id]: newInvitation }))
                                             console.log('✅ Einladung erstellt:', newInvitation)
+                                            
+                                            // Benachrichtige andere Tabs/Seiten über neue Einladung
+                                            if (typeof window !== 'undefined') {
+                                              window.localStorage.setItem('invitation-updated', Date.now().toString())
+                                              window.dispatchEvent(new Event('invitation-updated'))
+                                            }
                                           } else {
                                             const errorData = await createInvitationRes.json().catch(() => ({ error: 'Unbekannter Fehler' }))
                                             throw new Error(errorData.error || 'Fehler beim Erstellen der Einladung')
