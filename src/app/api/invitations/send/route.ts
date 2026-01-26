@@ -188,6 +188,9 @@ export async function POST(request: NextRequest) {
               additionalData: JSON.stringify(guestAdditionalData),
             },
           })
+          
+          // Benachrichtige Frontend über Update (für automatische Aktualisierung der Gästeliste)
+          // Diese Benachrichtigung wird über localStorage-Events kommuniziert
         } catch (e) {
           console.error('Fehler beim Aktualisieren von additionalData für Gast:', guest.id, e)
         }

@@ -510,6 +510,12 @@ export default function InvitationsPage() {
         alert(`Einladungen gesendet: ${result.successful} erfolgreich, ${result.failed} fehlgeschlagen`)
         setSelectedGuests([])
         await loadInvitations(eventId)
+        
+        // Benachrichtige Gästeliste über Update
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('email-sent-update', Date.now().toString())
+          window.dispatchEvent(new Event('email-sent'))
+        }
       } else {
         alert('Fehler: ' + result.error)
       }

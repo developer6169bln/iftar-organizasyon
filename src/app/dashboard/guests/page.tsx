@@ -654,6 +654,37 @@ export default function GuestsPage() {
     setFilteredGuests(filtered)
   }, [searchQuery, guests, columnFilters, showNoResultsWarning, sortColumn, sortDirection])
 
+  // Lade Gästeliste neu, wenn eine E-Mail gesendet wurde
+  useEffect(() => {
+    const handleEmailSent = () => {
+      loadGuests()
+    }
+
+    // Event-Listener für localStorage-Event
+    window.addEventListener('email-sent', handleEmailSent)
+    
+    // Prüfe auch localStorage für Updates (für Cross-Tab-Kommunikation)
+    const checkForUpdates = () => {
+      const lastUpdate = localStorage.getItem('email-sent-update')
+      if (lastUpdate) {
+        const updateTime = parseInt(lastUpdate, 10)
+        const now = Date.now()
+        // Wenn Update weniger als 10 Sekunden alt ist, lade neu
+        if (now - updateTime < 10000) {
+          loadGuests()
+        }
+      }
+    }
+
+    // Prüfe alle 2 Sekunden auf Updates
+    const updateCheckInterval = setInterval(checkForUpdates, 2000)
+
+    return () => {
+      window.removeEventListener('email-sent', handleEmailSent)
+      clearInterval(updateCheckInterval)
+    }
+  }, [])
+
   const loadGuests = async () => {
     try {
       const response = await fetch('/api/guests')
