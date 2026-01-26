@@ -1860,9 +1860,28 @@ export default function GuestsPage() {
                               const val = getColumnValue(g, column)
                               return val
                             })
-                            // Wenn mindestens 80% der Werte Boolean sind, behandle die Spalte als Boolean
-                            const booleanCount = allValues.filter(v => isBooleanValue(v)).length
-                            return booleanCount >= Math.max(1, allValues.length * 0.8)
+                            
+                            // Filtere leere/null/undefined Werte
+                            const nonEmptyValues = allValues.filter(v => v !== null && v !== undefined && v !== '')
+                            
+                            // Wenn keine Werte vorhanden, prüfe ob die Spalte in der Vergangenheit Boolean war
+                            if (nonEmptyValues.length === 0) {
+                              // Prüfe in allen Gästen (nicht nur gefilterte)
+                              const allGuestsValues = guests.map(g => {
+                                const val = getColumnValue(g, column)
+                                return val
+                              }).filter(v => v !== null && v !== undefined && v !== '')
+                              
+                              if (allGuestsValues.length > 0) {
+                                const booleanCount = allGuestsValues.filter(v => isBooleanValue(v)).length
+                                return booleanCount >= Math.max(1, allGuestsValues.length * 0.5) // 50% Threshold für historische Daten
+                              }
+                              return false
+                            }
+                            
+                            // Wenn mindestens 50% der vorhandenen Werte Boolean sind, behandle die Spalte als Boolean
+                            const booleanCount = nonEmptyValues.filter(v => isBooleanValue(v)).length
+                            return booleanCount >= Math.max(1, nonEmptyValues.length * 0.5)
                           })()
                           
                           // Wenn Boolean-Spalte: Rendere Checkbox

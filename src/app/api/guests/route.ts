@@ -17,6 +17,7 @@ const guestSchema = z.object({
   receptionBy: z.string().optional(),
   arrivalDate: z.string().optional(), // ISO date string
   notes: z.string().optional(),
+  additionalData: z.string().optional(), // JSON string für zusätzliche Felder
 })
 
 export async function GET(request: NextRequest) {
@@ -74,6 +75,41 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = guestSchema.parse(body)
 
+    // Verarbeite additionalData: Parse JSON und konvertiere Boolean-Strings zu echten Booleans
+    let additionalDataStr = null
+    if (validatedData.additionalData) {
+      try {
+        const additional = JSON.parse(validatedData.additionalData)
+        
+        // Konvertiere Boolean-Strings zu echten Booleans
+        const normalizedAdditional: Record<string, any> = {}
+        for (const [key, value] of Object.entries(additional)) {
+          if (typeof value === 'string') {
+            const lowerValue = value.toLowerCase().trim()
+            // Konvertiere String-Booleans zu echten Booleans
+            if (lowerValue === 'true') {
+              normalizedAdditional[key] = true
+            } else if (lowerValue === 'false') {
+              normalizedAdditional[key] = false
+            } else {
+              normalizedAdditional[key] = value
+            }
+          } else if (typeof value === 'boolean') {
+            // Behalte echte Booleans
+            normalizedAdditional[key] = value
+          } else {
+            normalizedAdditional[key] = value
+          }
+        }
+        
+        additionalDataStr = JSON.stringify(normalizedAdditional)
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData:', e)
+        // Falls Parsing fehlschlägt, speichere als String
+        additionalDataStr = validatedData.additionalData
+      }
+    }
+
     const guest = await prisma.guest.create({
       data: {
         eventId: validatedData.eventId,
@@ -90,6 +126,7 @@ export async function POST(request: NextRequest) {
           ? (isNaN(Date.parse(validatedData.arrivalDate)) ? null : new Date(validatedData.arrivalDate))
           : null,
         notes: validatedData.notes || null,
+        additionalData: additionalDataStr,
         status: 'INVITED',
       },
     })
