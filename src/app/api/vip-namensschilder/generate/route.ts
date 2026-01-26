@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument, StandardFonts, rgb, PDFImage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFImage, degrees } from 'pdf-lib'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -126,33 +126,14 @@ async function drawNamensschild(
         const instY = y + height - (settings?.institutionY || 50)
         const rotation = settings?.institutionRotation || 0
         
-        if (rotation !== 0) {
-          // Rotation mit Transformation
-          const radians = (rotation * Math.PI) / 180
-          page.pushOperators()
-          page.translateContent(instX, instY)
-          page.rotateContent(radians)
-          page.translateContent(-instX, -instY)
-          
-          page.drawText(sanitizedInst, {
-            x: instX,
-            y: instY,
-            size: instSize,
-            color: rgb(0, 0, 0),
-            font: helveticaFont,
-          })
-          
-          page.popOperators()
-        } else {
-          // Keine Rotation
-          page.drawText(sanitizedInst, {
-            x: instX,
-            y: instY,
-            size: instSize,
-            color: rgb(0, 0, 0),
-            font: helveticaFont,
-          })
-        }
+        page.drawText(sanitizedInst, {
+          x: instX,
+          y: instY,
+          size: instSize,
+          color: rgb(0, 0, 0),
+          font: helveticaFont,
+          rotate: rotation !== 0 ? degrees(rotation) : undefined,
+        })
       }
     } catch (e) {
       console.error('Fehler beim Zeichnen der Institution:', e)
@@ -169,33 +150,14 @@ async function drawNamensschild(
         const nameY = y + height - (settings?.nameY || 70)
         const rotation = settings?.nameRotation || 0
         
-        if (rotation !== 0) {
-          // Rotation mit Transformation
-          const radians = (rotation * Math.PI) / 180
-          page.pushOperators()
-          page.translateContent(nameX, nameY)
-          page.rotateContent(radians)
-          page.translateContent(-nameX, -nameY)
-          
-          page.drawText(sanitizedName, {
-            x: nameX,
-            y: nameY,
-            size: nameSize,
-            color: rgb(0, 0, 0),
-            font: helveticaBoldFont,
-          })
-          
-          page.popOperators()
-        } else {
-          // Keine Rotation
-          page.drawText(sanitizedName, {
-            x: nameX,
-            y: nameY,
-            size: nameSize,
-            color: rgb(0, 0, 0),
-            font: helveticaBoldFont,
-          })
-        }
+        page.drawText(sanitizedName, {
+          x: nameX,
+          y: nameY,
+          size: nameSize,
+          color: rgb(0, 0, 0),
+          font: helveticaBoldFont,
+          rotate: rotation !== 0 ? degrees(rotation) : undefined,
+        })
       }
     } catch (e) {
       console.error('Fehler beim Zeichnen des Namens:', e)
