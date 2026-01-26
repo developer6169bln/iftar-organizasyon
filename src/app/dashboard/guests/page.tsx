@@ -455,17 +455,32 @@ export default function GuestsPage() {
     const importedColumns = Array.from(columnsSet).filter(col => col !== 'Nummer' && col !== 'İşlemler')
     const orderedColumns = ['Nummer', ...importedColumns, 'İşlemler']
     
-    // Setze Spalten direkt
-    setAllColumns(orderedColumns)
-    saveColumnOrder(orderedColumns)
+    // Prüfe ob sich die Spalten geändert haben, bevor wir setzen (verhindert Endlosschleife)
+    const currentColumnsStr = JSON.stringify([...allColumns].sort())
+    const newColumnsStr = JSON.stringify([...orderedColumns].sort())
     
-    console.log('📊 Importierte Spalten:', {
-      total: orderedColumns.length,
-      imported: importedColumns.length,
-      importedColumns: importedColumns,
-      allColumns: orderedColumns
-    })
-  }, [guests])
+    if (currentColumnsStr !== newColumnsStr) {
+      // Setze Spalten direkt
+      setAllColumns(orderedColumns)
+      // Speichere Reihenfolge (nur wenn sich wirklich etwas geändert hat)
+      try {
+        localStorage.setItem('guestColumnsOrder', JSON.stringify(orderedColumns))
+      } catch (e) {
+        console.error('Fehler beim Speichern der Spaltenreihenfolge:', e)
+      }
+      
+      // Nur einmal loggen, nicht bei jedem Render
+      if (guests.length > 0) {
+        console.log('📊 Importierte Spalten:', {
+          total: orderedColumns.length,
+          imported: importedColumns.length,
+          importedColumns: importedColumns,
+          allColumns: orderedColumns
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guests]) // Nur guests als Dependency, nicht allColumns (verhindert Endlosschleife)
 
   useEffect(() => {
     // Filter guests based on search query and column filters
@@ -1644,49 +1659,50 @@ export default function GuestsPage() {
                           // Hole Wert für diese Spalte
                           const rawValue = getColumnValue(guest, column, index)
                           
-                          // Prüfe ob dieser Wert TRUE/FALSE ist (automatische Checkbox-Erkennung)
-                          // Prüfe auch ob alle Werte dieser Spalte bei allen Gästen TRUE/FALSE sind
+                          // Prüfe ob diese Spalte TRUE/FALSE Werte enthält (automatische Checkbox-Erkennung)
+                          // Prüfe alle Werte dieser Spalte bei allen Gästen
                           const isBooleanColumn = (() => {
-                            // Prüfe den aktuellen Wert
-                            if (isBooleanValue(rawValue)) {
-                              // Prüfe ob alle anderen Gäste auch Boolean-Werte in dieser Spalte haben
-                              const allValues = filteredGuests.map(g => {
-                                const val = getColumnValue(g, column)
-                                return val
-                              })
-                              // Wenn mindestens 80% der Werte Boolean sind, behandle die Spalte als Boolean
-                              const booleanCount = allValues.filter(v => isBooleanValue(v)).length
-                              return booleanCount >= allValues.length * 0.8
-                            }
-                            return false
+                            // Prüfe ob alle Gäste Boolean-Werte in dieser Spalte haben
+                            const allValues = filteredGuests.map(g => {
+                              const val = getColumnValue(g, column)
+                              return val
+                            })
+                            // Wenn mindestens 80% der Werte Boolean sind, behandle die Spalte als Boolean
+                            const booleanCount = allValues.filter(v => isBooleanValue(v)).length
+                            return booleanCount >= Math.max(1, allValues.length * 0.8)
                           })()
                           
                           // Wenn Boolean-Spalte: Rendere Checkbox
                           if (isBooleanColumn) {
                             const checked = toBoolean(rawValue)
-                            const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
                             
                             return (
                               <td 
                                 key={column} 
                                 className="px-4 py-3 text-center"
                                 onClick={(e) => {
+                                  // Verhindere dass der td-Klick die Checkbox beeinflusst
                                   e.stopPropagation()
-                                  e.preventDefault()
                                 }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                style={{ pointerEvents: 'auto' }}
+                                onMouseDown={(e) => {
+                                  // Verhindere dass mousedown die Checkbox beeinflusst
+                                  e.stopPropagation()
+                                }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={checked}
                                   onChange={async (e) => {
+                                    // WICHTIG: Nur stopPropagation, NICHT preventDefault!
+                                    // preventDefault würde die Checkbox daran hindern, ihren Zustand zu ändern
                                     e.stopPropagation()
-                                    e.preventDefault()
+                                    
+                                    const newValue = e.target.checked
+                                    console.log('🔘 Checkbox geändert:', { guestId: guest.id, column, checked: newValue })
                                     
                                     // Speichere in additionalData
                                     const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
-                                    additional[column] = e.target.checked
+                                    additional[column] = newValue
                                     
                                     try {
                                       const response = await fetch('/api/guests', {
@@ -1701,20 +1717,31 @@ export default function GuestsPage() {
                                       if (response.ok) {
                                         const updated = await response.json()
                                         setGuests(guests.map(g => g.id === guest.id ? updated : g))
+                                        console.log('✅ Checkbox gespeichert:', { guestId: guest.id, column, checked: newValue })
                                       } else {
                                         const error = await response.json()
+                                        console.error('❌ Fehler beim Speichern:', error)
                                         alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+                                        // Setze Checkbox zurück bei Fehler
+                                        e.target.checked = !newValue
                                       }
                                     } catch (error) {
-                                      console.error('Fehler beim Speichern:', error)
+                                      console.error('❌ Fehler beim Speichern:', error)
                                       alert('Fehler beim Speichern')
+                                      // Setze Checkbox zurück bei Fehler
+                                      e.target.checked = !newValue
                                     }
                                   }}
                                   onClick={(e) => {
+                                    // Verhindere dass der Klick weiter propagiert
                                     e.stopPropagation()
                                   }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
+                                  onMouseDown={(e) => {
+                                    // Verhindere dass mousedown weiter propagiert
+                                    e.stopPropagation()
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4"
+                                  style={{ pointerEvents: 'auto', zIndex: 100, position: 'relative' }}
                                 />
                               </td>
                             )
