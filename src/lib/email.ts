@@ -69,15 +69,9 @@ export async function getEmailTransporter() {
     })
   }
 
-  // Teste Verbindung (optional - Fehler werden beim Senden abgefangen)
-  try {
-    await transporter.verify()
-    console.log('✅ Email-Server Verbindung erfolgreich')
-  } catch (error) {
-    console.warn('⚠️ Email-Server Verbindungstest fehlgeschlagen (wird beim Senden erneut versucht):', error)
-    // Wir werfen hier keinen Fehler, da die Verbindung beim tatsächlichen Senden noch funktionieren könnte
-    // Der Fehler wird dann beim sendMail() abgefangen
-  }
+  // KEIN verify() mehr - kann zu Timeouts führen
+  // Die Verbindung wird beim tatsächlichen sendMail() getestet
+  console.log('✅ Email-Transporter erstellt (Verbindungstest wird beim Senden durchgeführt)')
 
   return transporter
 }
