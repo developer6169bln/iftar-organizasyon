@@ -2174,8 +2174,8 @@ export default function GuestsPage() {
                           
                           // Standard-Spalten und zusätzliche Spalten aus additionalData - alle editierbar
                           // Überspringe Checkbox-Spalten (werden bereits oben behandelt)
-                          const isCheckboxColumn = ['Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'].includes(column)
-                          if (isCheckboxColumn) {
+                          const checkboxColumns = ['Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste']
+                          if (checkboxColumns.includes(column)) {
                             return null // Sollte nicht hier ankommen, aber als Sicherheit
                           }
                           
