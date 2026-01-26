@@ -236,6 +236,131 @@ export default function InvitationsPage() {
     }
   }
 
+  // Template-Funktionen
+  const handleSaveTemplate = async () => {
+    try {
+      if (!templateForm.name || !templateForm.subject || !templateForm.body) {
+        alert('Name, Betreff und Body sind erforderlich')
+        return
+      }
+
+      const url = '/api/email-templates'
+      const method = editingTemplate ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingTemplate ? { id: editingTemplate.id, ...templateForm } : templateForm),
+      })
+
+      if (response.ok) {
+        await loadTemplates()
+        setTemplateForm({
+          name: '',
+          language: 'de',
+          subject: '',
+          body: '',
+          plainText: '',
+          isDefault: false,
+        })
+        setEditingTemplate(null)
+        alert('Template gespeichert')
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleEditTemplate = (template: any) => {
+    setEditingTemplate(template)
+    setTemplateForm({
+      name: template.name,
+      language: template.language,
+      subject: template.subject,
+      body: template.body,
+      plainText: template.plainText || '',
+      isDefault: template.isDefault || false,
+    })
+  }
+
+  const handleDeleteTemplate = async (id: string) => {
+    if (!confirm('Möchten Sie dieses Template wirklich löschen?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/email-templates?id=${id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        await loadTemplates()
+        alert('Template gelöscht')
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error)
+      alert('Fehler beim Löschen')
+    }
+  }
+
+  const handleCreateDefaultTemplates = async () => {
+    if (!confirm('Möchten Sie Standard-Templates für alle Sprachen erstellen?')) {
+      return
+    }
+
+    try {
+      const defaultTemplates = [
+        {
+          name: 'Standard Einladung (Deutsch)',
+          language: 'de',
+          subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<p>Liebe/r {{GUEST_NAME}},</p>
+<p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
+<p>Wir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.</p>
+<p>Bitte bestätigen Sie Ihre Teilnahme:</p>
+<p><a href="{{ACCEPT_LINK}}">Zusage</a> | <a href="{{DECLINE_LINK}}">Absage</a></p>
+<p>Mit freundlichen Grüßen<br>Ihr Organisationsteam</p>`,
+          plainText: `Liebe/r {{GUEST_NAME}},\n\nwir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.\n\nWir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.\n\nBitte bestätigen Sie Ihre Teilnahme über die Links in der E-Mail.\n\nMit freundlichen Grüßen\nIhr Organisationsteam`,
+          isDefault: true,
+        },
+        {
+          name: 'Standard Einladung (Türkisch)',
+          language: 'tr',
+          subject: 'İftar Yemeği Daveti - {{EVENT_TITLE}}',
+          body: `<p>Sayın {{GUEST_NAME}},</p>
+<p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
+<p>Bu özel etkinlikte sizleri ağırlamaktan memnuniyet duyarız.</p>
+<p>Lütfen katılımınızı onaylayın:</p>
+<p><a href="{{ACCEPT_LINK}}">Kabul</a> | <a href="{{DECLINE_LINK}}">Red</a></p>
+<p>Saygılarımızla<br>Organizasyon Ekibi</p>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\n{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.\n\nBu özel etkinlikte sizleri ağırlamaktan memnuniyet duyarız.\n\nLütfen katılımınızı onaylayın.\n\nSaygılarımızla\nOrganizasyon Ekibi`,
+          isDefault: true,
+        },
+      ]
+
+      for (const template of defaultTemplates) {
+        await fetch('/api/email-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(template),
+        })
+      }
+
+      await loadTemplates()
+      alert('Standard-Templates erstellt')
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Standard-Templates:', error)
+      alert('Fehler beim Erstellen der Standard-Templates')
+    }
+  }
+
   const handleSendInvitations = async () => {
     if (selectedGuests.length === 0) {
       alert('Bitte wählen Sie mindestens einen Gast aus')
@@ -995,10 +1120,191 @@ export default function InvitationsPage() {
 
         {activeTab === 'templates' && (
           <div className="rounded-lg bg-white p-6 shadow">
-            <h2 className="mb-4 text-xl font-semibold">Email-Templates</h2>
-            <p className="mb-4 text-sm text-gray-600">
-              Templates werden später implementiert. Verwenden Sie vorerst die Standard-Templates.
-            </p>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Email-Templates</h2>
+              <button
+                onClick={handleCreateDefaultTemplates}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
+                + Standard-Templates erstellen
+              </button>
+            </div>
+
+            {/* Formular für neue/bearbeitete Templates */}
+            <div className="mb-6 rounded-lg border border-gray-200 p-4">
+              <h3 className="mb-4 text-lg font-medium">
+                {editingTemplate ? 'Template bearbeiten' : 'Neues Email-Template'}
+              </h3>
+              
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. Standard Einladung (Deutsch)"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Sprache *
+                  </label>
+                  <select
+                    value={templateForm.language}
+                    onChange={(e) => setTemplateForm({ ...templateForm, language: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="de">Deutsch</option>
+                    <option value="tr">Türkisch</option>
+                    <option value="en">Englisch</option>
+                    <option value="ar">Arabisch</option>
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Betreff *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateForm.subject}
+                    onChange={(e) => setTemplateForm({ ...templateForm, subject: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z.B. Einladung zum Iftar-Essen - EVENT_TITLE"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Verfügbare Platzhalter: GUEST_NAME, EVENT_TITLE
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    HTML-Body *
+                  </label>
+                  <textarea
+                    value={templateForm.body}
+                    onChange={(e) => setTemplateForm({ ...templateForm, body: e.target.value })}
+                    rows={10}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                    placeholder="<p>Liebe/r GUEST_NAME,</p>..."
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Verfügbare Platzhalter: GUEST_NAME, EVENT_TITLE, EVENT_DATE, EVENT_LOCATION, ACCEPT_LINK, DECLINE_LINK
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Plain-Text (optional)
+                  </label>
+                  <textarea
+                    value={templateForm.plainText}
+                    onChange={(e) => setTemplateForm({ ...templateForm, plainText: e.target.value })}
+                    rows={5}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                    placeholder="Plain-Text Version der E-Mail"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={templateForm.isDefault}
+                      onChange={(e) => setTemplateForm({ ...templateForm, isDefault: e.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Als Standard-Template für diese Sprache verwenden
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={handleSaveTemplate}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  {editingTemplate ? 'Aktualisieren' : 'Erstellen'}
+                </button>
+                {editingTemplate && (
+                  <button
+                    onClick={() => {
+                      setEditingTemplate(null)
+                      setTemplateForm({
+                        name: '',
+                        language: 'de',
+                        subject: '',
+                        body: '',
+                        plainText: '',
+                        isDefault: false,
+                      })
+                    }}
+                    className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Liste der vorhandenen Templates */}
+            <div>
+              <h3 className="mb-4 text-lg font-medium">Vorhandene Templates</h3>
+              {templates.length === 0 ? (
+                <div className="rounded-lg border border-gray-200 p-4 text-center">
+                  <p className="text-sm text-gray-500">Keine Templates vorhanden</p>
+                  <p className="mt-2 text-xs text-gray-400">
+                    Erstellen Sie ein neues Template oder verwenden Sie den Button oben, um Standard-Templates zu erstellen.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className={`flex items-center justify-between rounded-lg border p-4 ${
+                        template.isDefault ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {template.name}
+                          {template.isDefault && (
+                            <span className="ml-2 rounded bg-green-500 px-2 py-1 text-xs text-white">
+                              Standard
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {template.language.toUpperCase()} - {template.subject}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleEditTemplate(template)}
+                          className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+                        >
+                          Bearbeiten
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          className="rounded-lg bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700"
+                        >
+                          Löschen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
