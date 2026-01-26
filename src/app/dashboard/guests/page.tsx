@@ -1796,17 +1796,26 @@ export default function GuestsPage() {
                               <td 
                                 key={column} 
                                 className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                style={{ pointerEvents: 'auto' }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={checked}
                                   onChange={(e) => {
                                     e.stopPropagation()
+                                    e.preventDefault()
                                     handleCheckboxChange(guest.id, 'nimmtTeil', e.target.checked)
                                   }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
                                   className="rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
+                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
                                 />
                               </td>
                             )
@@ -1832,17 +1841,26 @@ export default function GuestsPage() {
                               <td 
                                 key={column} 
                                 className="px-4 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  e.preventDefault()
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                style={{ pointerEvents: 'auto' }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={checked}
                                   onChange={(e) => {
                                     e.stopPropagation()
+                                    e.preventDefault()
                                     handleCheckboxChange(guest.id, 'abgesagt', e.target.checked)
                                   }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                  }}
                                   className="rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                                  style={{ pointerEvents: 'auto' }}
+                                  style={{ pointerEvents: 'auto', zIndex: 10, position: 'relative' }}
                                 />
                               </td>
                             )
@@ -1942,7 +1960,16 @@ export default function GuestsPage() {
                             <td 
                               key={column} 
                               className="px-4 py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50"
-                              onClick={() => !isEditing && handleCellEdit(guest.id, column, value)}
+                              onClick={(e) => {
+                                // Verhindere Klick auf Checkbox-Spalten
+                                if (checkboxColumns.includes(column)) {
+                                  e.stopPropagation()
+                                  return
+                                }
+                                if (!isEditing) {
+                                  handleCellEdit(guest.id, column, value)
+                                }
+                              }}
                             >
                               {isEditing ? (
                                 <div className="flex items-center gap-2">
