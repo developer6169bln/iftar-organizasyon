@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -483,10 +483,23 @@ export default function GuestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guests]) // Nur guests als Dependency, nicht allColumns (verhindert Endlosschleife)
 
-  // Reset checkbox states when guests change (to sync with database)
+  // Ref um vorherige Gäste-Länge zu speichern
+  const prevGuestsLengthRef = useRef(guests.length)
+  
+  // Reset checkbox states only when guests list length changes (new load, not updates)
   useEffect(() => {
-    setCheckboxStates({})
-  }, [guests])
+    // Nur zurücksetzen wenn sich die Anzahl der Gäste ändert (neues Laden)
+    // Nicht bei jedem Update, damit optimistische Updates funktionieren
+    const currentLength = guests.length
+    
+    if (prevGuestsLengthRef.current !== currentLength && prevGuestsLengthRef.current > 0) {
+      // Nur zurücksetzen wenn sich die Liste wirklich geändert hat (z.B. neuer Import)
+      setCheckboxStates({})
+    }
+    
+    prevGuestsLengthRef.current = currentLength
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guests.length]) // Nur Länge als Dependency, nicht die gesamte guests-Liste
 
   useEffect(() => {
     // Filter guests based on search query and column filters
@@ -1683,9 +1696,23 @@ export default function GuestsPage() {
                             // Prüfe zuerst lokalen State (optimistic update), dann Datenbank-Wert
                             const checkboxKey = `${guest.id}-${column}`
                             const hasLocalState = checkboxKey in checkboxStates
+                            
+                            // Hole Wert aus Datenbank
+                            let dbValue = rawValue
+                            if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                if (additional.hasOwnProperty(column)) {
+                                  dbValue = additional[column]
+                                }
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
                             const checked = hasLocalState 
                               ? checkboxStates[checkboxKey]
-                              : toBoolean(rawValue)
+                              : toBoolean(dbValue)
                             
                             return (
                               <td 
@@ -1734,15 +1761,34 @@ export default function GuestsPage() {
                                       
                                       if (response.ok) {
                                         const updated = await response.json()
+                                        
+                                        // Prüfe ob der Wert korrekt gespeichert wurde
+                                        let savedValue = false
+                                        if (updated?.additionalData) {
+                                          try {
+                                            const savedAdditional = JSON.parse(updated.additionalData)
+                                            savedValue = savedAdditional[column]
+                                            console.log(`💾 Gespeicherter Wert für ${column}:`, savedValue, typeof savedValue)
+                                          } catch (e) {
+                                            console.error('Fehler beim Parsen des gespeicherten additionalData:', e)
+                                          }
+                                        }
+                                        
                                         // Aktualisiere den Gast im State
                                         setGuests(prevGuests => prevGuests.map(g => g.id === guest.id ? updated : g))
-                                        // Entferne lokalen State (wird jetzt aus Datenbank gelesen)
-                                        setCheckboxStates(prev => {
-                                          const newState = { ...prev }
-                                          delete newState[checkboxKey]
-                                          return newState
-                                        })
-                                        console.log('✅ Checkbox gespeichert:', { guestId: guest.id, column, checked: newValue })
+                                        
+                                        // Entferne lokalen State NUR wenn der Wert korrekt gespeichert wurde
+                                        // Wenn nicht, behalte den lokalen State
+                                        if (savedValue === newValue || toBoolean(savedValue) === newValue) {
+                                          setCheckboxStates(prev => {
+                                            const newState = { ...prev }
+                                            delete newState[checkboxKey]
+                                            return newState
+                                          })
+                                          console.log('✅ Checkbox gespeichert und State entfernt:', { guestId: guest.id, column, checked: newValue, savedValue })
+                                        } else {
+                                          console.warn('⚠️ Wert nicht korrekt gespeichert, behalte lokalen State:', { guestId: guest.id, column, expected: newValue, saved: savedValue })
+                                        }
                                       } else {
                                         const error = await response.json()
                                         console.error('❌ Fehler beim Speichern:', error)
