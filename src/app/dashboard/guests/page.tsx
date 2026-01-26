@@ -164,37 +164,13 @@ export default function GuestsPage() {
     notes: '',
   })
   const [eventId, setEventId] = useState<string | null>(null)
-  const [googleSheetsConfig, setGoogleSheetsConfig] = useState({
-    spreadsheetId: '',
-    sheetName: 'Gästeliste',
-    enabled: false,
-    columnMapping: {} as Record<string, string>,
-  })
-  const [showGoogleSheetsModal, setShowGoogleSheetsModal] = useState(false)
-  const [syncing, setSyncing] = useState(false)
-  const [syncStatus, setSyncStatus] = useState<any>(null)
-  const [sheetHeaders, setSheetHeaders] = useState<string[]>([])
-  const [showColumnMapping, setShowColumnMapping] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
   
-  // Verfügbare Datenbankfelder
-  const dbFields = [
-    { key: 'name', label: 'Name', required: true },
-    { key: 'email', label: 'E-Mail', required: false },
-    { key: 'phone', label: 'Telefon', required: false },
-    { key: 'title', label: 'Titel', required: false },
-    { key: 'organization', label: 'Organisation', required: false },
-    { key: 'tableNumber', label: 'Tischnummer', required: false },
-    { key: 'isVip', label: 'VIP', required: false },
-    { key: 'status', label: 'Status', required: false },
-    { key: 'needsSpecialReception', label: 'Benötigt Empfang', required: false },
-    { key: 'receptionBy', label: 'Empfang von', required: false },
-    { key: 'arrivalDate', label: 'Anreisedatum', required: false },
-    { key: 'notes', label: 'Notizen', required: false },
-  ]
+  // ENTFERNT: dbFields (nicht mehr benötigt ohne Google Sheets)
 
   useEffect(() => {
     loadEventAndGuests()
-    loadGoogleSheetsConfig()
   }, [])
 
   // Wende gespeicherte Reihenfolge an, wenn allColumns sich ändert
@@ -368,56 +344,58 @@ export default function GuestsPage() {
     }
   }
 
-  const loadGoogleSheetsConfig = async () => {
+  const handleFileImport = async () => {
+    if (!importFile) {
+      alert('Bitte wählen Sie eine Datei aus')
+      return
+    }
+
+    // Bestätigungsdialog
+    const confirmMessage = 
+      '⚠️ WICHTIG: Dieser Import wird:\n\n' +
+      '• ALLE vorhandenen Einträge in der Einladungsliste löschen\n' +
+      '• Die neue Datei als Master-Liste importieren\n\n' +
+      'Diese Aktion kann nicht rückgängig gemacht werden!\n\n' +
+      'Möchten Sie fortfahren?'
+    
+    const confirmed = window.confirm(confirmMessage)
+    
+    if (!confirmed) {
+      return
+    }
+
     try {
-      const eventResponse = await fetch('/api/events')
-      if (eventResponse.ok) {
-        const event = await eventResponse.json()
-        // Lade Konfiguration direkt von der Config-Route
-        const configResponse = await fetch(`/api/google-sheets/config?eventId=${event.id}`)
-        if (configResponse.ok) {
-          const config = await configResponse.json()
-          setGoogleSheetsConfig({
-            spreadsheetId: config.spreadsheetId || '',
-            sheetName: config.sheetName || 'Gästeliste',
-            enabled: config.enabled || false,
-            columnMapping: config.columnMapping || {},
-          })
-          
-          // Lade auch Status für Sync-Informationen
-          const statusResponse = await fetch(`/api/google-sheets/sync?eventId=${event.id}&action=status`)
-          if (statusResponse.ok) {
-            const status = await statusResponse.json()
-            setSyncStatus(status)
-            
-            // Lade Sheet-Header wenn konfiguriert und verbunden
-            if (config.spreadsheetId && status.connected) {
-              setSheetHeaders(status.headers || [])
-            }
-          }
-        } else {
-          // Wenn keine Konfiguration vorhanden, setze Standardwerte
-          setGoogleSheetsConfig({
-            spreadsheetId: '',
-            sheetName: 'Gästeliste',
-            enabled: false,
-            columnMapping: {},
-          })
-        }
+      setImporting(true)
+      
+      const formData = new FormData()
+      formData.append('file', importFile)
+
+      const response = await fetch('/api/import/csv-xls', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        alert(`✅ Import erfolgreich!\n\n• ${result.imported} Einträge importiert\n• ${result.total} Zeilen verarbeitet`)
+        setImportFile(null)
+        // Lade Gäste neu (falls nötig)
+        await loadGuests()
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Import fehlgeschlagen')
       }
     } catch (error) {
-      console.error('Google Sheets Config yükleme hatası:', error)
-      // Setze Standardwerte bei Fehler
-      setGoogleSheetsConfig({
-        spreadsheetId: '',
-        sheetName: 'Gästeliste',
-        enabled: false,
-        columnMapping: {},
-      })
+      console.error('Import-Fehler:', error)
+      alert('Fehler beim Importieren der Datei')
+    } finally {
+      setImporting(false)
     }
   }
 
-  const loadSheetHeaders = async () => {
+
+  // ENTFERNT: loadSheetHeaders
+  const loadSheetHeaders_DELETED = async () => {
     if (!eventId || !googleSheetsConfig.spreadsheetId) {
       alert('Bitte zuerst Spreadsheet ID eingeben')
       return
@@ -1019,14 +997,6 @@ export default function GuestsPage() {
         })
         await loadGuests()
         
-        // Automatische Synchronisation zu Google Sheets (wenn aktiviert)
-        if (googleSheetsConfig.enabled && eventId) {
-          try {
-            await syncToGoogleSheets()
-          } catch (error) {
-            console.error('Automatische Sync fehlgeschlagen:', error)
-          }
-        }
       } else {
         const error = await response.json()
         alert(error.error || 'Misafir eklenirken hata oluştu')
@@ -1037,158 +1007,7 @@ export default function GuestsPage() {
     }
   }
 
-  const syncToGoogleSheets = async () => {
-    if (!eventId || !googleSheetsConfig.enabled) return
-
-    try {
-      setSyncing(true)
-      const response = await fetch('/api/google-sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId,
-          direction: 'to',
-        }),
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
-        return true
-      } else {
-        const error = await response.json()
-        console.error('Sync Fehler:', error)
-        return false
-      }
-    } catch (error) {
-      console.error('Sync Fehler:', error)
-      return false
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const syncFromGoogleSheets = async () => {
-    if (!eventId || !googleSheetsConfig.enabled) return
-
-    // Bestätigungsdialog: Warnung vor Überschreibung
-    const confirmMessage = 
-      '⚠️ WICHTIG: Dieser Import wird:\n\n' +
-      '• ALLE vorhandenen Gäste löschen\n' +
-      '• ALLE vorhandenen Spalten überschreiben\n' +
-      '• Die Google Sheets Tabelle als Master-Tabelle importieren\n\n' +
-      'Diese Aktion kann nicht rückgängig gemacht werden!\n\n' +
-      'Möchten Sie fortfahren?'
-    
-    const confirmed = window.confirm(confirmMessage)
-    
-    if (!confirmed) {
-      return false // Benutzer hat abgebrochen
-    }
-
-    try {
-      setSyncing(true)
-      const response = await fetch('/api/google-sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId,
-          direction: 'from',
-          confirmOverwrite: true, // Bestätigung senden
-        }),
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        
-        // Lade Gäste zuerst, damit wir die Spalten aus additionalData sammeln können
-        await loadGuests()
-        
-        // Setze Spaltenüberschriften AUSSCHLIESSLICH aus Google Sheets (direkter Import, kein Abgleich)
-        if (result.headers && Array.isArray(result.headers) && result.headers.length > 0) {
-          // Direkter Import: Nur Spalten aus Google Sheets (1:1, genau wie importiert)
-          const importedColumns: string[] = []
-          
-          // Füge ZUERST "Nummer" hinzu (geschützte Spalte, immer an erster Stelle, von 0 startend)
-          importedColumns.push('Nummer')
-          
-          // Füge ALLE Spalten aus Google Sheets hinzu (1:1, genau wie importiert)
-          // KEIN Abgleich, KEINE Standard-Spalten, NUR die importierten Spalten
-          result.headers.forEach((header: string) => {
-            if (header && header.trim() && !importedColumns.includes(header) && header !== 'Nummer') {
-              importedColumns.push(header)
-            }
-          })
-          
-          // Füge nur "İşlemler" am Ende hinzu (für Aktionen)
-          importedColumns.push('İşlemler')
-          
-          // Setze Spalten direkt (ersetzt alle alten Spalten)
-          setAllColumns(importedColumns)
-          saveColumnOrder(importedColumns)
-        } else {
-          // Wenn keine Header, lass useEffect die Spalten aus additionalData sammeln
-          // (wird automatisch durch loadGuests() ausgelöst)
-        }
-        
-        setSyncStatus({ ...syncStatus, lastSync: result.lastSync })
-        alert(`✅ Master-Import abgeschlossen:\n\n• ${result.created} Gäste importiert\n• ${result.deleted || 0} alte Gäste gelöscht\n• Alle Spalten aus Google Sheets übernommen\n• Alte Daten wurden ersetzt`)
-        return true
-      } else {
-        const error = await response.json()
-        
-        // Prüfe ob Bestätigung erforderlich ist
-        if (error.requiresConfirmation) {
-          alert(error.message || 'Bestätigung erforderlich')
-        } else {
-          alert(error.error || 'Synchronisation fehlgeschlagen')
-        }
-        return false
-      }
-    } catch (error) {
-      console.error('Sync Fehler:', error)
-      alert('Synchronisation fehlgeschlagen')
-      return false
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const handleSaveGoogleSheetsConfig = async () => {
-    if (!eventId) return
-
-    try {
-      const response = await fetch('/api/google-sheets/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventId,
-          spreadsheetId: googleSheetsConfig.spreadsheetId,
-          sheetName: googleSheetsConfig.sheetName,
-          enabled: googleSheetsConfig.enabled,
-          columnMapping: googleSheetsConfig.columnMapping,
-        }),
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        await loadGoogleSheetsConfig()
-        setShowGoogleSheetsModal(false)
-        
-        if (result.warning) {
-          alert(`Google Sheets Konfiguration gespeichert.\n\n⚠️ Warnung: ${result.warning}`)
-        } else {
-          alert('Google Sheets Konfiguration gespeichert')
-        }
-      } else {
-        const error = await response.json()
-        alert(error.error || 'Konfiguration konnte nicht gespeichert werden')
-      }
-    } catch (error) {
-      console.error('Config Fehler:', error)
-      alert('Konfiguration konnte nicht gespeichert werden')
-    }
-  }
+  // ENTFERNT: Alle Google Sheets Funktionen
 
   const handleUpdate = async (guestId: string, updatedData: any) => {
     try {
@@ -1243,14 +1062,6 @@ export default function GuestsPage() {
       if (response.ok) {
         await loadGuests()
         
-        // Automatische Synchronisation zu Google Sheets (wenn aktiviert)
-        if (googleSheetsConfig.enabled && eventId) {
-          try {
-            await syncToGoogleSheets()
-          } catch (error) {
-            console.error('Automatische Sync fehlgeschlagen:', error)
-          }
-        }
       } else {
         const error = await response.json()
         alert(error.error || error.details || 'VIP durumu güncellenemedi')
@@ -1423,14 +1234,6 @@ export default function GuestsPage() {
         setFilteredGuests(filteredGuests.filter(g => g.id !== guestId))
         setEditingGuest(null)
         
-        // Synchronisiere zu Google Sheets, falls aktiviert
-        if (googleSheetsConfig.enabled && eventId) {
-          try {
-            await syncToGoogleSheets()
-          } catch (syncError) {
-            console.error('Sync nach Löschen fehlgeschlagen:', syncError)
-          }
-        }
         
         alert('Gast erfolgreich gelöscht')
       } else {
@@ -1490,42 +1293,45 @@ export default function GuestsPage() {
               <h1 className="text-2xl font-bold text-gray-900">Misafir Yönetimi</h1>
             </div>
             <div className="flex gap-2">
-              {googleSheetsConfig.enabled && (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={syncToGoogleSheets}
-                    disabled={syncing}
-                    className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                    title="Zu Google Sheets synchronisieren"
-                  >
-                    {syncing ? '⏳ Sync...' : '📤 Zu Sheets'}
-                  </button>
-                  <button
-                    onClick={syncFromGoogleSheets}
-                    disabled={syncing}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    title="Von Google Sheets synchronisieren"
-                  >
-                    {syncing ? '⏳ Sync...' : '📥 Von Sheets'}
-                  </button>
-                  {syncStatus?.lastSync && (
-                    <span className="text-xs text-gray-500">
-                      Letzte Sync: {new Date(syncStatus.lastSync).toLocaleString('de-DE')}
-                    </span>
-                  )}
-                </div>
-              )}
-              <button
-                onClick={() => setShowGoogleSheetsModal(true)}
-                className={`rounded-lg px-4 py-2 text-sm font-medium ${
-                  googleSheetsConfig.enabled
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                title="Google Sheets Konfiguration"
-              >
-                📊 Google Sheets
-              </button>
+              {/* CSV/XLS Import */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".csv,.xls,.xlsx"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      setImportFile(file)
+                    }
+                  }}
+                  className="hidden"
+                  id="file-import-input"
+                />
+                <label
+                  htmlFor="file-import-input"
+                  className="cursor-pointer rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  📁 Datei auswählen
+                </label>
+                {importFile && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">{importFile.name}</span>
+                    <button
+                      onClick={handleFileImport}
+                      disabled={importing}
+                      className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {importing ? '⏳ Importiere...' : '📥 Importieren'}
+                    </button>
+                    <button
+                      onClick={() => setImportFile(null)}
+                      className="rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setShowAddForm(!showAddForm)}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
@@ -2246,166 +2052,7 @@ export default function GuestsPage() {
           </div>
         </div>
 
-        {/* Google Sheets Konfigurations-Modal */}
-        {showGoogleSheetsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-y-auto">
-            <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl my-8 max-h-[90vh] overflow-y-auto">
-              <h2 className="mb-4 text-xl font-semibold">Google Sheets Synchronisation</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Spreadsheet ID *
-                  </label>
-                    <p className="mb-1 text-xs text-gray-500">
-                      Aus der Google Sheets URL: https://docs.google.com/spreadsheets/d/<strong>SPREADSHEET_ID</strong>/edit
-                    </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={googleSheetsConfig.spreadsheetId}
-                      onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, spreadsheetId: e.target.value })}
-                      className="mt-1 flex-1 rounded-lg border border-gray-300 px-3 py-2"
-                      placeholder="z.B. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-                    />
-                    {googleSheetsConfig.spreadsheetId && (
-                      <button
-                        onClick={loadSheetHeaders}
-                        className="mt-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                      >
-                        Header laden
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Sheet Name
-                  </label>
-                  <input
-                    type="text"
-                    value={googleSheetsConfig.sheetName}
-                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, sheetName: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                    placeholder="Gästeliste"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Name des Tabs im Spreadsheet (Standard: "Gästeliste")
-                  </p>
-                </div>
-
-                {/* Spaltenzuordnung */}
-                {sheetHeaders.length > 0 && (
-                  <div className="rounded-lg border border-gray-200 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-gray-700">Spaltenzuordnung</h3>
-                      <button
-                        onClick={() => setShowColumnMapping(!showColumnMapping)}
-                        className="text-xs text-indigo-600 hover:text-indigo-700"
-                      >
-                        {showColumnMapping ? 'Ausblenden' : 'Anzeigen'}
-                      </button>
-                    </div>
-                    {showColumnMapping && (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {dbFields.map((field) => (
-                          <div key={field.key} className="flex items-center gap-2">
-                            <label className="w-32 text-xs text-gray-600">
-                              {field.label}
-                              {field.required && <span className="text-red-500">*</span>}
-                            </label>
-                            <select
-                              value={googleSheetsConfig.columnMapping[field.key] || ''}
-                              onChange={(e) => {
-                                const newMapping = { ...googleSheetsConfig.columnMapping }
-                                if (e.target.value) {
-                                  newMapping[field.key] = e.target.value
-                                } else {
-                                  delete newMapping[field.key]
-                                }
-                                setGoogleSheetsConfig({ ...googleSheetsConfig, columnMapping: newMapping })
-                              }}
-                              className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
-                            >
-                              <option value="">-- Nicht zugeordnet --</option>
-                              {sheetHeaders.map((header) => (
-                                <option key={header} value={header}>
-                                  {header}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ))}
-                        <p className="mt-2 text-xs text-gray-500">
-                          Ordne die Spalten aus deinem Google Sheet den Datenbankfeldern zu. 
-                          Nicht zugeordnete Felder werden bei der Synchronisation ignoriert.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="sheetsEnabled"
-                    checked={googleSheetsConfig.enabled}
-                    onChange={(e) => setGoogleSheetsConfig({ ...googleSheetsConfig, enabled: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300"
-                  />
-                  <label htmlFor="sheetsEnabled" className="text-sm font-medium text-gray-700">
-                    Automatische Synchronisation aktivieren
-                  </label>
-                </div>
-
-                {syncStatus && (
-                  <div className="rounded-lg bg-gray-50 p-3 text-sm">
-                    <p className="font-medium text-gray-700">Status:</p>
-                    <p className="text-gray-600">
-                      {syncStatus.configured ? '✅ Konfiguriert' : '❌ Nicht konfiguriert'}
-                    </p>
-                    {syncStatus.lastSync && (
-                      <p className="text-gray-600">
-                        Letzte Sync: {new Date(syncStatus.lastSync).toLocaleString('de-DE')}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-                  <p className="font-medium mb-1">📋 Setup-Anleitung:</p>
-                  <ol className="list-decimal list-inside space-y-1 text-xs">
-                    <li>Erstelle ein Google Sheet oder öffne ein bestehendes</li>
-                    <li>Teile das Sheet mit der Service Account E-Mail (siehe .env)</li>
-                    <li>Kopiere die Spreadsheet ID aus der URL</li>
-                    <li>Füge die ID hier ein und klicke auf "Header laden"</li>
-                    <li>Ordne die Spalten deines Sheets den Datenbankfeldern zu</li>
-                    <li>Aktiviere die Synchronisation und speichere</li>
-                  </ol>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSaveGoogleSheetsConfig}
-                    className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                  >
-                    Speichern
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowGoogleSheetsModal(false)
-                      setShowColumnMapping(false)
-                      loadGoogleSheetsConfig() // Reset auf gespeicherte Werte
-                    }}
-                    className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
-                  >
-                    Abbrechen
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ENTFERNT: Google Sheets Konfigurations-Modal - komplett entfernt */}
       </main>
     </div>
   )
