@@ -421,12 +421,30 @@ export default function GuestsPage() {
     const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
     
     // Felder, die nicht aus additionalData in die Spaltenliste aufgenommen werden sollen
-    const ignoredFields = new Set([
-      'Auswahl',
-      'Einladung E-Mail',
-      'Einladung Post',
-      'Nummer',
-    ])
+    // Case-insensitive Prüfung
+    const shouldIgnoreColumn = (key: string): boolean => {
+      const normalized = key.toLowerCase().trim()
+      if (normalized === 'nummer') return true
+      // Prüfe auf exakte Übereinstimmungen
+      if (
+        normalized === 'auswahl' ||
+        normalized === 'einladung e-mail' ||
+        normalized === 'einladung e-mail' ||
+        normalized === 'einladung post' ||
+        normalized === 'einladungspost'
+      ) {
+        return true
+      }
+      // Prüfe auf Teilstrings
+      if (
+        normalized.includes('auswahl') ||
+        (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
+        (normalized.includes('einladung') && normalized.includes('post'))
+      ) {
+        return true
+      }
+      return false
+    }
 
     // Sammle NUR Spalten aus additionalData von ALLEN Gästen (keine Standard-Spalten)
     guests.forEach(guest => {
@@ -438,8 +456,8 @@ export default function GuestsPage() {
             if (key && key.trim()) {
               // Normalisiere den Spaltennamen (trim whitespace)
               const normalizedKey = key.trim()
-              // Ignoriere Felder, die nicht in der Tabelle erscheinen sollen
-              if (!ignoredFields.has(normalizedKey)) {
+              // Ignoriere Felder, die nicht in der Tabelle erscheinen sollen (case-insensitive)
+              if (!shouldIgnoreColumn(normalizedKey)) {
                 columnsSet.add(normalizedKey)
               }
             }

@@ -72,8 +72,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Keine Daten in der Datei gefunden' }, { status: 400 })
     }
 
-    // Header-Liste (1:1) für Frontend/Debug
-    const headers = Object.keys(rows[0] || {}).map(normalizeKey).filter(Boolean)
+    // Header-Liste (1:1) für Frontend/Debug, aber ignoriere bestimmte Felder
+    const shouldIgnoreHeader = (key: string): boolean => {
+      const normalized = key.toLowerCase().trim()
+      return (
+        normalized === 'auswahl' ||
+        normalized === 'einladung e-mail' ||
+        normalized === 'einladung e-mail' ||
+        normalized === 'einladung post' ||
+        normalized === 'einladungspost' ||
+        normalized.includes('auswahl') ||
+        (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
+        (normalized.includes('einladung') && normalized.includes('post'))
+      )
+    }
+    const headers = Object.keys(rows[0] || {})
+      .map(normalizeKey)
+      .filter((h) => h && !shouldIgnoreHeader(h))
 
     // Import: lösche alte Gästeliste (nur für dieses Event) und schreibe neu
     const created = await prisma.$transaction(async (tx) => {
@@ -89,24 +104,40 @@ export async function POST(request: NextRequest) {
         const batch = rows.slice(i, i + batchSize)
         const data = batch.map((row) => {
           // Felder, die beim Import ignoriert werden sollen (nicht in additionalData speichern)
-          const ignoredFields = new Set([
-            'Auswahl',
-            'Einladung E-Mail',
-            'Einladung Post',
-            'auswahl',
-            'einladung e-mail',
-            'einladung post',
-            'Einladung E-Mail',
-            'Einladung Post',
-          ])
+          // Case-insensitive Vergleich mit allen möglichen Varianten
+          const shouldIgnoreField = (key: string): boolean => {
+            const normalized = key.toLowerCase().trim()
+            // Prüfe auf exakte Übereinstimmungen (case-insensitive)
+            if (
+              normalized === 'auswahl' ||
+              normalized === 'einladung e-mail' ||
+              normalized === 'einladung e-mail' ||
+              normalized === 'einladung post' ||
+              normalized === 'einladungspost' ||
+              normalized === 'einladungspost' ||
+              normalized === 'einladung e mail' ||
+              normalized === 'einladungspost'
+            ) {
+              return true
+            }
+            // Prüfe auf Teilstrings (z.B. "Einladung E-Mail" enthält "einladung")
+            if (
+              normalized.includes('auswahl') ||
+              (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
+              (normalized.includes('einladung') && normalized.includes('post'))
+            ) {
+              return true
+            }
+            return false
+          }
 
           // additionalData 1:1 wie Datei, aber ignoriere bestimmte Felder
           const additionalData: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(row)) {
             const key = normalizeKey(k)
             if (!key) continue
-            // Ignoriere Felder, die nicht importiert werden sollen
-            if (ignoredFields.has(key)) continue
+            // Ignoriere Felder, die nicht importiert werden sollen (case-insensitive)
+            if (shouldIgnoreField(key)) continue
             additionalData[key] = v
           }
 
