@@ -17,15 +17,37 @@ const CARD_HEIGHT_POINTS = CARD_HEIGHT_MM * MM_TO_POINTS // ~340.16 Punkte
 
 // Hilfsfunktion: Hole Feldwert aus Guest
 function getFieldValue(guest: any, fieldName: string): string {
+  // Zuerst in additionalData suchen (verschiedene Varianten)
   if (guest.additionalData) {
     try {
       const additional = JSON.parse(guest.additionalData)
-      if (additional.hasOwnProperty(fieldName)) {
-        const value = additional[fieldName]
-        return value !== null && value !== undefined ? String(value) : ''
+      
+      // Suche nach verschiedenen Varianten des Feldnamens
+      const fieldVariants = [
+        fieldName,
+        fieldName.replace('/', ' / '),
+        fieldName.replace(' / ', '/'),
+        fieldName.replace('/', ' /'),
+        fieldName.replace(' /', '/'),
+      ]
+      
+      for (const variant of fieldVariants) {
+        if (additional.hasOwnProperty(variant)) {
+          const value = additional[variant]
+          if (value !== null && value !== undefined && String(value).trim() !== '') {
+            console.log(`✅ Gefunden "${variant}":`, value)
+            return String(value)
+          }
+        }
+      }
+      
+      // Debug: Zeige alle Keys wenn "Staat" oder "Institution" gesucht wird
+      if (fieldName.includes('Staat') || fieldName.includes('Institution')) {
+        console.log('🔍 Suche nach Staat/Institution. Verfügbare Keys:', Object.keys(additional))
+        console.log('🔍 Guest additionalData:', JSON.stringify(additional, null, 2))
       }
     } catch (e) {
-      // Ignoriere Parse-Fehler
+      console.error('Fehler beim Parsen von additionalData:', e)
     }
   }
   
@@ -42,9 +64,14 @@ function getFieldValue(guest: any, fieldName: string): string {
     return guest.tableNumber ? String(guest.tableNumber) : ''
   }
   if (fieldName === 'Staat/Institution' || fieldName === 'Staat / Institution') {
-    return guest.organization || ''
+    const orgValue = guest.organization || ''
+    if (orgValue) {
+      console.log('✅ Gefunden in guest.organization:', orgValue)
+      return orgValue
+    }
   }
   
+  console.log(`⚠️ Feld "${fieldName}" nicht gefunden für Gast:`, guest.name || guest.id)
   return ''
 }
 
@@ -85,7 +112,7 @@ async function drawNamensschild(
   // Koordinaten-Transformation: Vorschau (HTML/CSS) zu PDF
   // Vorschau: top/left in Pixeln (170x240 Portrait oder 240x170 Landscape)
   // PDF: x/y in Punkten (240.95x340.16 Portrait oder 340.16x240.95 Landscape)
-  // HTML: Y von oben, PDF: Y von unten
+  // HTML: Y von oben (top=0 ist oben), PDF: Y von unten (y=0 ist unten)
   const previewWidth = cardOrientation === 'landscape' ? 240 : 170
   const previewHeight = cardOrientation === 'landscape' ? 170 : 240
   const scaleX = width / previewWidth
@@ -95,11 +122,12 @@ async function drawNamensschild(
   const convertX = (previewX: number) => x + (previewX * scaleX)
   const convertY = (previewY: number) => {
     // Y umkehren: HTML top -> PDF y (von unten)
-    // In HTML: top=0 ist oben, in PDF: y=0 ist unten
+    // In HTML: top=0 ist oben, top=previewHeight ist unten
+    // In PDF: y=0 ist unten (y der Karte), y=height ist oben
     // previewY ist der Abstand von oben in der Vorschau
-    // Wir müssen es umkehren: previewHeight - previewY gibt Abstand von unten
-    const previewYFromBottom = previewHeight - previewY
-    return y + (previewYFromBottom * scaleY)
+    // Um zu PDF zu konvertieren: y + height - (previewY * scaleY)
+    // Das gibt den Y-Wert von unten gemessen
+    return y + height - (previewY * scaleY)
   }
 
   // Logo (wenn vorhanden) - verwende Einstellungen aus Vorschau
@@ -108,7 +136,8 @@ async function drawNamensschild(
     const logoHeight = (settings?.logoHeight || 30) * scaleY
     // Logo-Position: top-left corner in Vorschau
     const logoX = convertX(settings?.logoX || 10)
-    // Logo-Y: top position in Vorschau, aber wir brauchen bottom position für PDF
+    // Logo-Y: top position in Vorschau, für PDF brauchen wir bottom-left corner
+    // convertY gibt die Y-Position von unten, also müssen wir die Höhe abziehen
     const logoY = convertY((settings?.logoY || 10) + (settings?.logoHeight || 30)) - logoHeight
     
     try {
@@ -125,9 +154,20 @@ async function drawNamensschild(
 
   // Nur: Staat/Institution, Vorname, Name
   
-  // Staat/Institution
-  const institution = getFieldValue(guest, 'Staat/Institution') || 
-                     getFieldValue(guest, 'Staat / Institution') || ''
+  // Staat/Institution - suche in verschiedenen Varianten
+  let institution = getFieldValue(guest, 'Staat/Institution')
+  if (!institution || institution.trim() === '') {
+    institution = getFieldValue(guest, 'Staat / Institution')
+  }
+  if (!institution || institution.trim() === '') {
+    // Versuche auch andere Varianten
+    institution = getFieldValue(guest, 'Staat/Institution') || 
+                  getFieldValue(guest, 'Staat / Institution') ||
+                  getFieldValue(guest, 'Staat/ Institution') ||
+                  getFieldValue(guest, 'Staat /Institution') || ''
+  }
+  
+  console.log(`📋 Gast: ${guest.name || guest.id}, Institution: "${institution}"`)
 
   // Name
   const vorname = getFieldValue(guest, 'Vorname')
@@ -144,6 +184,8 @@ async function drawNamensschild(
         const instY = convertY(settings?.institutionY || 50)
         const rotation = settings?.institutionRotation || 0
         
+        console.log(`📝 Zeichne Institution: "${sanitizedInst}" bei (${instX}, ${instY}), Größe: ${instSize}, Rotation: ${rotation}`)
+        
         page.drawText(sanitizedInst, {
           x: instX,
           y: instY,
@@ -152,10 +194,14 @@ async function drawNamensschild(
           font: helveticaFont,
           rotate: rotation !== 0 ? degrees(rotation) : undefined,
         })
+      } else {
+        console.log(`⚠️ Institution-Text wurde nach Sanitize leer: "${institution}"`)
       }
     } catch (e) {
       console.error('Fehler beim Zeichnen der Institution:', e)
     }
+  } else {
+    console.log(`⚠️ Keine Institution gefunden für Gast: ${guest.name || guest.id}`)
   }
 
   // Name Text (mit Rotation)
