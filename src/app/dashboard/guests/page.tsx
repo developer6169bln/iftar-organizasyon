@@ -832,9 +832,13 @@ export default function GuestsPage() {
   }
 
   const handleCheckboxChange = async (guestId: string, field: string, checked: boolean) => {
+    console.log('🔘 Checkbox geändert:', { guestId, field, checked })
     try {
       const guest = guests.find(g => g.id === guestId)
-      if (!guest) return
+      if (!guest) {
+        console.error('Gast nicht gefunden:', guestId)
+        return
+      }
 
       if (field === 'vip') {
         const response = await fetch('/api/guests', {
@@ -845,6 +849,11 @@ export default function GuestsPage() {
         if (response.ok) {
           const updated = await response.json()
           setGuests(guests.map(g => g.id === guestId ? updated : g))
+          console.log('✅ VIP gespeichert:', updated)
+        } else {
+          const error = await response.json()
+          console.error('❌ Fehler beim Speichern von VIP:', error)
+          alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
         }
       } else if (field === 'mailListe') {
         // Speichere Mail-Liste in additionalData
@@ -863,6 +872,11 @@ export default function GuestsPage() {
         if (response.ok) {
           const updated = await response.json()
           setGuests(guests.map(g => g.id === guestId ? updated : g))
+          console.log('✅ Mail-Liste gespeichert:', updated)
+        } else {
+          const error = await response.json()
+          console.error('❌ Fehler beim Speichern von Mail-Liste:', error)
+          alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
         }
       } else {
         // Für Invitation-Felder: Speichere in additionalData wenn keine Invitation existiert
@@ -903,6 +917,11 @@ export default function GuestsPage() {
           if (response.ok) {
             const updated = await response.json()
             setGuests(guests.map(g => g.id === guestId ? updated : g))
+            console.log('✅ Invitation-Feld in additionalData gespeichert:', field, updated)
+          } else {
+            const error = await response.json()
+            console.error('❌ Fehler beim Speichern in additionalData:', error)
+            alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
           }
         } else {
           // Invitation existiert - aktualisiere Invitation
@@ -940,12 +959,17 @@ export default function GuestsPage() {
             setInvitations({ ...invitations, [guestId]: updated })
             // Aktualisiere auch den Gast, falls nötig
             setGuests(guests.map(g => g.id === guestId ? { ...g } : g))
+            console.log('✅ Invitation aktualisiert:', field, updated)
+          } else {
+            const error = await response.json()
+            console.error('❌ Fehler beim Aktualisieren der Invitation:', error)
+            alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
           }
         }
       }
     } catch (error) {
-      console.error('Fehler beim Speichern:', error)
-      alert('Fehler beim Speichern')
+      console.error('❌ Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
     }
   }
 
@@ -1883,26 +1907,78 @@ export default function GuestsPage() {
                           
                           if (column === 'VIP') {
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={guest.isVip || false}
-                                  onChange={(e) => handleCheckboxChange(guest.id, 'vip', e.target.checked)}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  onChange={(e) => {
+                                    e.stopPropagation()
+                                    handleCheckboxChange(guest.id, 'vip', e.target.checked)
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                 />
                               </td>
                             )
                           }
                           
                           if (column === 'Einladung E-Mail') {
+                            // Prüfe zuerst Invitation, dann additionalData
                             const invitation = invitations[guest.id]
+                            let checked = false
+                            
+                            if (invitation?.sentAt) {
+                              checked = true
+                            } else if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                checked = additional['Einladung E-Mail'] === true || additional['Einladung E-Mail'] === 'true' || additional['Einladung E-Mail'] === 1
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => {
+                                  // Verhindere, dass der Klick auf die Zelle die Checkbox beeinflusst
+                                  e.stopPropagation()
+                                }}
+                              >
                                 <input
                                   type="checkbox"
-                                  checked={!!invitation?.sentAt}
-                                  disabled
-                                  className="rounded border-gray-300 text-gray-400"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    e.stopPropagation()
+                                    // Speichere in additionalData
+                                    const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+                                    additional['Einladung E-Mail'] = e.target.checked
+                                    if (e.target.checked) {
+                                      additional['Einladung E-Mail Datum'] = new Date().toISOString()
+                                    }
+                                    
+                                    fetch('/api/guests', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        id: guest.id,
+                                        additionalData: JSON.stringify(additional)
+                                      }),
+                                    }).then(res => res.json()).then(updated => {
+                                      setGuests(guests.map(g => g.id === guest.id ? updated : g))
+                                    }).catch(err => {
+                                      console.error('Fehler beim Speichern:', err)
+                                      alert('Fehler beim Speichern')
+                                    })
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                   title={invitation?.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
                                 />
                               </td>
@@ -1910,54 +1986,108 @@ export default function GuestsPage() {
                           }
                           
                           if (column === 'Einladung Post') {
+                            // Prüfe zuerst Invitation, dann additionalData
                             const invitation = invitations[guest.id]
+                            let checked = false
+                            
+                            if (invitation?.sentByPost) {
+                              checked = true
+                            } else if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                checked = additional['Einladung Post'] === true || additional['Einladung Post'] === 'true' || additional['Einladung Post'] === 1
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
-                                  checked={invitation?.sentByPost || false}
-                                  onChange={(e) => handleCheckboxChange(guest.id, 'sentByPost', e.target.checked)}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    e.stopPropagation()
+                                    handleCheckboxChange(guest.id, 'sentByPost', e.target.checked)
+                                  }}
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                 />
                               </td>
                             )
                           }
                           
                           if (column === 'Nimmt Teil') {
+                            // Prüfe zuerst Invitation, dann additionalData
                             const invitation = invitations[guest.id]
+                            let checked = false
+                            
+                            if (invitation?.response === 'ACCEPTED') {
+                              checked = true
+                            } else if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                checked = additional['Nimmt Teil'] === true || additional['Nimmt Teil'] === 'true' || additional['Nimmt Teil'] === 1
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
-                                  checked={invitation?.response === 'ACCEPTED'}
+                                  checked={checked}
                                   onChange={(e) => {
-                                    if (e.target.checked) {
-                                      handleCheckboxChange(guest.id, 'nimmtTeil', true)
-                                    } else {
-                                      handleCheckboxChange(guest.id, 'nimmtTeil', false)
-                                    }
+                                    e.stopPropagation()
+                                    handleCheckboxChange(guest.id, 'nimmtTeil', e.target.checked)
                                   }}
-                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                                  className="rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                 />
                               </td>
                             )
                           }
                           
                           if (column === 'Abgesagt') {
+                            // Prüfe zuerst Invitation, dann additionalData
                             const invitation = invitations[guest.id]
+                            let checked = false
+                            
+                            if (invitation?.response === 'DECLINED') {
+                              checked = true
+                            } else if (guest?.additionalData) {
+                              try {
+                                const additional = JSON.parse(guest.additionalData)
+                                checked = additional['Abgesagt'] === true || additional['Abgesagt'] === 'true' || additional['Abgesagt'] === 1
+                              } catch (e) {
+                                // Ignoriere Parse-Fehler
+                              }
+                            }
+                            
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
-                                  checked={invitation?.response === 'DECLINED'}
+                                  checked={checked}
                                   onChange={(e) => {
-                                    if (e.target.checked) {
-                                      handleCheckboxChange(guest.id, 'abgesagt', true)
-                                    } else {
-                                      handleCheckboxChange(guest.id, 'abgesagt', false)
-                                    }
+                                    e.stopPropagation()
+                                    handleCheckboxChange(guest.id, 'abgesagt', e.target.checked)
                                   }}
-                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                  className="rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                 />
                               </td>
                             )
@@ -1976,30 +2106,20 @@ export default function GuestsPage() {
                             }
                             
                             return (
-                              <td key={column} className="px-4 py-3 text-center">
+                              <td 
+                                key={column} 
+                                className="px-4 py-3 text-center"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <input
                                   type="checkbox"
                                   checked={mailListeValue}
                                   onChange={(e) => {
-                                    // Speichere in additionalData
-                                    const additional = guest.additionalData ? JSON.parse(guest.additionalData) : {}
-                                    additional['Mail-Liste'] = e.target.checked
-                                    
-                                    fetch('/api/guests', {
-                                      method: 'PATCH',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        id: guest.id,
-                                        additionalData: JSON.stringify(additional)
-                                      }),
-                                    }).then(res => res.json()).then(updated => {
-                                      setGuests(guests.map(g => g.id === guest.id ? updated : g))
-                                    }).catch(err => {
-                                      console.error('Fehler beim Speichern:', err)
-                                      alert('Fehler beim Speichern')
-                                    })
+                                    e.stopPropagation()
+                                    handleCheckboxChange(guest.id, 'mailListe', e.target.checked)
                                   }}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                  style={{ pointerEvents: 'auto' }}
                                 />
                               </td>
                             )
@@ -2053,6 +2173,12 @@ export default function GuestsPage() {
                           }
                           
                           // Standard-Spalten und zusätzliche Spalten aus additionalData - alle editierbar
+                          // Überspringe Checkbox-Spalten (werden bereits oben behandelt)
+                          const isCheckboxColumn = ['Auswahl', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'].includes(column)
+                          if (isCheckboxColumn) {
+                            return null // Sollte nicht hier ankommen, aber als Sicherheit
+                          }
+                          
                           const value = getColumnValue(guest, column)
                           const isEditing = editingCell?.guestId === guest.id && editingCell?.column === column
                           
