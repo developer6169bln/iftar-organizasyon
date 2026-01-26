@@ -13,6 +13,7 @@ export default function VIPNamensschilderPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [namensschildCount, setNamensschildCount] = useState<number>(4) // Standard: 4 pro A4
   const [generatingPDF, setGeneratingPDF] = useState(false)
+  const [cardOrientation, setCardOrientation] = useState<'portrait' | 'landscape'>('portrait') // Hochformat (85x120) oder Querformat (120x85)
   const [showPreview, setShowPreview] = useState(false)
   const [previewSettings, setPreviewSettings] = useState({
     logoX: 10,
@@ -58,12 +59,15 @@ export default function VIPNamensschilderPage() {
         const deltaY = e.clientY - dragStart.y
         
         setPreviewSettings(prev => {
+          const previewWidth = cardOrientation === 'landscape' ? 240 : 170
+          const previewHeight = cardOrientation === 'landscape' ? 170 : 240
+          
           if (draggingElement === 'logo') {
-            return { ...prev, logoX: Math.max(0, Math.min(prev.logoX + deltaX, 200 - prev.logoWidth)), logoY: Math.max(0, Math.min(prev.logoY - deltaY, 100 - prev.logoHeight)) }
+            return { ...prev, logoX: Math.max(0, Math.min(prev.logoX + deltaX, previewWidth - prev.logoWidth)), logoY: Math.max(0, Math.min(prev.logoY - deltaY, previewHeight - prev.logoHeight)) }
           } else if (draggingElement === 'institution') {
-            return { ...prev, institutionX: Math.max(0, Math.min(prev.institutionX + deltaX, 200)), institutionY: Math.max(0, Math.min(prev.institutionY - deltaY, 100)) }
+            return { ...prev, institutionX: Math.max(0, Math.min(prev.institutionX + deltaX, previewWidth)), institutionY: Math.max(0, Math.min(prev.institutionY - deltaY, previewHeight)) }
           } else if (draggingElement === 'name') {
-            return { ...prev, nameX: Math.max(0, Math.min(prev.nameX + deltaX, 200)), nameY: Math.max(0, Math.min(prev.nameY - deltaY, 100)) }
+            return { ...prev, nameX: Math.max(0, Math.min(prev.nameX + deltaX, previewWidth)), nameY: Math.max(0, Math.min(prev.nameY - deltaY, previewHeight)) }
           }
           return prev
         })
@@ -193,6 +197,7 @@ export default function VIPNamensschilderPage() {
       formData.append('guests', JSON.stringify(guestsToGenerate))
       formData.append('count', String(namensschildCount))
       formData.append('settings', JSON.stringify(previewSettings))
+      formData.append('orientation', cardOrientation)
       if (logoFile) {
         formData.append('logo', logoFile)
       }
@@ -281,7 +286,7 @@ export default function VIPNamensschilderPage() {
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold">Namensschilder-Einstellungen</h2>
           
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
                 Anzahl Namensschilder pro A4-Seite *
@@ -297,7 +302,23 @@ export default function VIPNamensschilderPage() {
                 <option value={8}>8 Namensschilder</option>
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                Die Namensschilder werden gleichmäßig auf der A4-Seite verteilt und in der Mitte klappbar erstellt.
+                Die Namensschilder werden gleichmäßig auf der A4-Seite verteilt.
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Karten-Ausrichtung *
+              </label>
+              <select
+                value={cardOrientation}
+                onChange={(e) => setCardOrientation(e.target.value as 'portrait' | 'landscape')}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              >
+                <option value="portrait">Hochformat (85mm x 120mm)</option>
+                <option value="landscape">Querformat (120mm x 85mm)</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Karten-Größe: 85mm x 120mm (Breite x Länge)
               </p>
             </div>
 
@@ -372,9 +393,10 @@ export default function VIPNamensschilderPage() {
               <div 
                 className="relative mx-auto bg-white shadow-lg"
                 style={{ 
-                  width: '200px', 
-                  height: '100px',
-                  border: '1px solid #ccc'
+                  width: cardOrientation === 'landscape' ? '240px' : '170px', 
+                  height: cardOrientation === 'landscape' ? '170px' : '240px',
+                  border: '1px solid #ccc',
+                  aspectRatio: cardOrientation === 'landscape' ? '120/85' : '85/120'
                 }}
               >
                 {/* Logo */}

@@ -8,6 +8,13 @@ export const maxDuration = 60
 const A4_WIDTH = 595.28
 const A4_HEIGHT = 841.89
 
+// Karten-Dimensionen in mm, dann in Punkte umrechnen (1mm = 2.83465 Punkte)
+const CARD_WIDTH_MM = 85  // Breite
+const CARD_HEIGHT_MM = 120 // Länge
+const MM_TO_POINTS = 2.83465
+const CARD_WIDTH_POINTS = CARD_WIDTH_MM * MM_TO_POINTS  // ~240.95 Punkte
+const CARD_HEIGHT_POINTS = CARD_HEIGHT_MM * MM_TO_POINTS // ~340.16 Punkte
+
 // Hilfsfunktion: Hole Feldwert aus Guest
 function getFieldValue(guest: any, fieldName: string): string {
   if (guest.additionalData) {
@@ -54,10 +61,7 @@ async function drawNamensschild(
   helveticaBoldFont: any,
   settings: any
 ) {
-  // Berechne die Mitte des Namensschilds für die Faltlinie
-  const foldLineX = x + width / 2
-  
-  // Hintergrund-Rahmen
+  // Hintergrund-Rahmen (keine Faltlinie mehr)
   page.drawRectangle({
     x,
     y,
@@ -67,16 +71,6 @@ async function drawNamensschild(
     borderWidth: 1,
     color: rgb(1, 1, 1), // Weiß
   })
-
-  // Faltlinie in der Mitte (gestrichelt)
-  for (let i = 0; i < height; i += 10) {
-    page.drawLine({
-      start: { x: foldLineX, y: y + i },
-      end: { x: foldLineX, y: Math.min(y + i + 5, y + height) },
-      color: rgb(0.7, 0.7, 0.7),
-      thickness: 0.5,
-    })
-  }
 
   // Logo (wenn vorhanden) - verwende Einstellungen aus Vorschau
   if (logoImage) {
@@ -174,7 +168,10 @@ export async function POST(request: NextRequest) {
     const guestsJson = formData.get('guests') as string
     const countStr = formData.get('count') as string
     const settingsJson = formData.get('settings') as string
+    const orientationStr = formData.get('orientation') as string
     const logoFile = formData.get('logo') as File | null
+
+    const cardOrientation = (orientationStr === 'landscape' ? 'landscape' : 'portrait') as 'portrait' | 'landscape'
 
     if (!guestsJson) {
       console.error('❌ Keine Gäste-Daten gefunden')
@@ -246,30 +243,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Karten-Dimensionen basierend auf Ausrichtung
+    const cardWidth = cardOrientation === 'landscape' ? CARD_HEIGHT_POINTS : CARD_WIDTH_POINTS  // 120mm oder 85mm
+    const cardHeight = cardOrientation === 'landscape' ? CARD_WIDTH_POINTS : CARD_HEIGHT_POINTS  // 85mm oder 120mm
+
     // Berechne Layout basierend auf Anzahl - IMMER Portrait (Längsformat)
     // A4 Portrait: 595.28 x 841.89 Punkte (Breite x Höhe)
+    // Berechne wie viele Karten auf eine A4-Seite passen
+    const margin = 20
+    const spacing = 10
+    
+    // Berechne maximale Anzahl Spalten und Zeilen
+    const maxCols = Math.floor((A4_WIDTH - margin * 2 + spacing) / (cardWidth + spacing))
+    const maxRows = Math.floor((A4_HEIGHT - margin * 2 + spacing) / (cardHeight + spacing))
+    
+    // Bestimme optimale Verteilung
     let cols = 1
     let rows = namensschildCount
 
     if (namensschildCount === 2) {
-      cols = 1
-      rows = 2
+      cols = Math.min(2, maxCols)
+      rows = Math.ceil(namensschildCount / cols)
     } else if (namensschildCount === 4) {
-      cols = 2
-      rows = 2
+      cols = Math.min(2, maxCols)
+      rows = Math.ceil(namensschildCount / cols)
     } else if (namensschildCount === 6) {
-      cols = 2
-      rows = 3
+      cols = Math.min(2, maxCols)
+      rows = Math.ceil(namensschildCount / cols)
     } else if (namensschildCount === 8) {
-      cols = 2
-      rows = 4
+      cols = Math.min(2, maxCols)
+      rows = Math.ceil(namensschildCount / cols)
     }
 
-    const margin = 20
-    const spacing = 10
-    // Portrait: Breite (595.28) ist kleiner als Höhe (841.89)
-    const namensschildWidth = (A4_WIDTH - margin * 2 - spacing * (cols - 1)) / cols
-    const namensschildHeight = (A4_HEIGHT - margin * 2 - spacing * (rows - 1)) / rows
+    // Verwende feste Karten-Größe
+    const namensschildWidth = cardWidth
+    const namensschildHeight = cardHeight
 
     // Generiere Namensschilder
     console.log('📄 Generiere Namensschilder...')
@@ -282,11 +290,16 @@ export async function POST(request: NextRequest) {
       const page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT])
       console.log(`📄 Erstelle Seite ${currentPage + 1} im Portrait-Format (${A4_WIDTH}x${A4_HEIGHT})...`)
       
-      // Platziere Namensschilder auf der Seite
+      // Platziere Namensschilder auf der Seite (zentriert)
+      const totalWidth = cols * namensschildWidth + (cols - 1) * spacing
+      const totalHeight = rows * namensschildHeight + (rows - 1) * spacing
+      const startX = (A4_WIDTH - totalWidth) / 2
+      const startY = A4_HEIGHT - margin - totalHeight
+      
       for (let row = 0; row < rows && guestIndex < guests.length; row++) {
         for (let col = 0; col < cols && guestIndex < guests.length; col++) {
-          const x = margin + col * (namensschildWidth + spacing)
-          const y = A4_HEIGHT - margin - (row + 1) * namensschildHeight + row * spacing
+          const x = startX + col * (namensschildWidth + spacing)
+          const y = startY + row * (namensschildHeight + spacing)
 
           try {
           await drawNamensschild(
