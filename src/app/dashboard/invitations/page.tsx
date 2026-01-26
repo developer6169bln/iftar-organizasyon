@@ -144,12 +144,21 @@ export default function InvitationsPage() {
       // Lade Events (für eventId)
       const eventsRes = await fetch('/api/events')
       if (eventsRes.ok) {
-        const events = await eventsRes.json()
-        if (events.length > 0) {
-          setEventId(events[0].id)
+        const eventData = await eventsRes.json()
+        
+        // API gibt entweder ein einzelnes Event oder ein Array zurück
+        let event = null
+        if (Array.isArray(eventData)) {
+          event = eventData.length > 0 ? eventData[0] : null
+        } else {
+          event = eventData
+        }
+        
+        if (event && event.id) {
+          setEventId(event.id)
           await Promise.all([
-            loadGuests(events[0].id),
-            loadInvitations(events[0].id),
+            loadGuests(event.id),
+            loadInvitations(event.id),
             loadTemplates(),
             loadEmailConfigs(),
           ])
@@ -684,18 +693,23 @@ export default function InvitationsPage() {
         if (!eventsRes.ok) {
           throw new Error('Fehler beim Laden der Events')
         }
-        const events = await eventsRes.json()
-        if (!events || events.length === 0) {
-          alert('Kein Event gefunden. Bitte erstellen Sie zuerst ein Event.')
-          return
-        }
-        currentEventId = events[0]?.id
-        setEventId(currentEventId)
+        const eventData = await eventsRes.json()
         
-        if (!currentEventId) {
+        // API gibt entweder ein einzelnes Event oder ein Array zurück
+        let event = null
+        if (Array.isArray(eventData)) {
+          event = eventData.length > 0 ? eventData[0] : null
+        } else {
+          event = eventData
+        }
+        
+        if (!event || !event.id) {
           alert('Kein Event gefunden. Bitte erstellen Sie zuerst ein Event.')
           return
         }
+        
+        currentEventId = event.id
+        setEventId(currentEventId)
       } catch (error) {
         console.error('Fehler beim Laden der Events:', error)
         alert('Fehler beim Laden der Events. Bitte versuchen Sie es erneut.')
