@@ -165,6 +165,22 @@ export async function POST(request: NextRequest) {
           },
         })
 
+        // Aktualisiere Gast: Setze "Einladung geschickt" in additionalData
+        try {
+          const guestAdditionalData = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+          guestAdditionalData['Einladung geschickt'] = true
+          guestAdditionalData['Einladung geschickt Datum'] = new Date().toISOString()
+          
+          await prisma.guest.update({
+            where: { id: guest.id },
+            data: {
+              additionalData: JSON.stringify(guestAdditionalData),
+            },
+          })
+        } catch (e) {
+          console.error('Fehler beim Aktualisieren von additionalData für Gast:', guest.id, e)
+        }
+
         results.push({
           guestId: guest.id,
           guestName: guest.name,

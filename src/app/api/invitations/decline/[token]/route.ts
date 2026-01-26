@@ -39,13 +39,37 @@ export async function GET(
       },
     })
 
-    // Aktualisiere Gast-Status
-    await prisma.guest.update({
+    // Aktualisiere Gast-Status und additionalData
+    const guest = await prisma.guest.findUnique({
       where: { id: invitation.guestId },
-      data: {
-        status: 'DECLINED',
-      },
     })
+
+    if (guest) {
+      try {
+        const additionalData = guest.additionalData ? JSON.parse(guest.additionalData) : {}
+        additionalData['Absage'] = true
+        additionalData['Absage Datum'] = new Date().toISOString()
+        // Setze "Zusage" auf false, wenn Absage aktiviert wird
+        additionalData['Zusage'] = false
+
+        await prisma.guest.update({
+          where: { id: invitation.guestId },
+          data: {
+            status: 'CANCELLED',
+            additionalData: JSON.stringify(additionalData),
+          },
+        })
+      } catch (e) {
+        console.error('Fehler beim Aktualisieren von additionalData:', e)
+        // Fallback: Nur Status aktualisieren
+        await prisma.guest.update({
+          where: { id: invitation.guestId },
+          data: {
+            status: 'CANCELLED',
+          },
+        })
+      }
+    }
 
     // Weiterleitung zur Bestätigungsseite
     return NextResponse.redirect(
