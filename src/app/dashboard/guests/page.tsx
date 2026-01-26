@@ -420,17 +420,28 @@ export default function GuestsPage() {
     // Füge nur Checkbox-Spalten und "Nummer" hinzu
     const columnsSet = new Set<string>(['Auswahl', 'Nummer', 'VIP', 'Einladung E-Mail', 'Einladung Post', 'Nimmt Teil', 'Abgesagt', 'Mail-Liste'])
     
+    // Felder, die nicht aus additionalData in die Spaltenliste aufgenommen werden sollen
+    const ignoredFields = new Set([
+      'Auswahl',
+      'Einladung E-Mail',
+      'Einladung Post',
+      'Nummer',
+    ])
+
     // Sammle NUR Spalten aus additionalData von ALLEN Gästen (keine Standard-Spalten)
     guests.forEach(guest => {
       if (guest?.additionalData) {
         try {
           const additional = JSON.parse(guest.additionalData)
-          // Füge ALLE Spalten aus additionalData hinzu (direkter Import)
+          // Füge ALLE Spalten aus additionalData hinzu (direkter Import), aber ignoriere bestimmte Felder
           Object.keys(additional).forEach(key => {
-            if (key && key.trim() && key !== 'Nummer') {
+            if (key && key.trim()) {
               // Normalisiere den Spaltennamen (trim whitespace)
               const normalizedKey = key.trim()
-              columnsSet.add(normalizedKey)
+              // Ignoriere Felder, die nicht in der Tabelle erscheinen sollen
+              if (!ignoredFields.has(normalizedKey)) {
+                columnsSet.add(normalizedKey)
+              }
             }
           })
         } catch (e) {

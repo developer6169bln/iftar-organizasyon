@@ -88,11 +88,25 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < rows.length; i += batchSize) {
         const batch = rows.slice(i, i + batchSize)
         const data = batch.map((row) => {
-          // additionalData 1:1 wie Datei
+          // Felder, die beim Import ignoriert werden sollen (nicht in additionalData speichern)
+          const ignoredFields = new Set([
+            'Auswahl',
+            'Einladung E-Mail',
+            'Einladung Post',
+            'auswahl',
+            'einladung e-mail',
+            'einladung post',
+            'Einladung E-Mail',
+            'Einladung Post',
+          ])
+
+          // additionalData 1:1 wie Datei, aber ignoriere bestimmte Felder
           const additionalData: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(row)) {
             const key = normalizeKey(k)
             if (!key) continue
+            // Ignoriere Felder, die nicht importiert werden sollen
+            if (ignoredFields.has(key)) continue
             additionalData[key] = v
           }
 
