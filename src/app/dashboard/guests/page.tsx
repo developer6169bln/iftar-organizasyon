@@ -149,7 +149,7 @@ export default function GuestsPage() {
     
     return ''
   }
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<Record<string, any>>({
     name: '',
     email: '',
     phone: '',
@@ -921,41 +921,96 @@ export default function GuestsPage() {
         return
       }
       const event = await eventResponse.json()
+      
+      // Handle both single event object and array
+      let eventObj = null
+      if (Array.isArray(event)) {
+        eventObj = event.length > 0 ? event[0] : null
+      } else {
+        eventObj = event
+      }
+
+      // Sammle alle Felder aus formData für additionalData
+      const additionalData: Record<string, any> = {}
+      const standardFields: Record<string, any> = {
+        eventId: eventObj.id,
+        name: formData.name || formData['Name'] || '',
+        email: formData.email || formData['E-Mail'] || formData['E-Mail-Adresse'] || undefined,
+        phone: formData.phone || formData['Telefon'] || formData['Phone'] || undefined,
+        title: formData.title || formData['Ünvan'] || formData['Funktion'] || undefined,
+        organization: formData.organization || formData['Kurum'] || formData['Partei / Organisation / Unternehmen'] || undefined,
+        tableNumber: formData.tableNumber ? parseInt(formData.tableNumber) : undefined,
+        isVip: formData.isVip || formData['VIP'] === true || formData['VIP'] === 'true',
+        needsSpecialReception: formData.needsSpecialReception || formData['VIP Begleitung benötigt?'] === true || formData['VIP Begleitung benötigt?'] === 'true',
+        receptionBy: formData.receptionBy || formData['VIP Begleiter (Name)'] || undefined,
+        arrivalDate: formData.arrivalDate || formData['VIP Anreise (Uhrzeit)'] || undefined,
+        notes: formData.notes || formData['Notiz'] || formData['Notizen'] || undefined,
+      }
+
+      // Alle anderen Felder in additionalData speichern
+      allColumns
+        .filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+        .forEach(col => {
+          // Überspringe Standard-Felder, die bereits in standardFields sind
+          if (['Name', 'name', 'E-Mail', 'E-Mail-Adresse', 'Telefon', 'Phone', 'Ünvan', 'Funktion', 'Kurum', 'Partei / Organisation / Unternehmen', 'VIP', 'VIP Begleitung benötigt?', 'VIP Begleiter (Name)', 'VIP Anreise (Uhrzeit)', 'Notiz', 'Notizen'].includes(col)) {
+            return
+          }
+          
+          const value = formData[col]
+          if (value !== undefined && value !== null && value !== '') {
+            // Konvertiere Boolean-Werte
+            if (isBooleanValue(value)) {
+              additionalData[col] = toBoolean(value)
+            } else {
+              additionalData[col] = value
+            }
+          }
+        })
+
+      // Füge auch Standard-Felder hinzu, die in additionalData gespeichert werden sollen
+      if (formData['Status']) additionalData['Status'] = formData['Status']
+      if (formData['Tischnummer']) additionalData['Tischnummer'] = formData['Tischnummer']
+      if (formData['Kategorie']) additionalData['Kategorie'] = formData['Kategorie']
+      if (formData['Ebende']) additionalData['Ebende'] = formData['Ebende']
+      if (formData['Einladungspriorität']) additionalData['Einladungspriorität'] = formData['Einladungspriorität']
+      if (formData['Wahrscheinlichkeit']) additionalData['Wahrscheinlichkeit'] = formData['Wahrscheinlichkeit']
 
       const response = await fetch('/api/guests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          eventId: event.id,
-          name: formData.name,
-          email: formData.email || undefined,
-          phone: formData.phone || undefined,
-          title: formData.title || undefined,
-          organization: formData.organization || undefined,
-          tableNumber: formData.tableNumber ? parseInt(formData.tableNumber) : undefined,
-          isVip: formData.isVip,
-          needsSpecialReception: formData.needsSpecialReception,
-          receptionBy: formData.receptionBy || undefined,
-          arrivalDate: formData.arrivalDate || undefined,
-          notes: formData.notes || undefined,
+          ...standardFields,
+          additionalData: Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : undefined,
         }),
       })
 
       if (response.ok) {
         setShowAddForm(false)
-        setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          title: '',
-          organization: '',
-          tableNumber: '',
-          isVip: false,
-          needsSpecialReception: false,
-          receptionBy: '',
-          arrivalDate: '',
-          notes: '',
+        // Reset formData - behalte Struktur, aber setze alle Werte zurück
+        const resetData: Record<string, any> = {}
+        allColumns.forEach(col => {
+          if (col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID') {
+            // Prüfe ob es eine Boolean-Spalte ist
+            const isBooleanCol = guests.some(g => {
+              const value = getColumnValue(g, col, 0)
+              return isBooleanValue(value)
+            })
+            resetData[col] = isBooleanCol ? false : ''
+          }
         })
+        // Setze Standard-Felder
+        resetData.name = ''
+        resetData.email = ''
+        resetData.phone = ''
+        resetData.title = ''
+        resetData.organization = ''
+        resetData.tableNumber = ''
+        resetData.isVip = false
+        resetData.needsSpecialReception = false
+        resetData.receptionBy = ''
+        resetData.arrivalDate = ''
+        resetData.notes = ''
+        setFormData(resetData)
         await loadGuests()
         
       } else {
@@ -1423,120 +1478,93 @@ export default function GuestsPage() {
           <div className="mb-8 rounded-xl bg-white p-6 shadow-md">
             <h2 className="mb-4 text-xl font-semibold">Yeni Misafir Ekle</h2>
             <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">İsim *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">E-posta</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Telefon</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Ünvan</label>
-                <input
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Kurum</label>
-                <input
-                  type="text"
-                  value={formData.organization}
-                  onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Masa Numarası</label>
-                <input
-                  type="number"
-                  value={formData.tableNumber}
-                  onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.isVip}
-                    onChange={(e) => setFormData({ ...formData, isVip: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">VIP Misafir</span>
-                </label>
-              </div>
-              <div className="md:col-span-2 border-t border-gray-200 pt-4">
-                <h3 className="mb-3 text-sm font-semibold text-gray-700">Empfang & Anreise</h3>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.needsSpecialReception}
-                        onChange={(e) => setFormData({ ...formData, needsSpecialReception: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Besonderer Empfang erforderlich</span>
-                    </label>
-                  </div>
-                  {formData.needsSpecialReception && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Empfangen von</label>
+              {/* Dynamische Felder basierend auf allColumns */}
+              {allColumns
+                .filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+                .map((column) => {
+                  // Prüfe ob es eine Boolean-Spalte ist
+                  const isBooleanCol = guests.length > 0 && guests.some(g => {
+                    const value = getColumnValue(g, column, 0)
+                    return isBooleanValue(value)
+                  })
+                  
+                  // Standard-Feld-Mappings (für direkte DB-Felder)
+                  if (column === 'Name' || column === 'name') {
+                    return (
+                      <div key={column}>
+                        <label className="block text-sm font-medium text-gray-700">
+                          {column} *
+                        </label>
                         <input
                           type="text"
-                          value={formData.receptionBy}
-                          onChange={(e) => setFormData({ ...formData, receptionBy: e.target.value })}
-                          placeholder="Name der Person, die empfängt"
+                          required
+                          value={formData[column] || formData.name || ''}
+                          onChange={(e) => setFormData({ ...formData, [column]: e.target.value, name: e.target.value })}
                           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Anreisedatum & Uhrzeit</label>
+                    )
+                  }
+                  
+                  if (column === 'E-Mail' || column === 'E-Mail-Adresse') {
+                    return (
+                      <div key={column}>
+                        <label className="block text-sm font-medium text-gray-700">{column}</label>
                         <input
-                          type="datetime-local"
-                          value={formData.arrivalDate}
-                          onChange={(e) => setFormData({ ...formData, arrivalDate: e.target.value })}
+                          type="email"
+                          value={formData[column] || formData.email || ''}
+                          onChange={(e) => setFormData({ ...formData, [column]: e.target.value, email: e.target.value })}
                           className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
                         />
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Notlar</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
-                />
-              </div>
+                    )
+                  }
+                  
+                  if (column === 'Telefon' || column === 'Phone') {
+                    return (
+                      <div key={column}>
+                        <label className="block text-sm font-medium text-gray-700">{column}</label>
+                        <input
+                          type="tel"
+                          value={formData[column] || formData.phone || ''}
+                          onChange={(e) => setFormData({ ...formData, [column]: e.target.value, phone: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                        />
+                      </div>
+                    )
+                  }
+                  
+                  // Boolean-Spalten als Checkboxen
+                  if (isBooleanCol) {
+                    return (
+                      <div key={column} className="md:col-span-2">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={formData[column] === true || formData[column] === 'true'}
+                            onChange={(e) => setFormData({ ...formData, [column]: e.target.checked })}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">{column}</span>
+                        </label>
+                      </div>
+                    )
+                  }
+                  
+                  // Alle anderen Spalten als Text-Input
+                  return (
+                    <div key={column}>
+                      <label className="block text-sm font-medium text-gray-700">{column}</label>
+                      <input
+                        type="text"
+                        value={formData[column] || ''}
+                        onChange={(e) => setFormData({ ...formData, [column]: e.target.value })}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2"
+                      />
+                    </div>
+                  )
+                })}
+              
               <div className="md:col-span-2 flex gap-2">
                 <button
                   type="submit"
