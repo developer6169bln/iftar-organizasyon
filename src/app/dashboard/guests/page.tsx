@@ -1873,16 +1873,25 @@ export default function GuestsPage() {
                                     // Spezielle Behandlung für "Einladungsliste"
                                     if (column === 'Einladungsliste' || column.toLowerCase().includes('einladungsliste')) {
                                       try {
-                                        // Lade eventId
-                                        const eventsRes = await fetch('/api/events')
-                                        if (!eventsRes.ok) {
-                                          throw new Error('Fehler beim Laden der Events')
+                                        // Verwende eventId aus State, oder lade es
+                                        let currentEventId = eventId
+                                        
+                                        if (!currentEventId) {
+                                          // Lade eventId falls nicht vorhanden
+                                          const eventsRes = await fetch('/api/events')
+                                          if (!eventsRes.ok) {
+                                            throw new Error('Fehler beim Laden der Events')
+                                          }
+                                          const events = await eventsRes.json()
+                                          if (!events || events.length === 0) {
+                                            throw new Error('Kein Event gefunden')
+                                          }
+                                          currentEventId = events[0]?.id
+                                          
+                                          if (!currentEventId) {
+                                            throw new Error('Event-ID nicht gefunden')
+                                          }
                                         }
-                                        const events = await eventsRes.ok ? await eventsRes.json() : []
-                                        if (events.length === 0) {
-                                          throw new Error('Kein Event gefunden')
-                                        }
-                                        const currentEventId = events[0].id
                                         
                                         if (newValue) {
                                           // Erstelle Einladung (ohne E-Mail zu senden)
@@ -1900,7 +1909,7 @@ export default function GuestsPage() {
                                             setInvitations(prev => ({ ...prev, [guest.id]: newInvitation }))
                                             console.log('✅ Einladung erstellt:', newInvitation)
                                           } else {
-                                            const errorData = await createInvitationRes.json()
+                                            const errorData = await createInvitationRes.json().catch(() => ({ error: 'Unbekannter Fehler' }))
                                             throw new Error(errorData.error || 'Fehler beim Erstellen der Einladung')
                                           }
                                         } else {
