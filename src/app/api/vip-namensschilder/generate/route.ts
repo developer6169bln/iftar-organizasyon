@@ -80,16 +80,17 @@ async function drawNamensschild(
 
   // Logo (wenn vorhanden) - verwende Einstellungen aus Vorschau
   if (logoImage) {
-    const logoSize = settings?.logoSize || 30
+    const logoWidth = settings?.logoWidth || 30
+    const logoHeight = settings?.logoHeight || 30
     const logoX = x + (settings?.logoX || 10)
-    const logoY = y + height - (settings?.logoY || 10) - logoSize
+    const logoY = y + height - (settings?.logoY || 10) - logoHeight
     
     try {
       page.drawImage(logoImage, {
         x: logoX,
         y: logoY,
-        width: logoSize,
-        height: logoSize,
+        width: logoWidth,
+        height: logoHeight,
       })
     } catch (e) {
       console.error('Fehler beim Zeichnen des Logos:', e)
@@ -245,7 +246,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Berechne Layout basierend auf Anzahl
+    // Berechne Layout basierend auf Anzahl - IMMER Portrait (Längsformat)
+    // A4 Portrait: 595.28 x 841.89 Punkte (Breite x Höhe)
     let cols = 1
     let rows = namensschildCount
 
@@ -265,6 +267,7 @@ export async function POST(request: NextRequest) {
 
     const margin = 20
     const spacing = 10
+    // Portrait: Breite (595.28) ist kleiner als Höhe (841.89)
     const namensschildWidth = (A4_WIDTH - margin * 2 - spacing * (cols - 1)) / cols
     const namensschildHeight = (A4_HEIGHT - margin * 2 - spacing * (rows - 1)) / rows
 
@@ -274,9 +277,10 @@ export async function POST(request: NextRequest) {
     let currentPage = 0
 
     while (guestIndex < guests.length) {
-      // Neue Seite für jede Gruppe
+      // Neue Seite für jede Gruppe - IMMER Portrait (Längsformat)
+      // A4 Portrait: Breite x Höhe = 595.28 x 841.89 Punkte
       const page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT])
-      console.log(`📄 Erstelle Seite ${currentPage + 1}...`)
+      console.log(`📄 Erstelle Seite ${currentPage + 1} im Portrait-Format (${A4_WIDTH}x${A4_HEIGHT})...`)
       
       // Platziere Namensschilder auf der Seite
       for (let row = 0; row < rows && guestIndex < guests.length; row++) {

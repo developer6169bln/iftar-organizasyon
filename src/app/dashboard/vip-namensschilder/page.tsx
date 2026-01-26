@@ -17,7 +17,8 @@ export default function VIPNamensschilderPage() {
   const [previewSettings, setPreviewSettings] = useState({
     logoX: 10,
     logoY: 10,
-    logoSize: 30,
+    logoWidth: 30,
+    logoHeight: 30,
     institutionX: 50,
     institutionY: 50,
     institutionSize: 10,
@@ -385,8 +386,8 @@ export default function VIPNamensschilderPage() {
                       position: 'absolute',
                       left: `${previewSettings.logoX}px`,
                       top: `${previewSettings.logoY}px`,
-                      width: `${previewSettings.logoSize}px`,
-                      height: `${previewSettings.logoSize}px`,
+                      width: `${previewSettings.logoWidth}px`,
+                      height: `${previewSettings.logoHeight}px`,
                       cursor: draggingElement === 'logo' ? 'grabbing' : 'grab',
                       border: draggingElement === 'logo' ? '2px solid blue' : '1px dashed gray',
                     }}
@@ -485,14 +486,25 @@ export default function VIPNamensschilderPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Logo Größe</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Logo Breite (px)</label>
                 <input
                   type="number"
-                  value={previewSettings.logoSize}
-                  onChange={(e) => setPreviewSettings({ ...previewSettings, logoSize: Number(e.target.value) })}
+                  value={previewSettings.logoWidth}
+                  onChange={(e) => setPreviewSettings({ ...previewSettings, logoWidth: Number(e.target.value) })}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   min="10"
-                  max="100"
+                  max="200"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Logo Höhe (px)</label>
+                <input
+                  type="number"
+                  value={previewSettings.logoHeight}
+                  onChange={(e) => setPreviewSettings({ ...previewSettings, logoHeight: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  min="10"
+                  max="200"
                 />
               </div>
             </div>
