@@ -302,7 +302,7 @@ export default function VIPNamensschilderPage() {
                 <option value={8}>8 Namensschilder</option>
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                Die Namensschilder werden gleichmäßig auf der A4-Seite verteilt.
+                Die Namensschilder werden gleichmäßig auf der A4-Seite verteilt. Karten-Größe: 85mm x 120mm.
               </p>
             </div>
             <div>
