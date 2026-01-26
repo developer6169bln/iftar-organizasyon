@@ -45,6 +45,12 @@ export default function InvitationsPage() {
   })
   const [editingConfig, setEditingConfig] = useState<any>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [testEmailForm, setTestEmailForm] = useState({
+    email: '',
+    templateId: '',
+    includeLinks: true,
+  })
+  const [sendingTestEmail, setSendingTestEmail] = useState(false)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -358,6 +364,50 @@ export default function InvitationsPage() {
     } catch (error) {
       console.error('Fehler beim Erstellen der Standard-Templates:', error)
       alert('Fehler beim Erstellen der Standard-Templates')
+    }
+  }
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailForm.email || !testEmailForm.templateId) {
+      alert('Bitte geben Sie eine E-Mail-Adresse ein und wählen Sie ein Template aus')
+      return
+    }
+
+    if (!eventId) {
+      alert('Kein Event ausgewählt')
+      return
+    }
+
+    setSendingTestEmail(true)
+    try {
+      const response = await fetch('/api/invitations/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: testEmailForm.email,
+          templateId: testEmailForm.templateId,
+          eventId,
+          includeLinks: testEmailForm.includeLinks,
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        alert('✅ Test-E-Mail erfolgreich gesendet!')
+        setTestEmailForm({
+          email: '',
+          templateId: '',
+          includeLinks: true,
+        })
+      } else {
+        alert('Fehler: ' + (result.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Senden der Test-E-Mail:', error)
+      alert('Fehler beim Senden der Test-E-Mail')
+    } finally {
+      setSendingTestEmail(false)
     }
   }
 
@@ -1122,12 +1172,73 @@ export default function InvitationsPage() {
           <div className="rounded-lg bg-white p-6 shadow">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-xl font-semibold">Email-Templates</h2>
-              <button
-                onClick={handleCreateDefaultTemplates}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-              >
-                + Standard-Templates erstellen
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateDefaultTemplates}
+                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  + Standard-Templates erstellen
+                </button>
+              </div>
+            </div>
+
+            {/* Test-Email Bereich */}
+            <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <h3 className="mb-4 text-lg font-medium text-blue-900">Test-E-Mail senden</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    E-Mail-Adresse *
+                  </label>
+                  <input
+                    type="email"
+                    value={testEmailForm.email}
+                    onChange={(e) => setTestEmailForm({ ...testEmailForm, email: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="test@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Template auswählen *
+                  </label>
+                  <select
+                    value={testEmailForm.templateId}
+                    onChange={(e) => setTestEmailForm({ ...testEmailForm, templateId: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">-- Template wählen --</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name} ({template.language.toUpperCase()})
+                        {template.isDefault ? ' [Standard]' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={testEmailForm.includeLinks}
+                      onChange={(e) => setTestEmailForm({ ...testEmailForm, includeLinks: e.target.checked })}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Links einbeziehen
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <div className="mt-4">
+                <button
+                  onClick={handleSendTestEmail}
+                  disabled={sendingTestEmail || !testEmailForm.email || !testEmailForm.templateId}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sendingTestEmail ? '⏳ Sende...' : '📧 Test-E-Mail senden'}
+                </button>
+              </div>
             </div>
 
             {/* Formular für neue/bearbeitete Templates */}
