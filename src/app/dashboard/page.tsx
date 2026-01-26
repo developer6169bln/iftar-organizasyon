@@ -5,6 +5,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
+// Hilfsfunktion: Prüfe ob Bild existiert
+const checkImageExists = (url: string): Promise<boolean> => {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(true)
+    img.onerror = () => resolve(false)
+    img.src = url
+  })
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -28,6 +38,7 @@ export default function DashboardPage() {
     description: '',
     responsibleUserId: '',
   })
+  const [logoExists, setLogoExists] = useState<boolean | null>(null)
 
   useEffect(() => {
     // Token kontrolü - Cookie veya localStorage'dan oku
@@ -64,6 +75,9 @@ export default function DashboardPage() {
     loadStatistics()
     loadCategories()
     loadUsers()
+    
+    // Prüfe ob Logo existiert
+    checkImageExists('/uid-berlin-logo.png').then(setLogoExists)
   }, [router])
 
   const loadUsers = async () => {
@@ -402,7 +416,7 @@ export default function DashboardPage() {
       <header 
         className="relative bg-cover bg-center bg-no-repeat shadow-sm"
         style={{
-          backgroundImage: 'url(/uid-berlin-logo.png)',
+          backgroundImage: logoExists === false ? 'none' : 'url(/uid-berlin-logo.png)',
           backgroundSize: 'contain',
           backgroundPosition: 'center',
           backgroundColor: '#215F7D',
