@@ -836,19 +836,32 @@ async function fillTemplateWithMultipleGuests(
           console.warn(`  ⚠️ Fehler beim Ermitteln der Feld-Position:`, posError)
         }
         
-        // KRITISCH: Wenn Unicode-Font verfügbar ist und direkte Zeichnung möglich war, 
-        // FÜLLE KEINE FORMULARFELDER - das würde ANSI verwenden!
+        // KRITISCH: Wenn Unicode-Font verfügbar ist, FÜLLE KEINE TEXT-FORMULARFELDER!
+        // pdf-lib verwendet WinAnsi für Formularfelder, auch wenn wir UTF-8 setzen
+        // Beim Flatten wird WinAnsi verwendet → Fehler "WinAnsi cannot encode"
+        // Lösung: Nur direkte Zeichnung verwenden, Formularfelder leer lassen
+        
         // Prüfe ob Text bereits mit Unicode-Font gezeichnet wurde
         if (fieldInfoMap.has(fieldName)) {
           const fieldInfo = fieldInfoMap.get(fieldName)
           if (fieldInfo && fieldInfo.drawnDirectly === true) {
-            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet (drawnDirectly=true), überspringe Formularfeld-Füllung (verhindert ANSI!)`)
+            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet (drawnDirectly=true), überspringe Formularfeld-Füllung (verhindert WinAnsi!)`)
             continue
           }
           if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined && unicodeFont) {
-            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld-Füllung (verhindert ANSI!)`)
+            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld-Füllung (verhindert WinAnsi!)`)
             continue
           }
+        }
+        
+        // KRITISCH: Wenn Unicode-Font verfügbar ist, fülle KEINE Text-Formularfelder!
+        // pdf-lib verwendet WinAnsi beim Flatten → Fehler "WinAnsi cannot encode"
+        const fieldType = field.constructor.name
+        if (unicodeFont && (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown')) {
+          console.log(`  ⚠️ Unicode-Font verfügbar - überspringe Formularfeld-Füllung für ${fieldType} (verhindert WinAnsi-Fehler!)`)
+          console.log(`     Text sollte bereits mit direkter Zeichnung gezeichnet worden sein`)
+          console.log(`     Wenn nicht, ist direkte Zeichnung fehlgeschlagen - bitte Logs prüfen`)
+          continue // Überspringe Formularfeld-Füllung - verhindert WinAnsi-Fehler!
         }
         
         // Prüfe ob convertedValue definiert ist
@@ -857,13 +870,12 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // WICHTIG: Verwende Original-Text direkt (UTF-8) - KEINE Konvertierung mehr!
-        // Versuche Formularfeld mit Original-Text zu füllen (UTF-8)
+        // WICHTIG: Nur für CheckBoxen und andere nicht-Text-Felder
+        // Text-Felder werden NICHT gefüllt, wenn Unicode-Font verfügbar ist (verhindert WinAnsi)
         console.log(`  📝 Verwende Original-Text direkt (UTF-8): "${convertedValue}"`)
-        console.log(`     Türkische Zeichen werden NICHT konvertiert - direkte UTF-8-Verwendung!`)
+        console.log(`     ⚠️ WARNUNG: Formularfeld-Füllung kann WinAnsi-Fehler verursachen!`)
         
         try {
-          const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
           console.log(`  ✏️ Setze Wert direkt (UTF-8, Original-Text): "${convertedValue}"`)
           
@@ -871,19 +883,12 @@ async function fillTemplateWithMultipleGuests(
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // WICHTIG: Setze Original-Text direkt (UTF-8) - KEINE Konvertierung!
-            // pdf-lib sollte UTF-8 unterstützen, wenn Unicode-Font eingebettet ist
-            try {
-              fieldAny.setText(convertedValue) // Original-Text mit türkischen Zeichen
-              console.log(`  ✅ TextField gesetzt mit Original-Text (UTF-8): "${convertedValue}"`)
-            } catch (setTextError) {
-              console.error(`  ❌ Fehler beim Setzen des Textes:`, setTextError)
-              if (setTextError instanceof Error && setTextError.message.includes('WinAnsi')) {
-                console.error(`     ⚠️ WinAnsi-Fehler - aber wir verwenden Original-Text (UTF-8)!`)
-                console.error(`     ⚠️ Möglicherweise wird trotzdem ANSI verwendet - bitte Logs prüfen!`)
-              }
-              throw setTextError
-            }
+            // WARNUNG: pdf-lib verwendet WinAnsi für Formularfelder!
+            // Dies sollte nur passieren, wenn Unicode-Font NICHT verfügbar ist
+            console.error(`  ❌ FEHLER: PDFTextField wird gefüllt, obwohl Unicode-Font verfügbar sein sollte!`)
+            console.error(`     Dies wird WinAnsi-Fehler verursachen: "WinAnsi cannot encode"`)
+            console.error(`     Bitte prüfen Sie, warum direkte Zeichnung nicht verwendet wurde`)
+            throw new Error(`PDFTextField sollte nicht gefüllt werden, wenn Unicode-Font verfügbar ist (verhindert WinAnsi-Fehler)`)
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
@@ -1035,7 +1040,16 @@ async function fillTemplateWithMultipleGuests(
       }
       
       try {
+        // KRITISCH: Prüfe ob Text-Formularfelder gefüllt wurden (sollten leer sein, wenn Unicode-Font verfügbar ist)
+        if (unicodeFont && filledFieldsCount > 0) {
+          console.error(`  ❌ WARNUNG: ${filledFieldsCount} Text-Formularfeld(er) wurden gefüllt, obwohl Unicode-Font verfügbar ist!`)
+          console.error(`     Dies wird WinAnsi-Fehler verursachen: "WinAnsi cannot encode"`)
+          console.error(`     Bitte prüfen Sie, warum direkte Zeichnung nicht verwendet wurde`)
+          console.error(`     Versuche trotzdem zu flatten - Fehler wird wahrscheinlich auftreten`)
+        }
+        
         // Flatten alle Formularfelder (auch leere, damit sie nicht mehr interaktiv sind)
+        // WICHTIG: Wenn Text-Formularfelder gefüllt wurden, wird WinAnsi verwendet → Fehler!
         form.flatten()
         console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
         
