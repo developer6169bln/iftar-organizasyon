@@ -13,6 +13,9 @@ export default function VIPNamensschilderPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [templateFile, setTemplateFile] = useState<File | null>(null)
   const [useTemplate, setUseTemplate] = useState(false)
+  const [templateFields, setTemplateFields] = useState<Array<{ name: string; type: string }>>([])
+  const [fieldMapping, setFieldMapping] = useState<{ [pdfFieldName: string]: string }>({})
+  const [extractingFields, setExtractingFields] = useState(false)
   const [namensschildCount, setNamensschildCount] = useState<number>(4) // Standard: 4 pro A4
   const [generatingPDF, setGeneratingPDF] = useState(false)
   const [cardOrientation, setCardOrientation] = useState<'portrait' | 'landscape'>('portrait') // Hochformat (85x120) oder Querformat (120x85)
@@ -179,15 +182,59 @@ export default function VIPNamensschilderPage() {
     return ''
   }
 
-  const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       if (file.type !== 'application/pdf') {
         alert('Bitte laden Sie eine PDF-Datei hoch')
         return
       }
+      
       setTemplateFile(file)
       setUseTemplate(true)
+      setExtractingFields(true)
+      setTemplateFields([])
+      setFieldMapping({})
+      
+      try {
+        // Extrahiere Formularfelder aus dem PDF
+        const formData = new FormData()
+        formData.append('template', file)
+        
+        const response = await fetch('/api/vip-namensschilder/extract-fields', {
+          method: 'POST',
+          body: formData,
+        })
+        
+        const data = await response.json()
+        
+        if (data.fields && data.fields.length > 0) {
+          setTemplateFields(data.fields)
+          // Automatisches Mapping basierend auf Feldnamen
+          const autoMapping: { [key: string]: string } = {}
+          data.fields.forEach((field: { name: string; type: string }) => {
+            const fieldNameUpper = field.name.toUpperCase()
+            if (fieldNameUpper.includes('NAME') && !fieldNameUpper.includes('VOR')) {
+              autoMapping[field.name] = 'Name'
+            } else if (fieldNameUpper.includes('VORNAME') || fieldNameUpper.includes('VOR_NAME')) {
+              autoMapping[field.name] = 'Vorname'
+            } else if (fieldNameUpper.includes('TISCH') && fieldNameUpper.includes('NUMMER')) {
+              autoMapping[field.name] = 'Tisch-Nummer'
+            } else if (fieldNameUpper.includes('STAAT') || fieldNameUpper.includes('INSTITUTION')) {
+              autoMapping[field.name] = 'Staat/Institution'
+            }
+          })
+          setFieldMapping(autoMapping)
+          alert(`✅ ${data.fields.length} Formularfeld(er) gefunden. Bitte ordnen Sie die Felder zu.`)
+        } else {
+          alert('⚠️ Keine Formularfelder im PDF gefunden. Bitte erstellen Sie ein PDF mit Formularfeldern.')
+        }
+      } catch (error) {
+        console.error('Fehler beim Extrahieren der Formularfelder:', error)
+        alert('Fehler beim Extrahieren der Formularfelder: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
+      } finally {
+        setExtractingFields(false)
+      }
     }
   }
 
@@ -199,6 +246,14 @@ export default function VIPNamensschilderPage() {
     if (useTemplate && !templateFile) {
       alert('Bitte laden Sie ein PDF-Template hoch')
       return
+    }
+
+    if (useTemplate && templateFields.length > 0) {
+      const mappedFields = Object.values(fieldMapping).filter(v => v !== '')
+      if (mappedFields.length === 0) {
+        alert('Bitte ordnen Sie mindestens ein PDF-Feld einem Gast-Datenfeld zu.')
+        return
+      }
     }
 
     const guestsToGenerate = selectedGuests.length > 0 
@@ -217,6 +272,7 @@ export default function VIPNamensschilderPage() {
       formData.append('useTemplate', String(useTemplate))
       if (useTemplate && templateFile) {
         formData.append('template', templateFile)
+        formData.append('fieldMapping', JSON.stringify(fieldMapping))
       } else {
         formData.append('count', String(namensschildCount))
         formData.append('settings', JSON.stringify(previewSettings))
@@ -341,22 +397,74 @@ export default function VIPNamensschilderPage() {
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
                 {templateFile && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-sm text-gray-600">✓ {templateFile.name}</span>
-                    <button
-                      onClick={() => {
-                        setTemplateFile(null)
-                        setUseTemplate(false)
-                      }}
-                      className="text-xs text-red-600 hover:text-red-700"
-                    >
-                      Entfernen
-                    </button>
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">✓ {templateFile.name}</span>
+                      <button
+                        onClick={() => {
+                          setTemplateFile(null)
+                          setUseTemplate(false)
+                          setTemplateFields([])
+                          setFieldMapping({})
+                        }}
+                        className="text-xs text-red-600 hover:text-red-700"
+                      >
+                        Entfernen
+                      </button>
+                    </div>
+                    {extractingFields && (
+                      <p className="mt-1 text-xs text-blue-600">⏳ Extrahiere Formularfelder...</p>
+                    )}
                   </div>
                 )}
                 <p className="mt-1 text-xs text-gray-500">
-                  Laden Sie ein PDF-Formular hoch. Platzhalter: <strong>NAME</strong>, <strong>VORNAME</strong>, <strong>TISCH-NUMMER</strong>, <strong>STAAT/INSTITUTION</strong>
+                  Laden Sie ein PDF-Formular hoch. Die Formularfelder werden automatisch erkannt und können zugeordnet werden.
                 </p>
+              </div>
+            )}
+            
+            {/* Feld-Mapping */}
+            {templateFields.length > 0 && (
+              <div className="mt-4 rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
+                <h3 className="mb-3 text-lg font-semibold text-gray-900">Feld-Zuordnung</h3>
+                <p className="mb-4 text-sm text-gray-600">
+                  Ordnen Sie jedes PDF-Formularfeld einem Gast-Datenfeld zu:
+                </p>
+                <div className="space-y-3">
+                  {templateFields.map((field) => (
+                    <div key={field.name} className="flex items-center gap-3 rounded-lg bg-white p-3 shadow-sm">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700">
+                          PDF-Feld: <span className="font-mono text-blue-600">{field.name}</span>
+                        </label>
+                        <span className="text-xs text-gray-500">Typ: {field.type}</span>
+                      </div>
+                      <div className="flex-1">
+                        <select
+                          value={fieldMapping[field.name] || ''}
+                          onChange={(e) => {
+                            setFieldMapping(prev => ({
+                              ...prev,
+                              [field.name]: e.target.value
+                            }))
+                          }}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          <option value="">-- Nicht zuordnen --</option>
+                          <option value="Name">Name (Vollständiger Name)</option>
+                          <option value="Vorname">Vorname</option>
+                          <option value="Tisch-Nummer">Tisch-Nummer</option>
+                          <option value="Staat/Institution">Staat/Institution</option>
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-lg bg-yellow-50 p-3">
+                  <p className="text-xs text-yellow-800">
+                    <strong>Hinweis:</strong> Nur zugeordnete Felder werden beim Generieren des PDFs ausgefüllt.
+                  </p>
+                </div>
               </div>
             )}
           </div>

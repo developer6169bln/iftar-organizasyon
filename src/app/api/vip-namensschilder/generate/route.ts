@@ -233,60 +233,78 @@ async function drawNamensschild(
 async function fillTemplateWithGuestData(
   templateBytes: ArrayBuffer,
   guest: any,
-  getFieldValue: (guest: any, fieldName: string) => string
+  getFieldValue: (guest: any, fieldName: string) => string,
+  fieldMapping: { [pdfFieldName: string]: string }
 ): Promise<PDFDocument> {
   // Lade Template
   const filledDoc = await PDFDocument.load(templateBytes)
   
-  // Gast-Daten extrahieren
-  const vorname = getFieldValue(guest, 'Vorname')
-  const nachname = getFieldValue(guest, 'Name')
-  const name = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
-  const tischNummer = getFieldValue(guest, 'Tisch-Nummer') || getFieldValue(guest, 'Tischnummer') || ''
-  const staatInstitution = getFieldValue(guest, 'Staat/Institution') || 
-                          getFieldValue(guest, 'Staat / Institution') || ''
-  
-  // Platzhalter-Mapping
-  const placeholders: { [key: string]: string } = {
-    'NAME': name,
-    'VORNAME': vorname,
-    'TISCH-NUMMER': tischNummer,
-    'TISCHNUMMER': tischNummer,
-    'STAAT/INSTITUTION': staatInstitution,
-    'STAAT / INSTITUTION': staatInstitution,
-  }
-  
-  // Versuche zuerst PDF-Formularfelder zu füllen
+  // Versuche PDF-Formularfelder zu füllen
   try {
     const form = filledDoc.getForm()
     const fields = form.getFields()
     
     console.log(`🔍 Gefundene Formularfelder: ${fields.length}`)
+    console.log(`📋 Mapping:`, fieldMapping)
     
     for (const field of fields) {
-      const fieldName = field.getName().toUpperCase()
-      console.log(`🔍 Prüfe Feld: "${fieldName}"`)
+      const pdfFieldName = field.getName()
+      const guestFieldName = fieldMapping[pdfFieldName]
       
-      // Prüfe alle Platzhalter-Varianten
-      for (const [placeholder, value] of Object.entries(placeholders)) {
-        if (fieldName.includes(placeholder) || fieldName === placeholder) {
+      if (!guestFieldName || guestFieldName === '') {
+        console.log(`⏭️ Feld "${pdfFieldName}" nicht zugeordnet, überspringe`)
+        continue
+      }
+      
+      // Hole Wert aus Gast-Daten
+      let value = getFieldValue(guest, guestFieldName)
+      
+      // Spezielle Behandlung für "Name" (Vollständiger Name)
+      if (guestFieldName === 'Name') {
+        const vorname = getFieldValue(guest, 'Vorname')
+        const nachname = getFieldValue(guest, 'Name')
+        value = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
+      }
+      
+      if (!value || value.trim() === '') {
+        console.log(`⚠️ Kein Wert für Feld "${pdfFieldName}" (Gast-Feld: "${guestFieldName}")`)
+        continue
+      }
+      
+      try {
+        const fieldType = field.constructor.name
+        console.log(`📝 Fülle PDF-Feld "${pdfFieldName}" (Typ: ${fieldType}) mit Gast-Feld "${guestFieldName}": "${value}"`)
+        
+        if (fieldType === 'PDFTextField') {
+          (field as any).setText(value)
+        } else if (fieldType === 'PDFCheckBox') {
+          // Checkboxen: true/false basierend auf Wert
+          const boolValue = value.toLowerCase() === 'true' || value.toLowerCase() === 'ja' || value === '1'
+          ;(field as any).check()
+          if (!boolValue) {
+            ;(field as any).uncheck()
+          }
+        } else if (fieldType === 'PDFDropdown') {
           try {
-            const fieldType = field.constructor.name
-            console.log(`📝 Fülle Feld "${fieldName}" (Typ: ${fieldType}) mit: "${value}"`)
-            
-            if (fieldType === 'PDFTextField') {
-              (field as any).setText(value)
-            } else if (fieldType === 'PDFCheckBox') {
-              // Checkboxen ignorieren
-            } else if (fieldType === 'PDFDropdown') {
-              (field as any).select(value)
-            }
-            console.log(`✅ Formularfeld "${fieldName}" gefüllt`)
-            break // Nur einmal füllen
+            (field as any).select(value)
           } catch (e) {
-            console.warn(`⚠️ Konnte Formularfeld "${fieldName}" nicht füllen:`, e)
+            // Falls Wert nicht in Dropdown-Liste, versuche als Text zu setzen
+            console.warn(`⚠️ Wert "${value}" nicht in Dropdown-Liste, versuche Text-Feld`)
+            if ((field as any).setText) {
+              (field as any).setText(value)
+            }
+          }
+        } else if (fieldType === 'PDFRadioGroup') {
+          try {
+            (field as any).select(value)
+          } catch (e) {
+            console.warn(`⚠️ Konnte Radio-Button nicht setzen:`, e)
           }
         }
+        
+        console.log(`✅ Formularfeld "${pdfFieldName}" erfolgreich gefüllt`)
+      } catch (e) {
+        console.warn(`⚠️ Konnte Formularfeld "${pdfFieldName}" nicht füllen:`, e)
       }
     }
     
@@ -294,10 +312,8 @@ async function fillTemplateWithGuestData(
     form.flatten()
     console.log('✅ Formularfelder gefüllt und geflattened')
   } catch (e) {
-    console.log('ℹ️ Keine PDF-Formularfelder gefunden:', e)
-    // Wenn keine Formularfelder vorhanden sind, müssen wir Text-Platzhalter manuell ersetzen
-    // Das ist komplexer und erfordert Text-Extraktion und -Ersetzung
-    // Für jetzt unterstützen wir nur PDF-Formularfelder
+    console.error('❌ Fehler beim Füllen der Formularfelder:', e)
+    throw new Error('Fehler beim Füllen der PDF-Formularfelder: ' + (e instanceof Error ? e.message : 'Unbekannter Fehler'))
   }
   
   return filledDoc
@@ -312,10 +328,21 @@ export async function POST(request: NextRequest) {
     const useTemplateStr = formData.get('useTemplate') as string
     const useTemplate = useTemplateStr === 'true'
     const templateFile = formData.get('template') as File | null
+    const fieldMappingJson = formData.get('fieldMapping') as string | null
     const countStr = formData.get('count') as string
     const settingsJson = formData.get('settings') as string
     const orientationStr = formData.get('orientation') as string
     const logoFile = formData.get('logo') as File | null
+    
+    // Parse field mapping
+    let fieldMapping: { [pdfFieldName: string]: string } = {}
+    if (fieldMappingJson) {
+      try {
+        fieldMapping = JSON.parse(fieldMappingJson)
+      } catch (e) {
+        console.error('Fehler beim Parsen des Field-Mappings:', e)
+      }
+    }
 
     const cardOrientation = (orientationStr === 'landscape' ? 'landscape' : 'portrait') as 'portrait' | 'landscape'
 
@@ -376,7 +403,7 @@ export async function POST(request: NextRequest) {
           console.log(`📝 Verarbeite Gast ${i + 1}/${guests.length}: ${guest.name || guest.id}`)
           
           // Fülle Template mit Gast-Daten (jedes Mal neu laden für saubere Kopie)
-          const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue)
+          const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue, fieldMapping)
           
           // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
           const pageCount = filledDoc.getPageCount()
