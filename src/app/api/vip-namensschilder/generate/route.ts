@@ -592,48 +592,40 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // WICHTIG: PDF-Formularfelder verwenden WinAnsi-Encoding, das türkische Zeichen NICHT unterstützt
-        // Daher müssen wir die Zeichen für WinAnsi konvertieren, damit setText() und flatten() funktionieren
-        // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts (Identity-H) wiederherstellen
-        const originalValue = value // Speichere Original-Wert für Unicode-Wiederherstellung
-        
-        // Konvertiere türkische Zeichen zu WinAnsi-kompatiblen Zeichen
-        // Dies ist notwendig, damit setText() und flatten() ohne Fehler funktionieren
-        let convertedValue = originalValue
-          .replace(/İ/g, 'I')  // Großes I mit Punkt → I
-          .replace(/ı/g, 'i')  // Kleines i ohne Punkt → i
-          .replace(/Ğ/g, 'G')  // Großes G mit Breve → G
-          .replace(/ğ/g, 'g')  // Kleines g mit Breve → g
-          .replace(/Ü/g, 'U')  // Großes U mit Umlaut → U
-          .replace(/ü/g, 'u')  // Kleines u mit Umlaut → u
-          .replace(/Ş/g, 'S')  // Großes S mit Cedilla → S
-          .replace(/ş/g, 's')  // Kleines s mit Cedilla → s
-          .replace(/Ö/g, 'O')  // Großes O mit Umlaut → O
-          .replace(/ö/g, 'o')  // Kleines o mit Umlaut → o
-          .replace(/Ç/g, 'C')  // Großes C mit Cedilla → C
-          .replace(/ç/g, 'c')  // Kleines c mit Cedilla → c
-        
-        // Entferne Steuerzeichen
-        convertedValue = sanitizeTextForWinAnsi(convertedValue)
-        
-        if (!convertedValue || convertedValue.trim() === '') {
-          console.log(`  ⚠️ Wert wurde nach Konvertierung leer, überspringe`)
-          continue
-        }
-        
-        // Speichere Original-Wert für Unicode-Wiederherstellung nach Flatten
-        // WICHTIG: Speichere ALLE Felder mit türkischen Zeichen für Unicode-Wiederherstellung
+        // NEUER ANSATZ: Zeichne Texte direkt mit Unicode-Fonts, anstatt Formularfelder zu füllen
+        // Dies vermeidet WinAnsi-Encoding-Probleme komplett
+        const originalValue = value
         const fieldName = field.getName()
-        const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
+        const pageIndex = 0
         
         // Prüfe ob Original-Wert türkische Zeichen enthält
         const hasTurkishChars = /[İıĞğŞşÇçÖöÜü]/.test(originalValue)
         
-        if (originalValue !== convertedValue) {
-          console.log(`  🔄 Konvertiere für WinAnsi (wird nach Flatten mit Unicode-Font wiederhergestellt): "${originalValue}" → "${convertedValue}"`)
-        } else if (hasTurkishChars) {
-          console.log(`  ℹ️ Feld enthält türkische Zeichen, wird mit Unicode-Font dargestellt: "${originalValue}"`)
+        if (!originalValue || originalValue.trim() === '') {
+          console.log(`  ⚠️ Wert ist leer, überspringe`)
+          continue
         }
+        
+        // Sanitize nur Steuerzeichen, behalte türkische Zeichen
+        const sanitizedValue = sanitizeTextForWinAnsi(originalValue)
+        
+        if (!sanitizedValue || sanitizedValue.trim() === '') {
+          console.log(`  ⚠️ Wert wurde nach Sanitization leer, überspringe`)
+          continue
+        }
+        
+        // Konvertiere für WinAnsi (Fallback, falls Unicode-Font nicht verfügbar)
+        let convertedValue = originalValue
+          .replace(/İ/g, 'I').replace(/ı/g, 'i')
+          .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+          .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+          .replace(/Ş/g, 'S').replace(/ş/g, 's')
+          .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+          .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+        
+        convertedValue = sanitizeTextForWinAnsi(convertedValue)
+        
+        console.log(`  📝 Feld "${fieldName}": "${originalValue}" (hat türkische Zeichen: ${hasTurkishChars})`)
         
         // Versuche Feld-Position und Font-Größe zu erhalten (für direkte Text-Zeichnung)
         try {
@@ -739,17 +731,7 @@ async function fillTemplateWithMultipleGuests(
           }
           
           // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
-          // Konvertiere für WinAnsi (Fallback)
-          let convertedValue = originalValue
-            .replace(/İ/g, 'I').replace(/ı/g, 'i')
-            .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
-            .replace(/Ü/g, 'U').replace(/ü/g, 'u')
-            .replace(/Ş/g, 'S').replace(/ş/g, 's')
-            .replace(/Ö/g, 'O').replace(/ö/g, 'o')
-            .replace(/Ç/g, 'C').replace(/ç/g, 'c')
-          
-          convertedValue = sanitizeTextForWinAnsi(convertedValue)
-          
+          // convertedValue wurde bereits oben berechnet
           if (convertedValue && convertedValue.trim() !== '') {
             // Speichere für spätere Wiederherstellung (falls nötig)
             if (hasTurkishChars || originalValue !== convertedValue) {
