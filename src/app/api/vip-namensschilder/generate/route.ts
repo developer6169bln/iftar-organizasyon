@@ -796,22 +796,29 @@ async function fillTemplateWithMultipleGuests(
                 console.error(`     Fehler-Message: ${drawError.message}`)
                 console.error(`     Stack: ${drawError.stack}`)
               }
-              console.warn(`  ⚠️ Fallback: Verwende Formularfeld-Füllung`)
-              // Fallback: Verwende Formularfeld
+              console.error(`  ❌ KRITISCH: Direkte Zeichnung fehlgeschlagen - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
+              console.error(`     ⚠️ Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
+              console.error(`     ⚠️ Bitte prüfen Sie die Logs, warum direkte Zeichnung fehlgeschlagen ist`)
+              // KEIN Fallback zu Formularfeld-Füllung - das würde WinAnsi-Fehler verursachen!
+              continue // Überspringe dieses Feld
             }
           } else {
-            // KRITISCH: Wenn direkte Zeichnung nicht möglich ist, wird WinAnsi verwendet!
+            // KRITISCH: Wenn direkte Zeichnung nicht möglich ist, können wir Formularfelder NICHT füllen!
+            // pdf-lib verwendet WinAnsi für Formularfelder → Fehler "WinAnsi cannot encode"
             console.error(`  ❌ KRITISCH: Direkte Unicode-Font-Zeichnung nicht möglich!`)
             if (!unicodeFont) {
-              console.error(`     ❌ Unicode-Font nicht verfügbar - PDF wird ANSI/WinAnsi verwenden!`)
+              console.error(`     ❌ Unicode-Font nicht verfügbar - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
             }
             if (!fieldRect) {
-              console.error(`     ❌ Feld-Position nicht verfügbar - PDF wird ANSI/WinAnsi verwenden!`)
+              console.error(`     ❌ Feld-Position nicht verfügbar - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
             }
             if (!sanitizedValue || sanitizedValue.trim() === '') {
               console.warn(`     ⚠️ Sanitized-Wert ist leer, überspringe`)
             }
-            console.error(`     ⚠️ Fallback: Verwende Formularfeld-Füllung mit WinAnsi (türkische Zeichen werden konvertiert!)`)
+            console.error(`     ⚠️ Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
+            console.error(`     ⚠️ Bitte prüfen Sie die Logs, warum direkte Zeichnung nicht möglich ist`)
+            // KEIN Fallback zu Formularfeld-Füllung - das würde WinAnsi-Fehler verursachen!
+            continue // Überspringe dieses Feld
           }
           
           // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
