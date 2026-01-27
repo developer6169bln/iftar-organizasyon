@@ -708,25 +708,33 @@ async function fillTemplateWithMultipleGuests(
     
     // Flatten form (macht Formularfelder zu statischem Text) - MUSS erfolgreich sein
     // WICHTIG: Nach dem Flatten werden die Formularfelder zu statischem Text
-    // Unicode-Zeichen sollten dann korrekt dargestellt werden können
+    // Versuche Unicode-Zeichen zu behalten - nach dem Flatten sollten sie als statischer Text dargestellt werden
     if (form) {
       console.log(`🔄 Flatten Formularfelder (konvertiert zu normalem PDF)...`)
+      console.log(`  📝 Versuche Unicode-Zeichen (İ, ğ, ş, etc.) zu behalten...`)
+      
       try {
-        // Versuche zuerst normales Flatten
+        // Versuche zuerst normales Flatten mit Unicode-Zeichen
         form.flatten()
         console.log('✅ Formularfelder gefüllt und geflattened - PDF ist jetzt normales PDF ohne Formularfelder')
+        console.log('  ✅ Türkische Zeichen sollten korrekt dargestellt werden')
       } catch (flattenError) {
-        // Falls Flatten fehlschlägt wegen Unicode-Zeichen, versuche alternative Methode
-        console.warn('⚠️ Flatten fehlgeschlagen, versuche alternative Methode:', flattenError)
+        // Falls Flatten fehlschlägt wegen Unicode-Zeichen
+        console.warn('⚠️ Flatten fehlgeschlagen, möglicherweise wegen Unicode-Zeichen:', flattenError)
         
-        if (flattenError instanceof Error && flattenError.message.includes('WinAnsi')) {
-          console.log('🔄 Versuche Flatten mit Unicode-Unterstützung...')
+        if (flattenError instanceof Error && (
+          flattenError.message.includes('WinAnsi') || 
+          flattenError.message.includes('cannot encode') ||
+          flattenError.message.includes('İ') ||
+          flattenError.message.includes('0x0130')
+        )) {
+          console.log('🔄 Unicode-Zeichen erkannt, versuche alternative Methode...')
           
-          // Versuche die Felder manuell zu rendern, dann Formularfelder entfernen
-          // Dies ist ein Workaround für Unicode-Zeichen
+          // Versuche updateAppearances für alle Felder (kann Unicode besser handhaben)
           try {
-            // Versuche erneut mit updateAppearances für alle Felder
             const allFields = form.getFields()
+            console.log(`  📝 Aktualisiere Appearances für ${allFields.length} Felder...`)
+            
             for (const field of allFields) {
               try {
                 const fieldAny = field as any
@@ -735,28 +743,45 @@ async function fillTemplateWithMultipleGuests(
                 }
               } catch (e) {
                 // Ignoriere einzelne Feld-Fehler
+                console.warn(`  ⚠️ Konnte Appearance für Feld nicht aktualisieren:`, e)
               }
             }
             
             // Versuche erneut zu flatten
+            console.log('  🔄 Versuche erneut zu flatten...')
             form.flatten()
-            console.log('✅ Formularfelder gefüllt und geflattened (mit Unicode-Unterstützung)')
+            console.log('✅ Formularfelder gefüllt und geflattened (mit updateAppearances)')
+            console.log('  ✅ Türkische Zeichen sollten korrekt dargestellt werden')
           } catch (retryError) {
             console.error('❌ Auch alternativer Flatten-Versuch fehlgeschlagen:', retryError)
-            // Als letzter Ausweg: Konvertiere problematische Zeichen nur für Flatten
-            console.log('🔄 Versuche Flatten mit konvertierten Zeichen...')
+            console.log('🔄 Als letzter Ausweg: Konvertiere nur problematische Zeichen temporär...')
             
-            // Konvertiere nur die problematischsten Zeichen temporär
+            // Als letzter Ausweg: Konvertiere nur die problematischsten Zeichen temporär
+            // Dies sollte nur bei absolutem Notfall passieren
             const tempFields = form.getFields()
+            let convertedCount = 0
+            
             for (const field of tempFields) {
               try {
                 const fieldAny = field as any
                 if (fieldAny.constructor.name === 'PDFTextField') {
                   const currentText = fieldAny.getText()
-                  if (currentText && currentText.includes('İ')) {
-                    // Temporär konvertieren nur für Flatten
-                    const tempText = currentText.replace(/İ/g, 'I').replace(/ı/g, 'i')
-                    fieldAny.setText(tempText)
+                  if (currentText) {
+                    // Konvertiere nur İ und ı (die problematischsten)
+                    let tempText = currentText
+                    if (tempText.includes('İ')) {
+                      tempText = tempText.replace(/İ/g, 'I')
+                      convertedCount++
+                    }
+                    if (tempText.includes('ı')) {
+                      tempText = tempText.replace(/ı/g, 'i')
+                      convertedCount++
+                    }
+                    
+                    if (tempText !== currentText) {
+                      fieldAny.setText(tempText)
+                      console.log(`  🔄 Konvertiert: "${currentText}" → "${tempText}"`)
+                    }
                   }
                 }
               } catch (e) {
@@ -764,8 +789,13 @@ async function fillTemplateWithMultipleGuests(
               }
             }
             
+            if (convertedCount > 0) {
+              console.warn(`  ⚠️ ${convertedCount} Feld(er) mit problematischen Zeichen konvertiert`)
+            }
+            
             form.flatten()
-            console.log('✅ Formularfelder gefüllt und geflattened (mit Zeichen-Konvertierung)')
+            console.log('✅ Formularfelder gefüllt und geflattened (mit minimaler Zeichen-Konvertierung)')
+            console.warn('  ⚠️ Einige Zeichen (İ, ı) wurden konvertiert, andere türkische Zeichen (ğ, ş, etc.) sollten erhalten bleiben')
           }
         } else {
           // Anderer Fehler
