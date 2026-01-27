@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument, StandardFonts, rgb, PDFImage, degrees } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont } from 'pdf-lib'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -229,12 +229,89 @@ async function drawNamensschild(
   }
 }
 
+// Hilfsfunktion: Fülle PDF-Template mit Gast-Daten
+async function fillTemplateWithGuestData(
+  templateBytes: ArrayBuffer,
+  guest: any,
+  getFieldValue: (guest: any, fieldName: string) => string
+): Promise<PDFDocument> {
+  // Lade Template
+  const filledDoc = await PDFDocument.load(templateBytes)
+  
+  // Gast-Daten extrahieren
+  const vorname = getFieldValue(guest, 'Vorname')
+  const nachname = getFieldValue(guest, 'Name')
+  const name = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
+  const tischNummer = getFieldValue(guest, 'Tisch-Nummer') || getFieldValue(guest, 'Tischnummer') || ''
+  const staatInstitution = getFieldValue(guest, 'Staat/Institution') || 
+                          getFieldValue(guest, 'Staat / Institution') || ''
+  
+  // Platzhalter-Mapping
+  const placeholders: { [key: string]: string } = {
+    'NAME': name,
+    'VORNAME': vorname,
+    'TISCH-NUMMER': tischNummer,
+    'TISCHNUMMER': tischNummer,
+    'STAAT/INSTITUTION': staatInstitution,
+    'STAAT / INSTITUTION': staatInstitution,
+  }
+  
+  // Versuche zuerst PDF-Formularfelder zu füllen
+  try {
+    const form = filledDoc.getForm()
+    const fields = form.getFields()
+    
+    console.log(`🔍 Gefundene Formularfelder: ${fields.length}`)
+    
+    for (const field of fields) {
+      const fieldName = field.getName().toUpperCase()
+      console.log(`🔍 Prüfe Feld: "${fieldName}"`)
+      
+      // Prüfe alle Platzhalter-Varianten
+      for (const [placeholder, value] of Object.entries(placeholders)) {
+        if (fieldName.includes(placeholder) || fieldName === placeholder) {
+          try {
+            const fieldType = field.constructor.name
+            console.log(`📝 Fülle Feld "${fieldName}" (Typ: ${fieldType}) mit: "${value}"`)
+            
+            if (fieldType === 'PDFTextField') {
+              (field as any).setText(value)
+            } else if (fieldType === 'PDFCheckBox') {
+              // Checkboxen ignorieren
+            } else if (fieldType === 'PDFDropdown') {
+              (field as any).select(value)
+            }
+            console.log(`✅ Formularfeld "${fieldName}" gefüllt`)
+            break // Nur einmal füllen
+          } catch (e) {
+            console.warn(`⚠️ Konnte Formularfeld "${fieldName}" nicht füllen:`, e)
+          }
+        }
+      }
+    }
+    
+    // Flatten form (macht Formularfelder zu statischem Text)
+    form.flatten()
+    console.log('✅ Formularfelder gefüllt und geflattened')
+  } catch (e) {
+    console.log('ℹ️ Keine PDF-Formularfelder gefunden:', e)
+    // Wenn keine Formularfelder vorhanden sind, müssen wir Text-Platzhalter manuell ersetzen
+    // Das ist komplexer und erfordert Text-Extraktion und -Ersetzung
+    // Für jetzt unterstützen wir nur PDF-Formularfelder
+  }
+  
+  return filledDoc
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('📄 Starte PDF-Generierung für Namensschilder...')
     
     const formData = await request.formData()
     const guestsJson = formData.get('guests') as string
+    const useTemplateStr = formData.get('useTemplate') as string
+    const useTemplate = useTemplateStr === 'true'
+    const templateFile = formData.get('template') as File | null
     const countStr = formData.get('count') as string
     const settingsJson = formData.get('settings') as string
     const orientationStr = formData.get('orientation') as string
@@ -281,7 +358,66 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`📄 Generiere PDF für ${guests.length} Gäste mit ${namensschildCount} Namensschildern pro Seite`)
+    // Template-Modus
+    if (useTemplate && templateFile) {
+      console.log(`📄 Template-Modus: Generiere PDF für ${guests.length} Gäste mit Template`)
+      
+      try {
+        // Lade Template-Bytes (einmal für alle Gäste)
+        const templateBytes = await templateFile.arrayBuffer()
+        console.log('✅ Template geladen')
+        
+        // Erstelle neues PDF-Dokument
+        const finalDoc = await PDFDocument.create()
+        
+        // Für jeden Gast: Template kopieren und füllen
+        for (let i = 0; i < guests.length; i++) {
+          const guest = guests[i]
+          console.log(`📝 Verarbeite Gast ${i + 1}/${guests.length}: ${guest.name || guest.id}`)
+          
+          // Fülle Template mit Gast-Daten (jedes Mal neu laden für saubere Kopie)
+          const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue)
+          
+          // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
+          const pageCount = filledDoc.getPageCount()
+          const pageIndices = Array.from({ length: pageCount }, (_, i) => i)
+          const copiedPages = await finalDoc.copyPages(filledDoc, pageIndices)
+          
+          for (const page of copiedPages) {
+            finalDoc.addPage(page)
+          }
+          
+          console.log(`✅ Gast ${i + 1}/${guests.length} verarbeitet (${pageCount} Seite(n))`)
+        }
+        
+        // PDF generieren
+        console.log('📄 Speichere PDF...')
+        const pdfBytes = await finalDoc.save()
+        console.log(`✅ PDF erfolgreich generiert (${pdfBytes.length} Bytes)`)
+        
+        return new NextResponse(pdfBytes as any, {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="namensschilder-${new Date().toISOString().split('T')[0]}.pdf"`,
+          },
+        })
+      } catch (error) {
+        console.error('Fehler beim Verarbeiten des Templates:', error)
+        if (error instanceof Error) {
+          console.error('Fehler-Stack:', error.stack)
+        }
+        return NextResponse.json(
+          { 
+            error: 'Fehler beim Verarbeiten des PDF-Templates',
+            details: error instanceof Error ? error.message : 'Unbekannter Fehler'
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Standard-Modus (bestehende Logik)
+    console.log(`📄 Standard-Modus: Generiere PDF für ${guests.length} Gäste mit ${namensschildCount} Namensschildern pro Seite`)
 
     // Erstelle PDF-Dokument
     console.log('📄 Erstelle PDF-Dokument...')

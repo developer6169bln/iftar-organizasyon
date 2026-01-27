@@ -11,6 +11,8 @@ export default function VIPNamensschilderPage() {
   const [selectedGuests, setSelectedGuests] = useState<string[]>([])
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [templateFile, setTemplateFile] = useState<File | null>(null)
+  const [useTemplate, setUseTemplate] = useState(false)
   const [namensschildCount, setNamensschildCount] = useState<number>(4) // Standard: 4 pro A4
   const [generatingPDF, setGeneratingPDF] = useState(false)
   const [cardOrientation, setCardOrientation] = useState<'portrait' | 'landscape'>('portrait') // Hochformat (85x120) oder Querformat (120x85)
@@ -177,8 +179,25 @@ export default function VIPNamensschilderPage() {
     return ''
   }
 
+  const handleTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.type !== 'application/pdf') {
+        alert('Bitte laden Sie eine PDF-Datei hoch')
+        return
+      }
+      setTemplateFile(file)
+      setUseTemplate(true)
+    }
+  }
+
   const handleGeneratePDF = async () => {
     if (selectedGuests.length === 0 && !confirm('Keine Gäste ausgewählt. Möchten Sie PDFs für alle VIP-Gäste erstellen?')) {
+      return
+    }
+
+    if (useTemplate && !templateFile) {
+      alert('Bitte laden Sie ein PDF-Template hoch')
       return
     }
 
@@ -195,11 +214,16 @@ export default function VIPNamensschilderPage() {
     try {
       const formData = new FormData()
       formData.append('guests', JSON.stringify(guestsToGenerate))
-      formData.append('count', String(namensschildCount))
-      formData.append('settings', JSON.stringify(previewSettings))
-      formData.append('orientation', cardOrientation)
-      if (logoFile) {
-        formData.append('logo', logoFile)
+      formData.append('useTemplate', String(useTemplate))
+      if (useTemplate && templateFile) {
+        formData.append('template', templateFile)
+      } else {
+        formData.append('count', String(namensschildCount))
+        formData.append('settings', JSON.stringify(previewSettings))
+        formData.append('orientation', cardOrientation)
+        if (logoFile) {
+          formData.append('logo', logoFile)
+        }
       }
 
       const response = await fetch('/api/vip-namensschilder/generate', {
@@ -286,6 +310,58 @@ export default function VIPNamensschilderPage() {
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
           <h2 className="mb-4 text-xl font-semibold">Namensschilder-Einstellungen</h2>
           
+          {/* Template-Option */}
+          <div className="mb-6 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="useTemplate"
+                checked={useTemplate}
+                onChange={(e) => {
+                  setUseTemplate(e.target.checked)
+                  if (!e.target.checked) {
+                    setTemplateFile(null)
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <label htmlFor="useTemplate" className="text-sm font-medium text-gray-700">
+                PDF-Template verwenden
+              </label>
+            </div>
+            {useTemplate && (
+              <div className="mt-2">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  PDF-Template hochladen *
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleTemplateUpload}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                {templateFile && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-sm text-gray-600">✓ {templateFile.name}</span>
+                    <button
+                      onClick={() => {
+                        setTemplateFile(null)
+                        setUseTemplate(false)
+                      }}
+                      className="text-xs text-red-600 hover:text-red-700"
+                    >
+                      Entfernen
+                    </button>
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-gray-500">
+                  Laden Sie ein PDF-Formular hoch. Platzhalter: <strong>NAME</strong>, <strong>VORNAME</strong>, <strong>TISCH-NUMMER</strong>, <strong>STAAT/INSTITUTION</strong>
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {!useTemplate && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -355,6 +431,7 @@ export default function VIPNamensschilderPage() {
               </p>
             </div>
           </div>
+          )}
 
           <div className="mt-4 flex gap-2">
             <button
