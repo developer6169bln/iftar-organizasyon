@@ -245,74 +245,133 @@ async function fillTemplateWithGuestData(
     const fields = form.getFields()
     
     console.log(`🔍 Gefundene Formularfelder: ${fields.length}`)
-    console.log(`📋 Mapping:`, fieldMapping)
+    console.log(`📋 Mapping:`, JSON.stringify(fieldMapping, null, 2))
+    console.log(`👤 Gast: ${guest.name || guest.id}`)
+    
+    let filledCount = 0
     
     for (const field of fields) {
       const pdfFieldName = field.getName()
       const guestFieldName = fieldMapping[pdfFieldName]
       
+      console.log(`\n🔍 Prüfe Feld: "${pdfFieldName}"`)
+      
       if (!guestFieldName || guestFieldName === '') {
-        console.log(`⏭️ Feld "${pdfFieldName}" nicht zugeordnet, überspringe`)
+        console.log(`  ⏭️ Nicht zugeordnet, überspringe`)
         continue
       }
       
+      console.log(`  📋 Zugeordnet zu Gast-Feld: "${guestFieldName}"`)
+      
       // Hole Wert aus Gast-Daten
       let value = getFieldValue(guest, guestFieldName)
+      console.log(`  📊 Wert vor Verarbeitung: "${value}"`)
       
       // Spezielle Behandlung für "Name" (Vollständiger Name)
       if (guestFieldName === 'Name') {
         const vorname = getFieldValue(guest, 'Vorname')
         const nachname = getFieldValue(guest, 'Name')
         value = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
+        console.log(`  🔄 Name zusammengesetzt: Vorname="${vorname}", Nachname="${nachname}" → "${value}"`)
       }
       
       if (!value || value.trim() === '') {
-        console.log(`⚠️ Kein Wert für Feld "${pdfFieldName}" (Gast-Feld: "${guestFieldName}")`)
+        console.log(`  ⚠️ Kein Wert gefunden, überspringe`)
         continue
       }
       
       try {
         const fieldType = field.constructor.name
-        console.log(`📝 Fülle PDF-Feld "${pdfFieldName}" (Typ: ${fieldType}) mit Gast-Feld "${guestFieldName}": "${value}"`)
+        console.log(`  📝 Feld-Typ: ${fieldType}`)
+        console.log(`  ✏️ Setze Wert: "${value}"`)
+        
+        // Versuche verschiedene Methoden, um das Feld zu setzen
+        const fieldAny = field as any
         
         if (fieldType === 'PDFTextField') {
-          (field as any).setText(value)
+          fieldAny.setText(value)
+          const currentValue = fieldAny.getText()
+          console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
+          filledCount++
         } else if (fieldType === 'PDFCheckBox') {
-          // Checkboxen: true/false basierend auf Wert
+          const checkBox = field as any
           const boolValue = value.toLowerCase() === 'true' || value.toLowerCase() === 'ja' || value === '1'
-          ;(field as any).check()
-          if (!boolValue) {
-            ;(field as any).uncheck()
+          if (boolValue) {
+            checkBox.check()
+            console.log(`  ✅ CheckBox aktiviert`)
+          } else {
+            checkBox.uncheck()
+            console.log(`  ✅ CheckBox deaktiviert`)
           }
+          filledCount++
         } else if (fieldType === 'PDFDropdown') {
+          const dropdown = field as any
           try {
-            (field as any).select(value)
+            dropdown.select(value)
+            console.log(`  ✅ Dropdown ausgewählt: "${value}"`)
+            filledCount++
           } catch (e) {
-            // Falls Wert nicht in Dropdown-Liste, versuche als Text zu setzen
-            console.warn(`⚠️ Wert "${value}" nicht in Dropdown-Liste, versuche Text-Feld`)
-            if ((field as any).setText) {
-              (field as any).setText(value)
+            console.warn(`  ⚠️ Wert "${value}" nicht in Dropdown-Liste:`, e)
+            // Versuche als Text zu setzen, falls möglich
+            if (typeof dropdown.setText === 'function') {
+              dropdown.setText(value)
+              console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
+              filledCount++
             }
           }
         } else if (fieldType === 'PDFRadioGroup') {
+          const radioGroup = field as any
           try {
-            (field as any).select(value)
+            radioGroup.select(value)
+            console.log(`  ✅ Radio-Button ausgewählt: "${value}"`)
+            filledCount++
           } catch (e) {
-            console.warn(`⚠️ Konnte Radio-Button nicht setzen:`, e)
+            console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
+          }
+        } else {
+          console.warn(`  ⚠️ Unbekannter Feld-Typ: ${fieldType}, versuche generische Methoden`)
+          // Versuche generische Methoden
+          if (typeof fieldAny.setText === 'function') {
+            try {
+              fieldAny.setText(value)
+              console.log(`  ✅ Feld mit setText() gesetzt: "${value}"`)
+              filledCount++
+            } catch (e) {
+              console.warn(`  ⚠️ setText() fehlgeschlagen:`, e)
+            }
+          } else if (typeof fieldAny.updateAppearances === 'function') {
+            // Manche Felder benötigen updateAppearances
+            try {
+              if (typeof fieldAny.setText === 'function') {
+                fieldAny.setText(value)
+              }
+              fieldAny.updateAppearances()
+              console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${value}"`)
+              filledCount++
+            } catch (e) {
+              console.warn(`  ⚠️ updateAppearances() fehlgeschlagen:`, e)
+            }
           }
         }
-        
-        console.log(`✅ Formularfeld "${pdfFieldName}" erfolgreich gefüllt`)
       } catch (e) {
-        console.warn(`⚠️ Konnte Formularfeld "${pdfFieldName}" nicht füllen:`, e)
+        console.error(`  ❌ Fehler beim Füllen des Feldes "${pdfFieldName}":`, e)
+        if (e instanceof Error) {
+          console.error(`     Stack:`, e.stack)
+        }
       }
     }
     
+    console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern gefüllt`)
+    
     // Flatten form (macht Formularfelder zu statischem Text)
+    console.log(`🔄 Flatten Formularfelder...`)
     form.flatten()
     console.log('✅ Formularfelder gefüllt und geflattened')
   } catch (e) {
     console.error('❌ Fehler beim Füllen der Formularfelder:', e)
+    if (e instanceof Error) {
+      console.error('   Stack:', e.stack)
+    }
     throw new Error('Fehler beim Füllen der PDF-Formularfelder: ' + (e instanceof Error ? e.message : 'Unbekannter Fehler'))
   }
   
