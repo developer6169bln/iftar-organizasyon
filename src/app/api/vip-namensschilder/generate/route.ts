@@ -1108,15 +1108,17 @@ async function fillTemplateWithMultipleGuests(
           }
         }
         
-        // WICHTIG: Wenn Text-Formularfelder gefüllt wurden, wird flatten() WinAnsi verwenden → Fehler!
-        // Lösung: Nur flatten, wenn keine Text-Formularfelder gefüllt wurden
+        // ROBUST: Overlay-Ansatz - Texte wurden direkt gezeichnet, Formularfelder sind leer
+        // Flatten ist jetzt sicher, da keine Text-Formularfelder mit türkischen Zeichen gefüllt wurden
         if (unicodeFont && filledFieldsCount === 0) {
-          console.log('  ✅ Keine Text-Formularfelder gefüllt - flatten sollte sicher sein')
+          console.log('  ✅ ROBUST: Overlay-Ansatz verwendet - keine Text-Formularfelder gefüllt')
+          console.log('  ✅ Texte wurden direkt gezeichnet (100% Unicode-Kontrolle, KEIN WinAnsi!)')
+          console.log('  ✅ Flatten ist sicher - keine WinAnsi-Fehler erwartet')
           form.flatten()
           console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
         } else if (filledFieldsCount > 0) {
           console.error(`  ❌ ${filledFieldsCount} Text-Formularfeld(er) wurden gefüllt - flatten() wird WinAnsi-Fehler verursachen!`)
-          console.error(`     Versuche trotzdem zu flatten - Fehler wird wahrscheinlich auftreten`)
+          console.error(`     ROBUST: Bitte verwenden Sie Overlay-Ansatz (direkte Zeichnung) statt Formularfeld-Füllung!`)
           try {
             form.flatten()
             console.log('✅ Formularfelder geflattened (trotz möglichem WinAnsi-Fehler)')
@@ -1124,7 +1126,7 @@ async function fillTemplateWithMultipleGuests(
             console.error(`  ❌ Fehler beim Flatten:`, flattenError)
             if (flattenError instanceof Error && flattenError.message.includes('WinAnsi')) {
               console.error(`     ⚠️ WinAnsi-Fehler beim Flatten - Formularfelder wurden nicht geflattened`)
-              console.error(`     ⚠️ PDF enthält möglicherweise noch interaktive Formularfelder`)
+              console.error(`     ⚠️ ROBUST: Verwenden Sie Overlay-Ansatz (direkte Zeichnung) für 100% Unicode-Kontrolle!`)
               throw flattenError
             }
             throw flattenError
