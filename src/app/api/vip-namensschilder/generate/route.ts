@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont, TextAlignment } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -375,6 +376,19 @@ function sanitizeTextForWinAnsi(text: string): string {
 }
 
 // Hilfsfunktion: Fülle PDF-Template mit mehreren Gästen (wenn mehrere Felder mit gleichem Namen)
+// Interface für gespeicherte Feld-Informationen (Original-Wert + Position)
+interface FieldInfo {
+  originalValue: string
+  convertedValue: string
+  fieldName: string
+  pageIndex: number
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  fontSize?: number
+}
+
 async function fillTemplateWithMultipleGuests(
   templateBytes: ArrayBuffer,
   guests: any[],
@@ -444,6 +458,8 @@ async function fillTemplateWithMultipleGuests(
     console.log(`📊 Maximale Gäste pro Seite (basierend auf Feld-Indizes): ${maxGuestsPerPage}`)
     
     let filledCount = 0
+    // Speichere Original-Werte für Unicode-Wiederherstellung nach Flatten
+    const fieldInfoMap: Map<string, FieldInfo> = new Map()
     
     // Für jedes Feld-Gruppe: Fülle mit entsprechendem Gast
     for (const [baseName, data] of Object.entries(fieldsByBaseName)) {
@@ -560,7 +576,8 @@ async function fillTemplateWithMultipleGuests(
         
         // WICHTIG: Formularfelder verwenden WinAnsi-Encoding, das türkische Zeichen nicht unterstützt
         // Daher müssen wir die Zeichen beim Setzen konvertieren
-        const originalValue = value // Speichere Original-Wert für später
+        // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts wiederherstellen
+        const originalValue = value // Speichere Original-Wert für Unicode-Wiederherstellung
         
         // Konvertiere türkische Zeichen für WinAnsi (damit setText() funktioniert)
         const convertedValue = convertTurkishCharsForWinAnsi(originalValue)
@@ -570,9 +587,56 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // Speichere Mapping für später (Original → Konvertiert)
+        // Speichere Original-Wert für Unicode-Wiederherstellung nach Flatten
         if (originalValue !== convertedValue) {
           console.log(`  🔄 Konvertiere für WinAnsi: "${originalValue}" → "${convertedValue}"`)
+          const fieldName = field.getName()
+          const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
+          
+          // Versuche Feld-Position zu erhalten (für Unicode-Wiederherstellung)
+          try {
+            const fieldAny = field as any
+            const acroField = fieldAny.acroField
+            if (acroField && acroField.getRectangle) {
+              const rect = acroField.getRectangle()
+              if (rect) {
+                fieldInfoMap.set(fieldName, {
+                  originalValue,
+                  convertedValue,
+                  fieldName,
+                  pageIndex,
+                  x: rect.x,
+                  y: rect.y,
+                  width: rect.width,
+                  height: rect.height
+                })
+                console.log(`  📍 Feld-Position gespeichert: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`)
+              } else {
+                fieldInfoMap.set(fieldName, {
+                  originalValue,
+                  convertedValue,
+                  fieldName,
+                  pageIndex
+                })
+              }
+            } else {
+              fieldInfoMap.set(fieldName, {
+                originalValue,
+                convertedValue,
+                fieldName,
+                pageIndex
+              })
+            }
+          } catch (posError) {
+            // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
+            fieldInfoMap.set(fieldName, {
+              originalValue,
+              convertedValue,
+              fieldName,
+              pageIndex
+            })
+            console.warn(`  ⚠️ Konnte Feld-Position nicht ermitteln:`, posError)
+          }
         }
         
         try {
@@ -706,7 +770,7 @@ async function fillTemplateWithMultipleGuests(
     
     // Flatten form (macht Formularfelder zu statischem Text) - MUSS erfolgreich sein
     // WICHTIG: Die Formularfelder wurden bereits mit konvertierten Werten gefüllt (WinAnsi-kompatibel)
-    // Daher sollte flatten() jetzt ohne Probleme funktionieren
+    // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts wiederherstellen
     if (form) {
       console.log(`🔄 Flatten Formularfelder (konvertiert zu normalem PDF)...`)
       console.log(`  📝 Alle Werte wurden bereits für WinAnsi konvertiert, flatten sollte funktionieren...`)
@@ -715,8 +779,93 @@ async function fillTemplateWithMultipleGuests(
         // Flatten sollte jetzt funktionieren, da alle Werte WinAnsi-kompatibel sind
         form.flatten()
         console.log('✅ Formularfelder gefüllt und geflattened - PDF ist jetzt normales PDF ohne Formularfelder')
-        console.log('  ℹ️ Hinweis: Türkische Zeichen wurden für WinAnsi konvertiert (İ→I, ğ→g, ş→s, etc.)')
-        console.log('  ℹ️ Dies ist notwendig, da PDF-Formularfelder WinAnsi-Encoding verwenden')
+        
+        // Versuche Unicode-Fonts einzubetten und Original-Texte wiederherzustellen
+        if (fieldInfoMap.size > 0) {
+          console.log(`\n🔄 Versuche türkische Zeichen mit Unicode-Fonts wiederherzustellen...`)
+          console.log(`  📊 ${fieldInfoMap.size} Feld(er) mit konvertierten Werten gefunden`)
+          
+          try {
+            // Registriere fontkit für Unicode-Unterstützung
+            filledDoc.registerFontkit(fontkit)
+            
+            // Versuche Unicode-Font zu laden (Unicode-Unterstützung für türkische Zeichen)
+            // pdf-lib unterstützt Identity-H Encoding für Unicode-Zeichen
+            let unicodeFont: PDFFont | null = null
+            try {
+              // Versuche Noto Sans TTF von CDN zu laden (Unicode-Unterstützung)
+              // Alternative: Verwende eine lokale Font-Datei oder eine andere Unicode-Font
+              const fontUrl = 'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf'
+              const fontResponse = await fetch(fontUrl)
+              if (fontResponse.ok) {
+                const fontBytes = await fontResponse.arrayBuffer()
+                unicodeFont = await filledDoc.embedFont(fontBytes)
+                console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich eingebettet')
+                console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
+              } else {
+                throw new Error(`Font-Response nicht OK: ${fontResponse.status}`)
+              }
+            } catch (fontError) {
+              console.warn('  ⚠️ Konnte Unicode-Font nicht laden:', fontError)
+              console.warn('  ⚠️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
+              // Kein Fallback zu StandardFonts, da diese keine Unicode-Unterstützung haben
+              unicodeFont = null
+            }
+            
+            if (unicodeFont) {
+              // Stelle Original-Texte mit Unicode-Font wiederher
+              const pages = filledDoc.getPages()
+              for (const [fieldName, fieldInfo] of fieldInfoMap.entries()) {
+                if (fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+                  try {
+                    const page = pages[fieldInfo.pageIndex]
+                    if (page) {
+                      // Zeichne Original-Text mit Unicode-Font über konvertierten Text
+                      // Verwende weißen Hintergrund, um konvertierten Text zu überdecken
+                      const textWidth = unicodeFont.widthOfTextAtSize(fieldInfo.originalValue, fieldInfo.fontSize || 12)
+                      const textHeight = (fieldInfo.fontSize || 12) * 1.2
+                      
+                      // Zeichne weißen Hintergrund
+                      page.drawRectangle({
+                        x: fieldInfo.x,
+                        y: fieldInfo.y - textHeight,
+                        width: fieldInfo.width || textWidth + 10,
+                        height: textHeight + 5,
+                        color: rgb(1, 1, 1), // Weiß
+                      })
+                      
+                      // Zeichne Original-Text mit Unicode-Font (UTF-8/Identity-H Encoding)
+                      // Der Font unterstützt jetzt türkische Zeichen (İ, ğ, ş, etc.)
+                      page.drawText(fieldInfo.originalValue, {
+                        x: fieldInfo.x + ((fieldInfo.width || textWidth) - textWidth) / 2, // Zentriert
+                        y: fieldInfo.y - textHeight + 5,
+                        size: fieldInfo.fontSize || 12,
+                        font: unicodeFont,
+                        color: rgb(0, 0, 0),
+                      })
+                      
+                      console.log(`  ✅ Unicode-Text gezeichnet: "${fieldInfo.originalValue}" (mit türkischen Zeichen)`)
+                      
+                      console.log(`  ✅ Text wiederhergestellt: "${fieldInfo.convertedValue}" → "${fieldInfo.originalValue}"`)
+                    }
+                  } catch (restoreError) {
+                    console.warn(`  ⚠️ Konnte Text für Feld "${fieldName}" nicht wiederherstellen:`, restoreError)
+                  }
+                } else {
+                  console.warn(`  ⚠️ Keine Position für Feld "${fieldName}" verfügbar, überspringe Wiederherstellung`)
+                }
+              }
+              console.log('  ✅ Unicode-Wiederherstellung abgeschlossen')
+            } else {
+              console.warn('  ⚠️ Kein Unicode-Font verfügbar, überspringe Wiederherstellung')
+            }
+          } catch (unicodeError) {
+            console.warn('  ⚠️ Unicode-Wiederherstellung fehlgeschlagen:', unicodeError)
+            console.log('  ℹ️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
+          }
+        } else {
+          console.log('  ℹ️ Keine konvertierten Werte gefunden, alle Texte sind bereits WinAnsi-kompatibel')
+        }
       } catch (flattenError) {
         console.error('❌ Fehler beim Flatten:', flattenError)
         if (flattenError instanceof Error) {
