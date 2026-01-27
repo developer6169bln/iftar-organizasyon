@@ -249,28 +249,76 @@ async function fillTemplateWithMultipleGuests(
     console.log(`📋 Mapping:`, JSON.stringify(fieldMapping, null, 2))
     console.log(`👥 Gäste: ${guests.length}`)
     
-    // Gruppiere Felder nach Namen
-    const fieldsByName: { [name: string]: any[] } = {}
+    // Gruppiere Felder nach Basisnamen (ohne Nummer am Ende)
+    // z.B. "Name1", "Name2", "Name3" → Basisname "Name"
+    const fieldsByBaseName: { [baseName: string]: { fields: any[], indices: number[] } } = {}
+    
     for (const field of fields) {
       const pdfFieldName = field.getName()
-      if (!fieldsByName[pdfFieldName]) {
-        fieldsByName[pdfFieldName] = []
+      
+      // Prüfe ob Feldname mit Nummer endet (1-9)
+      const numberMatch = pdfFieldName.match(/^(.+?)([1-9])$/)
+      
+      if (numberMatch) {
+        // Feld hat Nummer am Ende (z.B. "Name1", "Vorname2")
+        const baseName = numberMatch[1] // z.B. "Name"
+        const fieldIndex = parseInt(numberMatch[2]) - 1 // 0-basiert (1→0, 2→1, etc.)
+        
+        if (!fieldsByBaseName[baseName]) {
+          fieldsByBaseName[baseName] = { fields: [], indices: [] }
+        }
+        fieldsByBaseName[baseName].fields.push(field)
+        fieldsByBaseName[baseName].indices.push(fieldIndex)
+        
+        console.log(`  📋 Feld "${pdfFieldName}" → Basisname "${baseName}", Index ${fieldIndex}`)
+      } else {
+        // Feld hat keine Nummer, behandle als einzelnes Feld
+        if (!fieldsByBaseName[pdfFieldName]) {
+          fieldsByBaseName[pdfFieldName] = { fields: [], indices: [] }
+        }
+        fieldsByBaseName[pdfFieldName].fields.push(field)
+        fieldsByBaseName[pdfFieldName].indices.push(0) // Standard-Index 0
       }
-      fieldsByName[pdfFieldName].push(field)
     }
     
-    console.log(`📊 Feld-Gruppierung: ${Object.keys(fieldsByName).length} verschiedene Feldnamen`)
-    for (const [name, fieldList] of Object.entries(fieldsByName)) {
-      console.log(`  - "${name}": ${fieldList.length} Feld(er)`)
+    console.log(`📊 Feld-Gruppierung: ${Object.keys(fieldsByBaseName).length} verschiedene Basisnamen`)
+    for (const [baseName, data] of Object.entries(fieldsByBaseName)) {
+      console.log(`  - "${baseName}": ${data.fields.length} Feld(er), Indizes: [${data.indices.join(', ')}]`)
     }
+    
+    // Bestimme maximale Anzahl Gäste pro Seite basierend auf höchstem Index
+    let maxGuestsPerPage = 1
+    for (const [baseName, data] of Object.entries(fieldsByBaseName)) {
+      // Prüfe ob dieser Basisname zugeordnet ist
+      if (fieldMapping[baseName] || data.fields.some(f => fieldMapping[f.getName()])) {
+        const maxIndex = Math.max(...data.indices, 0)
+        maxGuestsPerPage = Math.max(maxGuestsPerPage, maxIndex + 1) // +1 weil 0-basiert
+      }
+    }
+    
+    console.log(`📊 Maximale Gäste pro Seite (basierend auf Feld-Indizes): ${maxGuestsPerPage}`)
     
     let filledCount = 0
     
     // Für jedes Feld-Gruppe: Fülle mit entsprechendem Gast
-    for (const [pdfFieldName, fieldList] of Object.entries(fieldsByName)) {
-      const guestFieldName = fieldMapping[pdfFieldName]
+    for (const [baseName, data] of Object.entries(fieldsByBaseName)) {
+      const { fields: fieldList, indices } = data
       
-      console.log(`\n🔍 Verarbeite Feld-Gruppe: "${pdfFieldName}" (${fieldList.length} Feld(er))`)
+      // Finde zugeordnetes Gast-Feld (prüfe Basisname und einzelne Felder)
+      let guestFieldName = fieldMapping[baseName]
+      if (!guestFieldName) {
+        // Prüfe ob einzelne Felder zugeordnet sind (z.B. "Name1", "Name2")
+        for (const field of fieldList) {
+          const fieldName = field.getName()
+          if (fieldMapping[fieldName]) {
+            guestFieldName = fieldMapping[fieldName]
+            console.log(`  📋 Basisname "${baseName}" zugeordnet über Feld "${fieldName}" → "${guestFieldName}"`)
+            break
+          }
+        }
+      }
+      
+      console.log(`\n🔍 Verarbeite Feld-Gruppe: "${baseName}" (${fieldList.length} Feld(er))`)
       
       if (!guestFieldName || guestFieldName === '') {
         console.log(`  ⏭️ Nicht zugeordnet, überspringe`)
@@ -279,17 +327,18 @@ async function fillTemplateWithMultipleGuests(
       
       console.log(`  📋 Zugeordnet zu Gast-Feld: "${guestFieldName}"`)
       
-      // Fülle jedes Feld in der Gruppe mit einem anderen Gast
+      // Fülle jedes Feld in der Gruppe mit dem entsprechenden Gast basierend auf Index
       for (let i = 0; i < fieldList.length; i++) {
         const field = fieldList[i]
-        const guest = guests[i] // Nimm den i-ten Gast
+        const fieldIndex = indices[i] // Index aus Feldname (0-basiert: 0, 1, 2, 3)
+        const guest = guests[fieldIndex] // Nimm den Gast am entsprechenden Index
         
         if (!guest) {
-          console.log(`  ⏭️ Kein Gast für Feld ${i + 1}/${fieldList.length}, überspringe`)
+          console.log(`  ⏭️ Kein Gast für Index ${fieldIndex} (Feld ${i + 1}/${fieldList.length}), überspringe`)
           continue
         }
         
-        console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} mit Gast: ${guest.name || guest.id}`)
+        console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} (Index ${fieldIndex}) mit Gast: ${guest.name || guest.id}`)
         
         // Hole Wert aus Gast-Daten
         let value = getFieldValue(guest, guestFieldName)
@@ -418,7 +467,8 @@ async function fillTemplateWithMultipleGuests(
             }
           }
         } catch (e) {
-          console.error(`  ❌ Fehler beim Füllen des Feldes "${pdfFieldName}" (Index ${i}):`, e)
+          const currentFieldName = field.getName()
+          console.error(`  ❌ Fehler beim Füllen des Feldes "${currentFieldName}" (Index ${fieldIndex}):`, e)
           if (e instanceof Error) {
             console.error(`     Stack:`, e.stack)
           }
@@ -537,33 +587,57 @@ export async function POST(request: NextRequest) {
         // Erstelle neues PDF-Dokument
         const finalDoc = await PDFDocument.create()
         
-        // Bestimme Anzahl Gäste pro Seite basierend auf Feldanzahl
+        // Bestimme Anzahl Gäste pro Seite basierend auf Feldnummern (1-4)
         // Lade Template einmal, um Feldanzahl zu bestimmen
         const tempDoc = await PDFDocument.load(templateBytes)
         const tempForm = tempDoc.getForm()
         const tempFields = tempForm.getFields()
         
-        // Finde das Feld mit den meisten Vorkommen (z.B. "Name" mit 4 Vorkommen = 4 Gäste pro Seite)
-        const fieldCounts: { [name: string]: number } = {}
+        // Analysiere Felder: Finde höchste Nummer in Feldnamen (z.B. "Name4" → 4 Gäste)
+        let maxGuestsPerPage = 1
+        const fieldAnalysis: { [baseName: string]: { count: number, maxIndex: number, mapped: string } } = {}
+        
         for (const field of tempFields) {
           const fieldName = field.getName()
-          fieldCounts[fieldName] = (fieldCounts[fieldName] || 0) + 1
-        }
-        
-        // Finde das zugeordnete Feld mit den meisten Vorkommen
-        let maxGuestsPerPage = 1
-        for (const [pdfFieldName, count] of Object.entries(fieldCounts)) {
-          if (fieldMapping[pdfFieldName]) {
-            maxGuestsPerPage = Math.max(maxGuestsPerPage, count)
+          const numberMatch = fieldName.match(/^(.+?)([1-9])$/)
+          
+          if (numberMatch) {
+            // Feld hat Nummer am Ende
+            const baseName = numberMatch[1]
+            const fieldIndex = parseInt(numberMatch[2])
+            
+            if (!fieldAnalysis[baseName]) {
+              fieldAnalysis[baseName] = { count: 0, maxIndex: 0, mapped: '' }
+            }
+            fieldAnalysis[baseName].count++
+            fieldAnalysis[baseName].maxIndex = Math.max(fieldAnalysis[baseName].maxIndex, fieldIndex)
+            
+            // Prüfe Zuordnung
+            if (fieldMapping[baseName]) {
+              fieldAnalysis[baseName].mapped = fieldMapping[baseName]
+            } else if (fieldMapping[fieldName]) {
+              fieldAnalysis[baseName].mapped = fieldMapping[fieldName]
+            }
+            
+            // Aktualisiere maxGuestsPerPage wenn Feld zugeordnet ist
+            if (fieldAnalysis[baseName].mapped) {
+              maxGuestsPerPage = Math.max(maxGuestsPerPage, fieldIndex)
+            }
+          } else {
+            // Feld ohne Nummer
+            if (!fieldAnalysis[fieldName]) {
+              fieldAnalysis[fieldName] = { count: 1, maxIndex: 0, mapped: fieldMapping[fieldName] || '' }
+            }
           }
         }
         
         console.log(`📊 Feld-Analyse:`)
-        for (const [name, count] of Object.entries(fieldCounts)) {
-          const mapped = fieldMapping[name] ? ` → ${fieldMapping[name]}` : ''
-          console.log(`  - "${name}": ${count}x${mapped}`)
+        for (const [name, data] of Object.entries(fieldAnalysis)) {
+          const mapped = data.mapped ? ` → ${data.mapped}` : ''
+          const indexInfo = data.maxIndex > 0 ? ` (max Index: ${data.maxIndex})` : ''
+          console.log(`  - "${name}": ${data.count}x${mapped}${indexInfo}`)
         }
-        console.log(`📊 Maximale Gäste pro Seite: ${maxGuestsPerPage}`)
+        console.log(`📊 Maximale Gäste pro Seite (basierend auf Feldnummern): ${maxGuestsPerPage}`)
         
         // Gruppiere Gäste: maxGuestsPerPage Gäste pro Seite
         const guestGroups: any[][] = []
