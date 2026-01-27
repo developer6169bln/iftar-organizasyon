@@ -711,14 +711,27 @@ async function fillTemplateWithMultipleGuests(
               }
             }
             
-            // Versuche Font-Größe zu extrahieren
+            // Versuche Font-Größe und Font-Name zu extrahieren
             try {
               if (acroField.dict) {
                 const da = acroField.dict.get('DA')
                 if (da) {
+                  // Extrahiere Font-Größe
                   const daMatch = da.match(/(\d+(?:\.\d+)?)\s+Tf/)
                   if (daMatch) {
                     fontSize = parseFloat(daMatch[1])
+                  }
+                  
+                  // Versuche Font-Name zu extrahieren (z.B. "ArialUnicodeMS" oder ähnlich)
+                  const fontNameMatch = da.match(/\/([A-Za-z0-9_\-]+)\s+\d+(?:\.\d+)?\s+Tf/)
+                  if (fontNameMatch) {
+                    const extractedFontName = fontNameMatch[1]
+                    console.log(`  📝 Gefundener Font-Name im Formularfeld: "${extractedFontName}"`)
+                    // Prüfe ob es Arial Unicode MS oder ähnlich ist
+                    if (extractedFontName.toLowerCase().includes('arial') || 
+                        extractedFontName.toLowerCase().includes('unicode')) {
+                      console.log(`  ✅ Formularfeld verwendet Arial Unicode MS oder ähnliche Font!`)
+                    }
                   }
                 }
               }
@@ -885,15 +898,20 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // KRITISCH: Für Text-Felder: Fülle NICHT, wenn Unicode-Font verfügbar ist!
+        // KRITISCH: Für Text-Felder: Fülle NIEMALS, wenn Unicode-Font verfügbar ist!
         // Direkte Zeichnung sollte bereits verwendet worden sein
         // Wenn nicht, bedeutet das, dass direkte Zeichnung fehlgeschlagen ist
+        // In diesem Fall müssen wir die direkte Zeichnung reparieren, nicht Formularfelder füllen!
         if (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown') {
           if (unicodeFont) {
-            console.error(`  ❌ FEHLER: ${fieldType} sollte NICHT gefüllt werden, wenn Unicode-Font verfügbar ist!`)
+            console.error(`  ❌ KRITISCH: ${fieldType} sollte NIEMALS gefüllt werden, wenn Unicode-Font verfügbar ist!`)
             console.error(`     Direkte Zeichnung sollte bereits verwendet worden sein`)
             console.error(`     Wenn nicht, ist direkte Zeichnung fehlgeschlagen - bitte Logs prüfen`)
             console.error(`     Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
+            console.error(`     ⚠️ Bitte prüfen Sie, warum direkte Zeichnung nicht funktioniert hat:`)
+            console.error(`        - Wurde Unicode-Font geladen?`)
+            console.error(`        - Wurde Feld-Position gefunden?`)
+            console.error(`        - Gab es Fehler beim Zeichnen?`)
             continue // Überspringe Formularfeld-Füllung - verhindert WinAnsi-Fehler!
           } else {
             console.warn(`  ⚠️ Unicode-Font nicht verfügbar - Formularfeld wird gefüllt (könnte WinAnsi verwenden)`)
