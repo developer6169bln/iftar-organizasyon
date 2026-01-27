@@ -156,46 +156,20 @@ async function drawNamensschild(
     color: rgb(1, 1, 1), // Weiß
   })
 
-  // Hilfsfunktion: Konvertiere Text für WinAnsi-Encoding (PDF-Formularfelder)
-  // WinAnsi kann nicht alle Unicode-Zeichen kodieren, daher müssen wir problematische Zeichen konvertieren
+  // Hilfsfunktion: Sanitize Text - entfernt NUR Steuerzeichen, behält ALLE Unicode-Zeichen (inkl. türkische)
+  // WICHTIG: KEINE Konvertierung von türkischen Zeichen mehr - Original-Text wird direkt verwendet (UTF-8)
   const sanitizeTextForWinAnsi = (text: string): string => {
     if (!text) return ''
     
-    // Konvertiere problematische Unicode-Zeichen zu ASCII-ähnlichen Zeichen
+    // Entferne NUR Steuerzeichen und unsichtbare Zeichen, behalte ALLE anderen Zeichen (inkl. türkische)
     let sanitized = text
-      // Türkische Zeichen
-      .replace(/İ/g, 'I')  // Großes I mit Punkt → I
-      .replace(/ı/g, 'i')  // Kleines i ohne Punkt → i
-      .replace(/Ğ/g, 'G')  // Großes G mit Breve → G
-      .replace(/ğ/g, 'g')  // Kleines g mit Breve → g
-      .replace(/Ü/g, 'U')  // Großes U mit Umlaut → U
-      .replace(/ü/g, 'u')  // Kleines u mit Umlaut → u
-      .replace(/Ş/g, 'S')  // Großes S mit Cedilla → S
-      .replace(/ş/g, 's')  // Kleines s mit Cedilla → s
-      .replace(/Ö/g, 'O')  // Großes O mit Umlaut → O
-      .replace(/ö/g, 'o')  // Kleines o mit Umlaut → o
-      .replace(/Ç/g, 'C')  // Großes C mit Cedilla → C
-      .replace(/ç/g, 'c')  // Kleines c mit Cedilla → c
-      // Andere problematische Zeichen
+      // Entferne Steuerzeichen (aber behalte alle druckbaren Unicode-Zeichen)
       .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Steuerzeichen
       .replace(/[\u200B-\u200D\uFEFF]/g, '') // Unsichtbare Zeichen
-      // Entferne Zeichen die nicht in WinAnsi sind (behalte nur ASCII + erweiterte ASCII)
-      .split('')
-      .map(char => {
-        const code = char.charCodeAt(0)
-        // WinAnsi unterstützt 0x00-0xFF, aber einige Bereiche sind problematisch
-        // Behalte nur druckbare ASCII-Zeichen (0x20-0x7E) und erweiterte ASCII (0xA0-0xFF)
-        if (code >= 0x20 && code <= 0x7E) {
-          return char // Standard ASCII
-        } else if (code >= 0xA0 && code <= 0xFF) {
-          return char // Erweiterte ASCII (Latin-1)
-        } else {
-          // Konvertiere zu ähnlichem ASCII-Zeichen oder entferne
-          return ''
-        }
-      })
-      .join('')
       .trim()
+    
+    // KEINE Konvertierung von türkischen Zeichen mehr!
+    // Türkische Zeichen (İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü) werden BEHALTEN und direkt verwendet
     
     return sanitized
   }
@@ -670,16 +644,9 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // Konvertiere für WinAnsi (Fallback, falls Unicode-Font nicht verfügbar)
-        let convertedValue = originalValue
-          .replace(/İ/g, 'I').replace(/ı/g, 'i')
-          .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
-          .replace(/Ü/g, 'U').replace(/ü/g, 'u')
-          .replace(/Ş/g, 'S').replace(/ş/g, 's')
-          .replace(/Ö/g, 'O').replace(/ö/g, 'o')
-          .replace(/Ç/g, 'C').replace(/ç/g, 'c')
-        
-        convertedValue = sanitizeTextForWinAnsi(convertedValue)
+        // WICHTIG: KEINE Konvertierung mehr - verwende Original-Text direkt (UTF-8)
+        // Türkische Zeichen werden NICHT mehr konvertiert - sie werden direkt verwendet
+        let convertedValue = sanitizeTextForWinAnsi(originalValue) // Nur Steuerzeichen entfernen, behalte türkische Zeichen
         
         console.log(`  📝 Feld "${fieldName}": "${originalValue}" (hat türkische Zeichen: ${hasTurkishChars})`)
         
@@ -890,23 +857,33 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // WARNUNG: Formularfeld-Füllung verwendet WinAnsi/ANSI - nur als Fallback!
-        console.warn(`  ⚠️ WARNUNG: Verwende Formularfeld-Füllung mit WinAnsi (ANSI-Kodierung!)`)
-        console.warn(`     Dies sollte nur passieren, wenn Unicode-Font nicht verfügbar ist!`)
-        console.warn(`     Original: "${originalValue}" → Konvertiert: "${convertedValue}"`)
+        // WICHTIG: Verwende Original-Text direkt (UTF-8) - KEINE Konvertierung mehr!
+        // Versuche Formularfeld mit Original-Text zu füllen (UTF-8)
+        console.log(`  📝 Verwende Original-Text direkt (UTF-8): "${convertedValue}"`)
+        console.log(`     Türkische Zeichen werden NICHT konvertiert - direkte UTF-8-Verwendung!`)
         
         try {
           const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
-          console.log(`  ✏️ Setze Wert (Fallback, WinAnsi/ANSI-kompatibel): "${convertedValue}"`)
+          console.log(`  ✏️ Setze Wert direkt (UTF-8, Original-Text): "${convertedValue}"`)
           
           // Versuche verschiedene Methoden, um das Feld zu setzen
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // Fallback: Fülle Formularfeld mit konvertiertem Wert (WinAnsi/ANSI)
-            fieldAny.setText(convertedValue)
-            console.log(`  ⚠️ TextField gesetzt mit WinAnsi/ANSI: "${convertedValue}"`)
+            // WICHTIG: Setze Original-Text direkt (UTF-8) - KEINE Konvertierung!
+            // pdf-lib sollte UTF-8 unterstützen, wenn Unicode-Font eingebettet ist
+            try {
+              fieldAny.setText(convertedValue) // Original-Text mit türkischen Zeichen
+              console.log(`  ✅ TextField gesetzt mit Original-Text (UTF-8): "${convertedValue}"`)
+            } catch (setTextError) {
+              console.error(`  ❌ Fehler beim Setzen des Textes:`, setTextError)
+              if (setTextError instanceof Error && setTextError.message.includes('WinAnsi')) {
+                console.error(`     ⚠️ WinAnsi-Fehler - aber wir verwenden Original-Text (UTF-8)!`)
+                console.error(`     ⚠️ Möglicherweise wird trotzdem ANSI verwendet - bitte Logs prüfen!`)
+              }
+              throw setTextError
+            }
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
@@ -935,14 +912,14 @@ async function fillTemplateWithMultipleGuests(
             try {
               // Verwende konvertierten Wert (WinAnsi-kompatibel)
               dropdown.select(convertedValue)
-              console.log(`  ✅ Dropdown ausgewählt (WinAnsi-kompatibel): "${convertedValue}"`)
+              console.log(`  ✅ Dropdown ausgewählt (UTF-8, Original-Text): "${convertedValue}"`)
               filledCount++
             } catch (e) {
               console.warn(`  ⚠️ Wert nicht in Dropdown-Liste:`, e)
               // Versuche als Text zu setzen, falls möglich
               if (typeof dropdown.setText === 'function') {
                 dropdown.setText(convertedValue)
-                console.log(`  ✅ Dropdown als Text gesetzt (WinAnsi-kompatibel): "${convertedValue}"`)
+                console.log(`  ✅ Dropdown als Text gesetzt (UTF-8, Original-Text): "${convertedValue}"`)
               // Zentriere den Text
               try {
                 if (typeof dropdown.setAlignment === 'function') {
@@ -961,7 +938,7 @@ async function fillTemplateWithMultipleGuests(
             try {
               // Verwende konvertierten Wert (WinAnsi-kompatibel)
               radioGroup.select(convertedValue)
-              console.log(`  ✅ Radio-Button ausgewählt (WinAnsi-kompatibel): "${convertedValue}"`)
+              console.log(`  ✅ Radio-Button ausgewählt (UTF-8, Original-Text): "${convertedValue}"`)
               filledCount++
             } catch (e) {
               console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
@@ -973,7 +950,7 @@ async function fillTemplateWithMultipleGuests(
               try {
                 // Verwende konvertierten Wert (WinAnsi-kompatibel)
                 fieldAny.setText(convertedValue)
-                console.log(`  ✅ Feld mit setText() gesetzt (WinAnsi-kompatibel): "${convertedValue}"`)
+                console.log(`  ✅ Feld mit setText() gesetzt (UTF-8, Original-Text): "${convertedValue}"`)
                 // Zentriere den Text
                 try {
                   if (typeof fieldAny.setAlignment === 'function') {
