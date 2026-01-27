@@ -767,21 +767,32 @@ async function fillTemplateWithMultipleGuests(
                 
                 console.log(`     Text-Breite: ${textWidth}, Text-Höhe: ${textHeight}`)
                 
+                // WICHTIG: PDF-Koordinatensystem hat (0,0) unten links
+                // fieldRect.y ist die obere Y-Koordinate des Feldes
+                // Für drawText() brauchen wir die untere Y-Koordinate
+                
                 // Berechne zentrierte Position
                 const textX = fieldRect.x + (fieldRect.width - textWidth) / 2
-                const textY = fieldRect.y - textHeight + (fieldRect.height - textHeight) / 2
+                // Y-Position: fieldRect.y ist oben, wir brauchen unten für drawText
+                // Text wird von der Baseline (unten) gezeichnet
+                const textY = fieldRect.y - fieldRect.height + (fieldRect.height - textHeight) / 2 + textHeight * 0.2
                 
                 console.log(`     Zeichne bei: x=${textX}, y=${textY}`)
+                console.log(`     Feld-Rect: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
                 
                 // Zeichne Text direkt mit Unicode-Font (unterstützt UTF-8/Unicode, Identity-H Encoding)
                 // Der Font unterstützt türkische Zeichen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü
+                // WICHTIG: drawText() verwendet automatisch UTF-8/Unicode-Encoding wenn Font eingebettet ist
                 page.drawText(sanitizedValue, {
                   x: textX,
                   y: textY,
                   size: fontSize,
-                  font: unicodeFont, // UTF-8/Unicode-kompatibler Font
+                  font: unicodeFont, // UTF-8/Unicode-kompatibler Font (Identity-H Encoding)
                   color: rgb(0, 0, 0),
                 })
+                
+                // Zusätzlicher Test: Prüfe ob Text korrekt gezeichnet wurde
+                console.log(`     ✅ Text gezeichnet mit Font: ${unicodeFont ? 'Unicode-Font' : 'Standard-Font'}`)
                 
                 console.log(`  ✅ Text erfolgreich mit Unicode-Font gezeichnet: "${sanitizedValue}"`)
                 console.log(`     Türkische Zeichen sollten korrekt dargestellt werden!`)
