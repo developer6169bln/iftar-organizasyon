@@ -849,35 +849,40 @@ async function fillTemplateWithMultipleGuests(
           console.warn(`  ⚠️ Fehler beim Ermitteln der Feld-Position:`, posError)
         }
         
-        // Prüfe ob convertedValue definiert ist (könnte fehlen, wenn direkte Zeichnung erfolgreich war)
-        // convertedValue sollte immer definiert sein, da es oben berechnet wurde
+        // KRITISCH: Wenn Unicode-Font verfügbar ist und direkte Zeichnung möglich war, 
+        // FÜLLE KEINE FORMULARFELDER - das würde ANSI verwenden!
+        // Prüfe ob Text bereits mit Unicode-Font gezeichnet wurde
+        if (unicodeFont && fieldInfoMap.has(fieldName)) {
+          const fieldInfo = fieldInfoMap.get(fieldName)
+          if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld-Füllung (verhindert ANSI!)`)
+            continue
+          }
+        }
+        
+        // Prüfe ob convertedValue definiert ist
         if (!convertedValue || convertedValue.trim() === '') {
           console.log(`  ⚠️ convertedValue ist leer, überspringe Formularfeld-Füllung`)
           continue
         }
         
+        // WARNUNG: Formularfeld-Füllung verwendet WinAnsi/ANSI - nur als Fallback!
+        console.warn(`  ⚠️ WARNUNG: Verwende Formularfeld-Füllung mit WinAnsi (ANSI-Kodierung!)`)
+        console.warn(`     Dies sollte nur passieren, wenn Unicode-Font nicht verfügbar ist!`)
+        console.warn(`     Original: "${originalValue}" → Konvertiert: "${convertedValue}"`)
+        
         try {
           const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
-          console.log(`  ✏️ Setze Wert (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
+          console.log(`  ✏️ Setze Wert (Fallback, WinAnsi/ANSI-kompatibel): "${convertedValue}"`)
           
           // Versuche verschiedene Methoden, um das Feld zu setzen
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // Wenn Unicode-Font verfügbar und Text bereits gezeichnet wurde, überspringe
-            // Ansonsten verwende konvertierten Wert (Fallback)
-            if (unicodeFont && fieldInfoMap.has(fieldName)) {
-              const fieldInfo = fieldInfoMap.get(fieldName)
-              if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
-                console.log(`  ℹ️ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld`)
-                continue
-              }
-            }
-            
-            // Fallback: Fülle Formularfeld mit konvertiertem Wert
+            // Fallback: Fülle Formularfeld mit konvertiertem Wert (WinAnsi/ANSI)
             fieldAny.setText(convertedValue)
-            console.log(`  ✅ TextField gesetzt (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
+            console.log(`  ⚠️ TextField gesetzt mit WinAnsi/ANSI: "${convertedValue}"`)
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
