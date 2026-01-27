@@ -329,39 +329,8 @@ async function drawNamensschild(
   }
 }
 
-// Hilfsfunktion: Konvertiere türkische Zeichen für WinAnsi-Encoding (PDF-Formularfelder)
-// WinAnsi kann türkische Zeichen nicht direkt kodieren, daher müssen wir sie konvertieren
-// WICHTIG: Diese Funktion wird nur für das Setzen in Formularfelder verwendet
-// Nach dem Flatten werden die Original-Zeichen mit Unicode-Fonts wiederhergestellt
-function convertTurkishCharsForWinAnsi(text: string): string {
-  if (!text) return ''
-  
-  // Konvertiere türkische Zeichen zu ASCII-ähnlichen Zeichen
-  // Diese Konvertierung ist notwendig, damit setText() in Formularfeldern funktioniert
-  let converted = text
-    // Türkische Zeichen - intelligente Konvertierung
-    .replace(/İ/g, 'I')  // Großes I mit Punkt → I
-    .replace(/ı/g, 'i')  // Kleines i ohne Punkt → i
-    .replace(/Ğ/g, 'G')  // Großes G mit Breve → G
-    .replace(/ğ/g, 'g')  // Kleines g mit Breve → g
-    .replace(/Ü/g, 'U')  // Großes U mit Umlaut → U
-    .replace(/ü/g, 'u')  // Kleines u mit Umlaut → u
-    .replace(/Ş/g, 'S')  // Großes S mit Cedilla → S
-    .replace(/ş/g, 's')  // Kleines s mit Cedilla → s
-    .replace(/Ö/g, 'O')  // Großes O mit Umlaut → O
-    .replace(/ö/g, 'o')  // Kleines o mit Umlaut → o
-    .replace(/Ç/g, 'C')  // Großes C mit Cedilla → C
-    .replace(/ç/g, 'c')  // Kleines c mit Cedilla → c
-    // Entferne Steuerzeichen und unsichtbare Zeichen
-    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Steuerzeichen
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Unsichtbare Zeichen
-    .trim()
-  
-  return converted
-}
-
 // Hilfsfunktion: Sanitize Text (nur Steuerzeichen entfernen, behalte alle Zeichen)
-// Wird für normale Text-Zeichnung verwendet (nicht für Formularfelder)
+// Wird für normale Text-Zeichnung verwendet (behält türkische Zeichen)
 function sanitizeTextForWinAnsi(text: string): string {
   if (!text) return ''
   
@@ -574,83 +543,87 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // WICHTIG: Formularfelder verwenden WinAnsi-Encoding, das türkische Zeichen nicht unterstützt
-        // Daher müssen wir die Zeichen beim Setzen konvertieren
-        // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts wiederherstellen
-        const originalValue = value // Speichere Original-Wert für Unicode-Wiederherstellung
+        // Verwende Original-Wert direkt (mit Unicode-Fonts werden türkische Zeichen korrekt dargestellt)
+        const originalValue = value
         
-        // Konvertiere türkische Zeichen für WinAnsi (damit setText() funktioniert)
-        const convertedValue = convertTurkishCharsForWinAnsi(originalValue)
+        // Sanitize nur Steuerzeichen, behalte türkische Zeichen
+        const sanitizedValue = sanitizeTextForWinAnsi(originalValue)
         
-        if (!convertedValue || convertedValue.trim() === '') {
-          console.log(`  ⚠️ Wert wurde nach Konvertierung leer, überspringe`)
+        if (!sanitizedValue || sanitizedValue.trim() === '') {
+          console.log(`  ⚠️ Wert wurde nach Sanitization leer, überspringe`)
           continue
         }
         
         // Speichere Original-Wert für Unicode-Wiederherstellung nach Flatten
-        if (originalValue !== convertedValue) {
-          console.log(`  🔄 Konvertiere für WinAnsi: "${originalValue}" → "${convertedValue}"`)
-          const fieldName = field.getName()
-          const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
-          
-          // Versuche Feld-Position zu erhalten (für Unicode-Wiederherstellung)
-          try {
-            const fieldAny = field as any
-            const acroField = fieldAny.acroField
-            if (acroField && acroField.getRectangle) {
-              const rect = acroField.getRectangle()
-              if (rect) {
-                fieldInfoMap.set(fieldName, {
-                  originalValue,
-                  convertedValue,
-                  fieldName,
-                  pageIndex,
-                  x: rect.x,
-                  y: rect.y,
-                  width: rect.width,
-                  height: rect.height
-                })
-                console.log(`  📍 Feld-Position gespeichert: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`)
-              } else {
-                fieldInfoMap.set(fieldName, {
-                  originalValue,
-                  convertedValue,
-                  fieldName,
-                  pageIndex
-                })
-              }
+        // (falls Formularfelder WinAnsi verwenden und Zeichen nicht direkt setzen können)
+        const fieldName = field.getName()
+        const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
+        
+        // Versuche Feld-Position zu erhalten (für Unicode-Wiederherstellung)
+        try {
+          const fieldAny = field as any
+          const acroField = fieldAny.acroField
+          if (acroField && acroField.getRectangle) {
+            const rect = acroField.getRectangle()
+            if (rect) {
+              fieldInfoMap.set(fieldName, {
+                originalValue,
+                convertedValue: sanitizedValue, // Für Vergleich
+                fieldName,
+                pageIndex,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height
+              })
+              console.log(`  📍 Feld-Position gespeichert: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`)
             } else {
               fieldInfoMap.set(fieldName, {
                 originalValue,
-                convertedValue,
+                convertedValue: sanitizedValue,
                 fieldName,
                 pageIndex
               })
             }
-          } catch (posError) {
-            // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
+          } else {
             fieldInfoMap.set(fieldName, {
               originalValue,
-              convertedValue,
+              convertedValue: sanitizedValue,
               fieldName,
               pageIndex
             })
-            console.warn(`  ⚠️ Konnte Feld-Position nicht ermitteln:`, posError)
           }
+        } catch (posError) {
+          // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
+          fieldInfoMap.set(fieldName, {
+            originalValue,
+            convertedValue: sanitizedValue,
+            fieldName,
+            pageIndex
+          })
+          console.warn(`  ⚠️ Konnte Feld-Position nicht ermitteln:`, posError)
         }
         
         try {
           const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
-          console.log(`  ✏️ Setze Wert (konvertiert für WinAnsi): "${convertedValue}"`)
+          console.log(`  ✏️ Setze Wert (mit Unicode): "${originalValue}"`)
           
           // Versuche verschiedene Methoden, um das Feld zu setzen
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // Verwende konvertierten Wert (WinAnsi-kompatibel)
-            fieldAny.setText(convertedValue)
-            console.log(`  ✅ TextField gesetzt: "${convertedValue}"`)
+            // Versuche Original-Wert zu setzen (mit Unicode)
+            // Falls das fehlschlägt (WinAnsi-Fehler), wird es nach dem Flatten mit Unicode-Font wiederhergestellt
+            try {
+              fieldAny.setText(originalValue)
+              console.log(`  ✅ TextField gesetzt (Unicode): "${originalValue}"`)
+            } catch (unicodeError) {
+              // Falls Unicode fehlschlägt, verwende sanitized (wird nach Flatten mit Unicode-Font wiederhergestellt)
+              console.warn(`  ⚠️ Unicode-Text fehlgeschlagen, verwende sanitized (wird nach Flatten wiederhergestellt):`, unicodeError)
+              fieldAny.setText(sanitizedValue)
+              console.log(`  ✅ TextField gesetzt (sanitized): "${sanitizedValue}"`)
+            }
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
@@ -677,16 +650,28 @@ async function fillTemplateWithMultipleGuests(
           } else if (fieldType === 'PDFDropdown') {
             const dropdown = field as any
             try {
-              // Verwende konvertierten Wert (WinAnsi-kompatibel)
-              dropdown.select(convertedValue)
-              console.log(`  ✅ Dropdown ausgewählt: "${convertedValue}"`)
-              filledCount++
+              // Versuche Original-Wert zu verwenden
+              try {
+                dropdown.select(originalValue)
+                console.log(`  ✅ Dropdown ausgewählt (Unicode): "${originalValue}"`)
+                filledCount++
+              } catch (e1) {
+                // Falls originaler Wert fehlschlägt, versuche sanitized
+                dropdown.select(sanitizedValue)
+                console.log(`  ✅ Dropdown ausgewählt (sanitized): "${sanitizedValue}"`)
+                filledCount++
+              }
             } catch (e) {
               console.warn(`  ⚠️ Wert nicht in Dropdown-Liste:`, e)
               // Versuche als Text zu setzen, falls möglich
               if (typeof dropdown.setText === 'function') {
-                dropdown.setText(convertedValue)
-                console.log(`  ✅ Dropdown als Text gesetzt: "${convertedValue}"`)
+                try {
+                  dropdown.setText(originalValue)
+                  console.log(`  ✅ Dropdown als Text gesetzt (Unicode): "${originalValue}"`)
+                } catch (textError) {
+                  dropdown.setText(sanitizedValue)
+                  console.log(`  ✅ Dropdown als Text gesetzt (sanitized): "${sanitizedValue}"`)
+                }
               // Zentriere den Text
               try {
                 if (typeof dropdown.setAlignment === 'function') {
@@ -696,17 +681,23 @@ async function fillTemplateWithMultipleGuests(
               } catch (alignError) {
                 console.warn(`  ⚠️ Konnte Dropdown-Text nicht zentrieren:`, alignError)
               }
-              console.log(`  ✅ Dropdown als Text gesetzt: "${convertedValue}"`)
+              console.log(`  ✅ Dropdown als Text gesetzt`)
               filledCount++
             }
             }
           } else if (fieldType === 'PDFRadioGroup') {
             const radioGroup = field as any
             try {
-              // Verwende konvertierten Wert (WinAnsi-kompatibel)
-              radioGroup.select(convertedValue)
-              console.log(`  ✅ Radio-Button ausgewählt: "${convertedValue}"`)
-              filledCount++
+              // Versuche Original-Wert zu verwenden
+              try {
+                radioGroup.select(originalValue)
+                console.log(`  ✅ Radio-Button ausgewählt (Unicode): "${originalValue}"`)
+                filledCount++
+              } catch (e1) {
+                radioGroup.select(sanitizedValue)
+                console.log(`  ✅ Radio-Button ausgewählt (sanitized): "${sanitizedValue}"`)
+                filledCount++
+              }
             } catch (e) {
               console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
             }
@@ -715,9 +706,14 @@ async function fillTemplateWithMultipleGuests(
             // Versuche generische Methoden
             if (typeof fieldAny.setText === 'function') {
               try {
-                // Verwende konvertierten Wert (WinAnsi-kompatibel)
-                fieldAny.setText(convertedValue)
-                console.log(`  ✅ Feld mit setText() gesetzt: "${convertedValue}"`)
+                // Versuche Original-Wert zu verwenden
+                try {
+                  fieldAny.setText(originalValue)
+                  console.log(`  ✅ Feld mit setText() gesetzt (Unicode): "${originalValue}"`)
+                } catch (unicodeError) {
+                  fieldAny.setText(sanitizedValue)
+                  console.log(`  ✅ Feld mit setText() gesetzt (sanitized): "${sanitizedValue}"`)
+                }
                 // Zentriere den Text
                 try {
                   if (typeof fieldAny.setAlignment === 'function') {
@@ -735,9 +731,14 @@ async function fillTemplateWithMultipleGuests(
               // Manche Felder benötigen updateAppearances
               try {
                 if (typeof fieldAny.setText === 'function') {
-                  // Verwende konvertierten Wert (WinAnsi-kompatibel)
-                  fieldAny.setText(convertedValue)
-                  console.log(`  ✅ Feld mit setText() gesetzt: "${convertedValue}"`)
+                  // Versuche Original-Wert zu verwenden
+                  try {
+                    fieldAny.setText(originalValue)
+                    console.log(`  ✅ Feld mit setText() gesetzt (Unicode): "${originalValue}"`)
+                  } catch (unicodeError) {
+                    fieldAny.setText(sanitizedValue)
+                    console.log(`  ✅ Feld mit setText() gesetzt (sanitized): "${sanitizedValue}"`)
+                  }
                   // Zentriere den Text
                   try {
                     if (typeof fieldAny.setAlignment === 'function') {
@@ -769,11 +770,11 @@ async function fillTemplateWithMultipleGuests(
     console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern gefüllt`)
     
     // Flatten form (macht Formularfelder zu statischem Text) - MUSS erfolgreich sein
-    // WICHTIG: Die Formularfelder wurden bereits mit konvertierten Werten gefüllt (WinAnsi-kompatibel)
-    // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts wiederherstellen
+    // WICHTIG: Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts wiederherstellen
+    // (falls Formularfelder WinAnsi verwendet haben und Zeichen nicht direkt setzen konnten)
     if (form) {
       console.log(`🔄 Flatten Formularfelder (konvertiert zu normalem PDF)...`)
-      console.log(`  📝 Alle Werte wurden bereits für WinAnsi konvertiert, flatten sollte funktionieren...`)
+      console.log(`  📝 Versuche Flatten mit Unicode-Werten...`)
       
       try {
         // Flatten sollte jetzt funktionieren, da alle Werte WinAnsi-kompatibel sind
