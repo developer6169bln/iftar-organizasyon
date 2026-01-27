@@ -328,6 +328,8 @@ async function fillTemplateWithMultipleGuests(
       console.log(`  📋 Zugeordnet zu Gast-Feld: "${guestFieldName}"`)
       
       // Fülle jedes Feld in der Gruppe mit dem entsprechenden Gast basierend auf Index
+      const filledGuestsInGroup = new Set<string>()
+      
       for (let i = 0; i < fieldList.length; i++) {
         const field = fieldList[i]
         const fieldIndex = indices[i] // Index aus Feldname (0-basiert: 0, 1, 2, 3)
@@ -338,6 +340,15 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
+        const guestId = guest.id || guest.name || JSON.stringify(guest)
+        
+        // Prüfe ob dieser Gast bereits in dieser Gruppe verarbeitet wurde
+        if (filledGuestsInGroup.has(guestId)) {
+          console.warn(`  ⚠️ Gast ${guest.name || guest.id} wurde bereits in dieser Gruppe verarbeitet, überspringe Duplikat`)
+          continue
+        }
+        
+        filledGuestsInGroup.add(guestId)
         console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} (Index ${fieldIndex}) mit Gast: ${guest.name || guest.id}`)
         
         // Hole Wert aus Gast-Daten
@@ -639,22 +650,66 @@ export async function POST(request: NextRequest) {
         }
         console.log(`📊 Maximale Gäste pro Seite (basierend auf Feldnummern): ${maxGuestsPerPage}`)
         
+        // Entferne Duplikate basierend auf Gast-ID
+        const uniqueGuests: any[] = []
+        const seenGuestIds = new Set<string>()
+        for (const guest of guests) {
+          const guestId = guest.id || guest.name || JSON.stringify(guest)
+          if (!seenGuestIds.has(guestId)) {
+            seenGuestIds.add(guestId)
+            uniqueGuests.push(guest)
+          } else {
+            console.warn(`⚠️ Doppelter Gast übersprungen: ${guest.name || guest.id}`)
+          }
+        }
+        
+        if (uniqueGuests.length !== guests.length) {
+          console.warn(`⚠️ ${guests.length - uniqueGuests.length} doppelte Gäste entfernt`)
+        }
+        
+        console.log(`👥 Eindeutige Gäste: ${uniqueGuests.length} von ${guests.length} ursprünglichen Gästen`)
+        
         // Gruppiere Gäste: maxGuestsPerPage Gäste pro Seite
         const guestGroups: any[][] = []
-        for (let i = 0; i < guests.length; i += maxGuestsPerPage) {
-          guestGroups.push(guests.slice(i, i + maxGuestsPerPage))
+        for (let i = 0; i < uniqueGuests.length; i += maxGuestsPerPage) {
+          guestGroups.push(uniqueGuests.slice(i, i + maxGuestsPerPage))
         }
         
         console.log(`📄 Erstelle ${guestGroups.length} Seite(n) mit je bis zu ${maxGuestsPerPage} Gast/Gästen`)
         
+        // Validierung: Prüfe dass alle Gäste in Gruppen sind
+        const totalGuestsInGroups = guestGroups.reduce((sum, group) => sum + group.length, 0)
+        if (totalGuestsInGroups !== uniqueGuests.length) {
+          console.error(`❌ FEHLER: Nicht alle Gäste in Gruppen! Erwartet: ${uniqueGuests.length}, Gefunden: ${totalGuestsInGroups}`)
+          throw new Error(`Nicht alle Gäste konnten gruppiert werden. Erwartet: ${uniqueGuests.length}, Gefunden: ${totalGuestsInGroups}`)
+        }
+        
+        // Tracking: Welche Gäste wurden verarbeitet
+        const processedGuestIds = new Set<string>()
+        
         // Für jede Gruppe: Template kopieren und füllen
         for (let groupIndex = 0; groupIndex < guestGroups.length; groupIndex++) {
           const guestGroup = guestGroups[groupIndex]
+          const groupGuestIds = guestGroup.map(g => g.id || g.name || JSON.stringify(g))
+          
           console.log(`\n📝 Verarbeite Gruppe ${groupIndex + 1}/${guestGroups.length} mit ${guestGroup.length} Gast/Gästen`)
+          console.log(`  👥 Gäste in Gruppe: ${guestGroup.map(g => g.name || g.id).join(', ')}`)
+          
+          // Prüfe ob Gäste bereits verarbeitet wurden
+          const alreadyProcessed = groupGuestIds.filter(id => processedGuestIds.has(id))
+          if (alreadyProcessed.length > 0) {
+            console.error(`  ❌ FEHLER: ${alreadyProcessed.length} Gast/Gäste wurden bereits verarbeitet: ${alreadyProcessed.join(', ')}`)
+            throw new Error(`Doppelte Verarbeitung erkannt: ${alreadyProcessed.join(', ')}`)
+          }
           
           try {
             // Fülle Template mit Gast-Gruppe (jedes Mal neu laden für saubere Kopie)
             const filledDoc = await fillTemplateWithMultipleGuests(templateBytes, guestGroup, getFieldValue, fieldMapping)
+            
+            // Markiere Gäste als verarbeitet
+            for (const guestId of groupGuestIds) {
+              processedGuestIds.add(guestId)
+            }
             
             // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
             const pageCount = filledDoc.getPageCount()
@@ -685,6 +740,26 @@ export async function POST(request: NextRequest) {
             throw new Error(`Fehler beim Verarbeiten von Gruppe ${groupIndex + 1}: ${groupError instanceof Error ? groupError.message : 'Unbekannter Fehler'}`)
           }
         }
+        
+        // Finale Validierung: Prüfe dass alle Gäste verarbeitet wurden
+        const allGuestIds = uniqueGuests.map(g => g.id || g.name || JSON.stringify(g))
+        const missingGuests = allGuestIds.filter(id => !processedGuestIds.has(id))
+        
+        if (missingGuests.length > 0) {
+          console.error(`❌ FEHLER: ${missingGuests.length} Gast/Gäste wurden nicht verarbeitet:`)
+          for (const missingId of missingGuests) {
+            const missingGuest = uniqueGuests.find(g => (g.id || g.name || JSON.stringify(g)) === missingId)
+            console.error(`  - ${missingGuest?.name || missingGuest?.id || missingId}`)
+          }
+          throw new Error(`${missingGuests.length} Gast/Gäste wurden nicht verarbeitet`)
+        }
+        
+        console.log(`\n✅ Validierung erfolgreich:`)
+        console.log(`  - ${uniqueGuests.length} eindeutige Gäste`)
+        console.log(`  - ${processedGuestIds.size} Gäste verarbeitet`)
+        console.log(`  - ${guestGroups.length} Seiten erstellt`)
+        console.log(`  - Keine Duplikate`)
+        console.log(`  - Alle Gäste eingetragen`)
         
         // PDF generieren
         console.log('📄 Speichere PDF...')
