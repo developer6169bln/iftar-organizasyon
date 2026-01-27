@@ -752,10 +752,17 @@ async function fillTemplateWithMultipleGuests(
           console.warn(`  ⚠️ Fehler beim Ermitteln der Feld-Position:`, posError)
         }
         
+        // Prüfe ob convertedValue definiert ist (könnte fehlen, wenn direkte Zeichnung erfolgreich war)
+        // convertedValue sollte immer definiert sein, da es oben berechnet wurde
+        if (!convertedValue || convertedValue.trim() === '') {
+          console.log(`  ⚠️ convertedValue ist leer, überspringe Formularfeld-Füllung`)
+          continue
+        }
+        
         try {
           const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
-          console.log(`  ✏️ Setze Wert (WinAnsi-kompatibel, wird nach Flatten mit Unicode-Font wiederhergestellt): "${convertedValue}"`)
+          console.log(`  ✏️ Setze Wert (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
           
           // Versuche verschiedene Methoden, um das Feld zu setzen
           const fieldAny = field as any
@@ -772,14 +779,8 @@ async function fillTemplateWithMultipleGuests(
             }
             
             // Fallback: Fülle Formularfeld mit konvertiertem Wert
-            // convertedValue wurde bereits oben berechnet
-            if (convertedValue && convertedValue.trim() !== '') {
-              fieldAny.setText(convertedValue)
-              console.log(`  ✅ TextField gesetzt (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
-            } else {
-              console.warn(`  ⚠️ Konvertierter Wert ist leer, überspringe`)
-              continue
-            }
+            fieldAny.setText(convertedValue)
+            console.log(`  ✅ TextField gesetzt (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
