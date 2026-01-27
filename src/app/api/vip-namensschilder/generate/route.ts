@@ -850,8 +850,9 @@ async function fillTemplateWithMultipleGuests(
           }
         }
         
-        // Wenn direkte Zeichnung nicht möglich war, verwende Formularfeld-Füllung
-        // (nach updateFieldAppearances sollte UTF-8 funktionieren)
+        // KRITISCH: Wenn Unicode-Font verfügbar ist, FÜLLE KEINE TEXT-FORMULARFELDER!
+        // Auch mit updateFieldAppearances() verwendet pdf-lib/@pdfme/pdf-lib beim Flatten WinAnsi
+        // Lösung: Nur direkte Zeichnung verwenden, Formularfelder leer lassen
         const fieldType = field.constructor.name
         
         // Prüfe ob convertedValue definiert ist
@@ -860,8 +861,22 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
-        // WICHTIG: Nur für CheckBoxen und andere nicht-Text-Felder
-        // Text-Felder werden NICHT gefüllt, wenn Unicode-Font verfügbar ist (verhindert WinAnsi)
+        // KRITISCH: Für Text-Felder: Fülle NICHT, wenn Unicode-Font verfügbar ist!
+        // Direkte Zeichnung sollte bereits verwendet worden sein
+        // Wenn nicht, bedeutet das, dass direkte Zeichnung fehlgeschlagen ist
+        if (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown') {
+          if (unicodeFont) {
+            console.error(`  ❌ FEHLER: ${fieldType} sollte NICHT gefüllt werden, wenn Unicode-Font verfügbar ist!`)
+            console.error(`     Direkte Zeichnung sollte bereits verwendet worden sein`)
+            console.error(`     Wenn nicht, ist direkte Zeichnung fehlgeschlagen - bitte Logs prüfen`)
+            console.error(`     Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
+            continue // Überspringe Formularfeld-Füllung - verhindert WinAnsi-Fehler!
+          } else {
+            console.warn(`  ⚠️ Unicode-Font nicht verfügbar - Formularfeld wird gefüllt (könnte WinAnsi verwenden)`)
+          }
+        }
+        
+        // Nur für CheckBoxen und andere nicht-Text-Felder
         console.log(`  📝 Verwende Original-Text direkt (UTF-8): "${convertedValue}"`)
         console.log(`     ⚠️ WARNUNG: Formularfeld-Füllung kann WinAnsi-Fehler verursachen!`)
         
@@ -873,13 +888,8 @@ async function fillTemplateWithMultipleGuests(
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // WICHTIG: Wenn Unicode-Font verfügbar ist UND updateFieldAppearances() aufgerufen wurde,
-            // kann pdf-lib jetzt UTF-8 verwenden (kein WinAnsi mehr!)
-            if (unicodeFont) {
-              console.log(`  ✅ Unicode-Font verfügbar - setText() verwendet jetzt UTF-8 (kein WinAnsi!)`)
-            } else {
-              console.warn(`  ⚠️ Unicode-Font nicht verfügbar - setText() könnte WinAnsi verwenden`)
-            }
+            // WARNUNG: Dies sollte nur passieren, wenn Unicode-Font NICHT verfügbar ist
+            console.warn(`  ⚠️ WARNUNG: PDFTextField wird gefüllt ohne Unicode-Font - könnte WinAnsi-Fehler verursachen!`)
             
             try {
               fieldAny.setText(convertedValue) // Original-Text mit türkischen Zeichen (UTF-8)
