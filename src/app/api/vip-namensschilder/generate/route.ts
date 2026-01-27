@@ -573,12 +573,17 @@ async function fillTemplateWithMultipleGuests(
         }
         
         // Speichere Original-Wert für Unicode-Wiederherstellung nach Flatten
-        // WICHTIG: Speichere ALLE Felder, auch wenn sie nicht konvertiert wurden (für Unicode-Font)
+        // WICHTIG: Speichere ALLE Felder mit türkischen Zeichen für Unicode-Wiederherstellung
         const fieldName = field.getName()
         const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
         
+        // Prüfe ob Original-Wert türkische Zeichen enthält
+        const hasTurkishChars = /[İıĞğŞşÇçÖöÜü]/.test(originalValue)
+        
         if (originalValue !== convertedValue) {
           console.log(`  🔄 Konvertiere für WinAnsi (wird nach Flatten mit Unicode-Font wiederhergestellt): "${originalValue}" → "${convertedValue}"`)
+        } else if (hasTurkishChars) {
+          console.log(`  ℹ️ Feld enthält türkische Zeichen, wird mit Unicode-Font dargestellt: "${originalValue}"`)
         }
         
         // Versuche Feld-Position und Font-Größe zu erhalten (für Unicode-Wiederherstellung)
@@ -621,23 +626,25 @@ async function fillTemplateWithMultipleGuests(
             }
           }
           
-          // Speichere Feld-Info (immer, auch wenn Position nicht verfügbar ist)
-          fieldInfoMap.set(fieldName, {
-            originalValue,
-            convertedValue,
-            fieldName,
-            pageIndex,
-            x: fieldRect?.x,
-            y: fieldRect?.y,
-            width: fieldRect?.width,
-            height: fieldRect?.height,
-            fontSize
-          })
-          
-          if (fieldRect) {
-            console.log(`  📍 Feld-Position gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
-          } else {
-            console.log(`  📍 Feld-Info gespeichert (Position wird später ermittelt), fontSize=${fontSize}`)
+          // Speichere Feld-Info (immer, wenn türkische Zeichen vorhanden sind oder konvertiert wurde)
+          if (hasTurkishChars || originalValue !== convertedValue) {
+            fieldInfoMap.set(fieldName, {
+              originalValue,
+              convertedValue,
+              fieldName,
+              pageIndex,
+              x: fieldRect?.x,
+              y: fieldRect?.y,
+              width: fieldRect?.width,
+              height: fieldRect?.height,
+              fontSize
+            })
+            
+            if (fieldRect) {
+              console.log(`  📍 Feld-Position gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
+            } else {
+              console.log(`  📍 Feld-Info gespeichert (Position wird später ermittelt), fontSize=${fontSize}`)
+            }
           }
         } catch (posError) {
           // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
@@ -806,24 +813,49 @@ async function fillTemplateWithMultipleGuests(
             // Versuche Unicode-Font zu laden (Unicode-Unterstützung für türkische Zeichen)
             // pdf-lib unterstützt Identity-H Encoding für Unicode-Zeichen
             let unicodeFont: PDFFont | null = null
-            try {
-              // Versuche Noto Sans TTF von CDN zu laden (Unicode-Unterstützung)
-              // Alternative: Verwende eine lokale Font-Datei oder eine andere Unicode-Font
-              const fontUrl = 'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf'
-              const fontResponse = await fetch(fontUrl)
-              if (fontResponse.ok) {
-                const fontBytes = await fontResponse.arrayBuffer()
-                unicodeFont = await filledDoc.embedFont(fontBytes)
-                console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich eingebettet')
-                console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
-              } else {
-                throw new Error(`Font-Response nicht OK: ${fontResponse.status}`)
+            const fontUrls = [
+              'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
+              'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
+              'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf'
+            ]
+            
+            for (const fontUrl of fontUrls) {
+              try {
+                console.log(`  🔄 Versuche Font zu laden von: ${fontUrl}`)
+                const fontResponse = await fetch(fontUrl, {
+                  headers: {
+                    'Accept': 'application/octet-stream',
+                  },
+                  // Timeout nach 10 Sekunden
+                  signal: AbortSignal.timeout(10000)
+                })
+                
+                if (fontResponse.ok) {
+                  const fontBytes = await fontResponse.arrayBuffer()
+                  console.log(`  📦 Font-Datei geladen: ${fontBytes.byteLength} Bytes`)
+                  
+                  unicodeFont = await filledDoc.embedFont(fontBytes)
+                  console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich eingebettet')
+                  console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
+                  console.log(`  ✅ Font kann türkische Zeichen darstellen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü`)
+                  break // Erfolgreich geladen, breche Schleife ab
+                } else {
+                  console.warn(`  ⚠️ Font-Response nicht OK (${fontResponse.status}): ${fontUrl}`)
+                }
+              } catch (fontError) {
+                console.warn(`  ⚠️ Fehler beim Laden von ${fontUrl}:`, fontError)
+                if (fontError instanceof Error) {
+                  console.warn(`     Fehler-Message: ${fontError.message}`)
+                }
+                // Versuche nächste URL
+                continue
               }
-            } catch (fontError) {
-              console.warn('  ⚠️ Konnte Unicode-Font nicht laden:', fontError)
-              console.warn('  ⚠️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
-              // Kein Fallback zu StandardFonts, da diese keine Unicode-Unterstützung haben
-              unicodeFont = null
+            }
+            
+            if (!unicodeFont) {
+              console.error('  ❌ Konnte Unicode-Font von keiner Quelle laden!')
+              console.error('  ❌ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, Ü→U, etc.)')
+              console.error('  ❌ Bitte überprüfen Sie die Internet-Verbindung oder verwenden Sie eine lokale Font-Datei')
             }
             
             if (unicodeFont) {
@@ -833,8 +865,12 @@ async function fillTemplateWithMultipleGuests(
               let skippedCount = 0
               
               for (const [fieldName, fieldInfo] of fieldInfoMap.entries()) {
-                // Nur wiederherstellen, wenn Original-Wert von konvertiertem Wert abweicht
-                if (fieldInfo.originalValue !== fieldInfo.convertedValue) {
+                // Wiederherstellen, wenn Original-Wert türkische Zeichen enthält ODER konvertiert wurde
+                const needsRestore = fieldInfo.originalValue !== fieldInfo.convertedValue || /[İıĞğŞşÇçÖöÜü]/.test(fieldInfo.originalValue)
+                
+                if (needsRestore) {
+                  console.log(`  🔄 Verarbeite Feld "${fieldName}": "${fieldInfo.originalValue}" (konvertiert: "${fieldInfo.convertedValue}")`)
+                  
                   if (fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
                     try {
                       const page = pages[fieldInfo.pageIndex]
@@ -845,22 +881,34 @@ async function fillTemplateWithMultipleGuests(
                         const fieldWidth = fieldInfo.width || textWidth + 10
                         const fieldHeight = fieldInfo.height || textHeight + 5
                         
+                        console.log(`    📐 Position: x=${fieldInfo.x}, y=${fieldInfo.y}, width=${fieldWidth}, height=${fieldHeight}, fontSize=${fontSize}`)
+                        console.log(`    📏 Text-Breite: ${textWidth}, Text-Höhe: ${textHeight}`)
+                        
                         // Zeichne weißen Hintergrund über konvertierten Text
                         // Verwende etwas größeren Bereich, um sicherzustellen, dass alles überdeckt wird
+                        const rectX = fieldInfo.x - 2
+                        const rectY = fieldInfo.y - fieldHeight - 2
+                        const rectWidth = fieldWidth + 4
+                        const rectHeight = fieldHeight + 4
+                        
                         page.drawRectangle({
-                          x: fieldInfo.x - 2,
-                          y: fieldInfo.y - fieldHeight - 2,
-                          width: fieldWidth + 4,
-                          height: fieldHeight + 4,
+                          x: rectX,
+                          y: rectY,
+                          width: rectWidth,
+                          height: rectHeight,
                           color: rgb(1, 1, 1), // Weiß
                         })
+                        
+                        console.log(`    🎨 Weißer Hintergrund gezeichnet: x=${rectX}, y=${rectY}, width=${rectWidth}, height=${rectHeight}`)
                         
                         // Berechne zentrierte Position für Text
                         const textX = fieldInfo.x + (fieldWidth - textWidth) / 2
                         const textY = fieldInfo.y - textHeight + (fieldHeight - textHeight) / 2
                         
+                        console.log(`    📝 Zeichne Text bei: x=${textX}, y=${textY}`)
+                        
                         // Zeichne Original-Text mit Unicode-Font (UTF-8/Identity-H Encoding)
-                        // Der Font unterstützt jetzt türkische Zeichen (İ, ğ, ş, etc.)
+                        // Der Font unterstützt jetzt türkische Zeichen (İ, ğ, ş, Ü, ü, etc.)
                         page.drawText(fieldInfo.originalValue, {
                           x: textX,
                           y: textY,
@@ -870,22 +918,23 @@ async function fillTemplateWithMultipleGuests(
                         })
                         
                         restoredCount++
-                        console.log(`  ✅ Text wiederhergestellt: "${fieldInfo.convertedValue}" → "${fieldInfo.originalValue}" (Feld: ${fieldName})`)
+                        console.log(`    ✅ Text erfolgreich wiederhergestellt: "${fieldInfo.convertedValue}" → "${fieldInfo.originalValue}"`)
                       } else {
                         skippedCount++
-                        console.warn(`  ⚠️ Seite ${fieldInfo.pageIndex} nicht gefunden für Feld "${fieldName}"`)
+                        console.warn(`    ⚠️ Seite ${fieldInfo.pageIndex} nicht gefunden für Feld "${fieldName}"`)
                       }
                     } catch (restoreError) {
                       skippedCount++
-                      console.warn(`  ⚠️ Konnte Text für Feld "${fieldName}" nicht wiederherstellen:`, restoreError)
+                      console.error(`    ❌ Fehler beim Wiederherstellen von Feld "${fieldName}":`, restoreError)
                       if (restoreError instanceof Error) {
-                        console.warn(`     Fehler-Details: ${restoreError.message}`)
+                        console.error(`       Fehler-Message: ${restoreError.message}`)
+                        console.error(`       Stack: ${restoreError.stack}`)
                       }
                     }
                   } else {
                     skippedCount++
-                    console.warn(`  ⚠️ Keine Position für Feld "${fieldName}" verfügbar, überspringe Wiederherstellung`)
-                    console.warn(`     Original: "${fieldInfo.originalValue}", Konvertiert: "${fieldInfo.convertedValue}"`)
+                    console.warn(`    ⚠️ Keine Position für Feld "${fieldName}" verfügbar (x=${fieldInfo.x}, y=${fieldInfo.y})`)
+                    console.warn(`       Original: "${fieldInfo.originalValue}", Konvertiert: "${fieldInfo.convertedValue}"`)
                   }
                 } else {
                   // Keine Konvertierung nötig, Original-Wert ist bereits WinAnsi-kompatibel
