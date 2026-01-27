@@ -1233,7 +1233,11 @@ async function fillTemplateWithMultipleGuests(
             console.log('  ℹ️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
           }
         } else {
-          console.log('  ℹ️ Keine konvertierten Werte gefunden, alle Texte sind bereits WinAnsi-kompatibel')
+          if (unicodeFont) {
+            console.log('  ✅ Keine Wiederherstellung nötig - alle Texte wurden direkt mit Unicode-Font gezeichnet!')
+          } else {
+            console.log('  ℹ️ Keine konvertierten Werte gefunden, alle Texte sind bereits WinAnsi-kompatibel')
+          }
         }
       } catch (flattenError) {
         console.error('❌ Fehler beim Flatten:', flattenError)
