@@ -573,46 +573,71 @@ async function fillTemplateWithMultipleGuests(
         }
         
         // Speichere Original-Wert für Unicode-Wiederherstellung nach Flatten
+        // WICHTIG: Speichere ALLE Felder, auch wenn sie nicht konvertiert wurden (für Unicode-Font)
+        const fieldName = field.getName()
+        const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
+        
         if (originalValue !== convertedValue) {
           console.log(`  🔄 Konvertiere für WinAnsi (wird nach Flatten mit Unicode-Font wiederhergestellt): "${originalValue}" → "${convertedValue}"`)
         }
         
-        const fieldName = field.getName()
-        const pageIndex = 0 // Template hat normalerweise nur eine Seite, sonst müssten wir die Seite finden
-        
-        // Versuche Feld-Position zu erhalten (für Unicode-Wiederherstellung)
+        // Versuche Feld-Position und Font-Größe zu erhalten (für Unicode-Wiederherstellung)
         try {
           const fieldAny = field as any
           const acroField = fieldAny.acroField
-          if (acroField && acroField.getRectangle) {
-            const rect = acroField.getRectangle()
-            if (rect) {
-              fieldInfoMap.set(fieldName, {
-                originalValue,
-                convertedValue,
-                fieldName,
-                pageIndex,
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height
-              })
-              console.log(`  📍 Feld-Position gespeichert: x=${rect.x}, y=${rect.y}, width=${rect.width}, height=${rect.height}`)
-            } else {
-              fieldInfoMap.set(fieldName, {
-                originalValue,
-                convertedValue,
-                fieldName,
-                pageIndex
-              })
+          
+          let fieldRect: { x: number; y: number; width: number; height: number } | null = null
+          let fontSize = 12 // Standard-Font-Größe
+          
+          if (acroField) {
+            // Versuche Rectangle zu erhalten
+            if (acroField.getRectangle) {
+              const rect = acroField.getRectangle()
+              if (rect && rect.x !== undefined && rect.y !== undefined) {
+                fieldRect = {
+                  x: rect.x,
+                  y: rect.y,
+                  width: rect.width || 100,
+                  height: rect.height || 20
+                }
+              }
             }
+            
+            // Versuche Font-Größe zu extrahieren
+            try {
+              if (acroField.dict) {
+                const da = acroField.dict.get('DA') // Default Appearance
+                if (da) {
+                  // Parse DA String für Font-Größe (z.B. "/Helv 12 Tf")
+                  const daMatch = da.match(/(\d+(?:\.\d+)?)\s+Tf/)
+                  if (daMatch) {
+                    fontSize = parseFloat(daMatch[1])
+                    console.log(`  📏 Font-Größe extrahiert: ${fontSize}`)
+                  }
+                }
+              }
+            } catch (fontSizeError) {
+              console.warn(`  ⚠️ Konnte Font-Größe nicht extrahieren, verwende Standard:`, fontSizeError)
+            }
+          }
+          
+          // Speichere Feld-Info (immer, auch wenn Position nicht verfügbar ist)
+          fieldInfoMap.set(fieldName, {
+            originalValue,
+            convertedValue,
+            fieldName,
+            pageIndex,
+            x: fieldRect?.x,
+            y: fieldRect?.y,
+            width: fieldRect?.width,
+            height: fieldRect?.height,
+            fontSize
+          })
+          
+          if (fieldRect) {
+            console.log(`  📍 Feld-Position gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
           } else {
-            fieldInfoMap.set(fieldName, {
-              originalValue,
-              convertedValue,
-              fieldName,
-              pageIndex
-            })
+            console.log(`  📍 Feld-Info gespeichert (Position wird später ermittelt), fontSize=${fontSize}`)
           }
         } catch (posError) {
           // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
@@ -620,7 +645,8 @@ async function fillTemplateWithMultipleGuests(
             originalValue,
             convertedValue,
             fieldName,
-            pageIndex
+            pageIndex,
+            fontSize: 12
           })
           console.warn(`  ⚠️ Konnte Feld-Position nicht ermitteln:`, posError)
         }
@@ -803,49 +829,74 @@ async function fillTemplateWithMultipleGuests(
             if (unicodeFont) {
               // Stelle Original-Texte mit Unicode-Font wiederher
               const pages = filledDoc.getPages()
+              let restoredCount = 0
+              let skippedCount = 0
+              
               for (const [fieldName, fieldInfo] of fieldInfoMap.entries()) {
-                if (fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
-                  try {
-                    const page = pages[fieldInfo.pageIndex]
-                    if (page) {
-                      // Zeichne Original-Text mit Unicode-Font über konvertierten Text
-                      // Verwende weißen Hintergrund, um konvertierten Text zu überdecken
-                      const textWidth = unicodeFont.widthOfTextAtSize(fieldInfo.originalValue, fieldInfo.fontSize || 12)
-                      const textHeight = (fieldInfo.fontSize || 12) * 1.2
-                      
-                      // Zeichne weißen Hintergrund
-                      page.drawRectangle({
-                        x: fieldInfo.x,
-                        y: fieldInfo.y - textHeight,
-                        width: fieldInfo.width || textWidth + 10,
-                        height: textHeight + 5,
-                        color: rgb(1, 1, 1), // Weiß
-                      })
-                      
-                      // Zeichne Original-Text mit Unicode-Font (UTF-8/Identity-H Encoding)
-                      // Der Font unterstützt jetzt türkische Zeichen (İ, ğ, ş, etc.)
-                      page.drawText(fieldInfo.originalValue, {
-                        x: fieldInfo.x + ((fieldInfo.width || textWidth) - textWidth) / 2, // Zentriert
-                        y: fieldInfo.y - textHeight + 5,
-                        size: fieldInfo.fontSize || 12,
-                        font: unicodeFont,
-                        color: rgb(0, 0, 0),
-                      })
-                      
-                      console.log(`  ✅ Unicode-Text gezeichnet: "${fieldInfo.originalValue}" (mit türkischen Zeichen)`)
-                      
-                      console.log(`  ✅ Text wiederhergestellt: "${fieldInfo.convertedValue}" → "${fieldInfo.originalValue}"`)
+                // Nur wiederherstellen, wenn Original-Wert von konvertiertem Wert abweicht
+                if (fieldInfo.originalValue !== fieldInfo.convertedValue) {
+                  if (fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+                    try {
+                      const page = pages[fieldInfo.pageIndex]
+                      if (page) {
+                        const fontSize = fieldInfo.fontSize || 12
+                        const textWidth = unicodeFont.widthOfTextAtSize(fieldInfo.originalValue, fontSize)
+                        const textHeight = fontSize * 1.2
+                        const fieldWidth = fieldInfo.width || textWidth + 10
+                        const fieldHeight = fieldInfo.height || textHeight + 5
+                        
+                        // Zeichne weißen Hintergrund über konvertierten Text
+                        // Verwende etwas größeren Bereich, um sicherzustellen, dass alles überdeckt wird
+                        page.drawRectangle({
+                          x: fieldInfo.x - 2,
+                          y: fieldInfo.y - fieldHeight - 2,
+                          width: fieldWidth + 4,
+                          height: fieldHeight + 4,
+                          color: rgb(1, 1, 1), // Weiß
+                        })
+                        
+                        // Berechne zentrierte Position für Text
+                        const textX = fieldInfo.x + (fieldWidth - textWidth) / 2
+                        const textY = fieldInfo.y - textHeight + (fieldHeight - textHeight) / 2
+                        
+                        // Zeichne Original-Text mit Unicode-Font (UTF-8/Identity-H Encoding)
+                        // Der Font unterstützt jetzt türkische Zeichen (İ, ğ, ş, etc.)
+                        page.drawText(fieldInfo.originalValue, {
+                          x: textX,
+                          y: textY,
+                          size: fontSize,
+                          font: unicodeFont,
+                          color: rgb(0, 0, 0),
+                        })
+                        
+                        restoredCount++
+                        console.log(`  ✅ Text wiederhergestellt: "${fieldInfo.convertedValue}" → "${fieldInfo.originalValue}" (Feld: ${fieldName})`)
+                      } else {
+                        skippedCount++
+                        console.warn(`  ⚠️ Seite ${fieldInfo.pageIndex} nicht gefunden für Feld "${fieldName}"`)
+                      }
+                    } catch (restoreError) {
+                      skippedCount++
+                      console.warn(`  ⚠️ Konnte Text für Feld "${fieldName}" nicht wiederherstellen:`, restoreError)
+                      if (restoreError instanceof Error) {
+                        console.warn(`     Fehler-Details: ${restoreError.message}`)
+                      }
                     }
-                  } catch (restoreError) {
-                    console.warn(`  ⚠️ Konnte Text für Feld "${fieldName}" nicht wiederherstellen:`, restoreError)
+                  } else {
+                    skippedCount++
+                    console.warn(`  ⚠️ Keine Position für Feld "${fieldName}" verfügbar, überspringe Wiederherstellung`)
+                    console.warn(`     Original: "${fieldInfo.originalValue}", Konvertiert: "${fieldInfo.convertedValue}"`)
                   }
                 } else {
-                  console.warn(`  ⚠️ Keine Position für Feld "${fieldName}" verfügbar, überspringe Wiederherstellung`)
+                  // Keine Konvertierung nötig, Original-Wert ist bereits WinAnsi-kompatibel
+                  console.log(`  ℹ️ Feld "${fieldName}" benötigt keine Wiederherstellung (bereits WinAnsi-kompatibel)`)
                 }
               }
-              console.log('  ✅ Unicode-Wiederherstellung abgeschlossen')
+              
+              console.log(`  📊 Wiederherstellung abgeschlossen: ${restoredCount} Feld(er) wiederhergestellt, ${skippedCount} übersprungen`)
             } else {
               console.warn('  ⚠️ Kein Unicode-Font verfügbar, überspringe Wiederherstellung')
+              console.warn('  ⚠️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
             }
           } catch (unicodeError) {
             console.warn('  ⚠️ Unicode-Wiederherstellung fehlgeschlagen:', unicodeError)
