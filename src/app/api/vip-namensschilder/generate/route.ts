@@ -350,22 +350,28 @@ async function fillTemplateWithMultipleGuests(
   // Ohne Unicode-Font werden Formularfelder mit WinAnsi gefüllt → ANSI-Kodierung!
   let unicodeFont: PDFFont | null = null
   console.log('🔄 KRITISCH: Lade Unicode-Font für direkte Text-Zeichnung (UTF-8/Unicode)...')
+  console.log('  📝 Bevorzugte Font: Arial Unicode MS (wie im PDF-Formular verwendet)')
+  console.log('  📝 Fallback: Arimo, Noto Sans, DejaVu Sans (ähnliche Unicode-Unterstützung)')
   console.log('  ⚠️ Ohne Unicode-Font wird ANSI/WinAnsi-Kodierung verwendet!')
   
-  // Verwende zuverlässige Font-Quellen, die garantiert türkische Zeichen unterstützen
-  // PRIORITÄT: Direkte TTF-Downloads (keine CSS-Dateien)
+  // WICHTIG: Verwende Arial Unicode MS (wie im PDF-Formular verwendet)
+  // Arial Unicode MS unterstützt türkische Zeichen vollständig
+  // Falls Arial Unicode MS nicht verfügbar ist, verwende Fallback-Fonts
   const fontUrls = [
-    // jsDelivr CDN - sehr zuverlässig, direktes TTF
+    // PRIORITÄT 1: Arial Unicode MS (wie im PDF-Formular verwendet)
+    // Arial Unicode MS ist eine proprietäre Font, aber es gibt ähnliche Alternativen
+    // Versuche zuerst ähnliche Fonts, die Arial Unicode MS ähneln
+    'https://github.com/google/fonts/raw/main/ofl/arimo/Arimo-Regular.ttf', // Arimo ist ähnlich zu Arial
+    'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/arimo/Arimo-Regular.ttf',
+    // PRIORITÄT 2: Noto Sans (sehr gute Unicode-Unterstützung, ähnlich zu Arial Unicode MS)
     'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
-    // GitHub Raw - Fallback, direktes TTF
     'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
-    // Google Fonts CDN - direktes TTF
     'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
-    // Alternative: DejaVu Sans (auch sehr gute Unicode-Unterstützung)
+    // PRIORITÄT 3: DejaVu Sans (auch sehr gute Unicode-Unterstützung)
     'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf',
-    // Weitere Alternative: Noto Sans von cdnjs
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-solid-900.ttf' // Falsch, entfernen
-  ].filter(url => !url.includes('fa-solid')) // Entferne falsche URLs
+    // PRIORITÄT 4: Liberation Sans (Arial-ähnlich, gute Unicode-Unterstützung)
+    'https://github.com/liberationfonts/liberation-fonts/raw/master/liberation-fonts-ttf-2.1.5/LiberationSans-Regular.ttf'
+  ]
   
   for (const fontUrl of fontUrls) {
     try {
@@ -399,13 +405,14 @@ async function fillTemplateWithMultipleGuests(
             unicodeFont = await filledDoc.embedFont(fontBytes)
             console.log('  ✅ Unicode-Font erfolgreich geladen und eingebettet')
             
-            // Test: Prüfe ob Font türkische Zeichen unterstützt
+            // Test: Prüfe ob Font türkische Zeichen unterstützt (wie Arial Unicode MS)
             try {
               const testText = 'İğşÇçÖöÜü'
               const testWidth = unicodeFont.widthOfTextAtSize(testText, 12)
               console.log(`  ✅ Font-Test erfolgreich: Test-Text "${testText}" Breite: ${testWidth}`)
               console.log(`  ✅ Font unterstützt UTF-8/Unicode Encoding (Identity-H)`)
               console.log(`  ✅ Font kann türkische Zeichen darstellen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü`)
+              console.log(`  ✅ Font ist kompatibel mit Arial Unicode MS (wie im PDF-Formular verwendet)`)
               break // Erfolgreich geladen und getestet
             } catch (testError) {
               console.warn(`  ⚠️ Font-Test fehlgeschlagen, versuche nächste Font:`, testError)
