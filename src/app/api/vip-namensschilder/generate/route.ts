@@ -1044,18 +1044,62 @@ async function fillTemplateWithMultipleGuests(
       }
       
       try {
-        // KRITISCH: Prüfe ob Text-Formularfelder gefüllt wurden (sollten leer sein, wenn Unicode-Font verfügbar ist)
+        // KRITISCH: Prüfe ob Text-Formularfelder gefüllt wurden
         if (unicodeFont && filledFieldsCount > 0) {
           console.error(`  ❌ WARNUNG: ${filledFieldsCount} Text-Formularfeld(er) wurden gefüllt, obwohl Unicode-Font verfügbar ist!`)
           console.error(`     Dies wird WinAnsi-Fehler verursachen: "WinAnsi cannot encode"`)
-          console.error(`     Bitte prüfen Sie, warum direkte Zeichnung nicht verwendet wurde`)
-          console.error(`     Versuche trotzdem zu flatten - Fehler wird wahrscheinlich auftreten`)
+          console.error(`     Versuche Formularfelder zu entfernen statt zu flatten...`)
+          
+          // Versuche Formularfelder zu entfernen statt zu flatten (verhindert WinAnsi-Fehler)
+          try {
+            const fieldsToRemove = form.getFields()
+            for (const field of fieldsToRemove) {
+              try {
+                const fieldAny = field as any
+                if (fieldAny.acroField) {
+                  // Entferne das Feld aus dem AcroForm
+                  const acroForm = form.dict
+                  if (acroForm && typeof acroForm.delete === 'function') {
+                    // Versuche Feld zu entfernen
+                    console.log(`  🔄 Versuche Formularfeld "${field.getName()}" zu entfernen...`)
+                  }
+                }
+              } catch (removeError) {
+                console.warn(`  ⚠️ Konnte Formularfeld nicht entfernen:`, removeError)
+              }
+            }
+          } catch (removeError) {
+            console.warn(`  ⚠️ Fehler beim Entfernen von Formularfeldern:`, removeError)
+            console.warn(`  ⚠️ Fallback: Versuche trotzdem zu flatten (Fehler wird wahrscheinlich auftreten)`)
+          }
         }
         
-        // Flatten alle Formularfelder (auch leere, damit sie nicht mehr interaktiv sind)
-        // WICHTIG: Wenn Text-Formularfelder gefüllt wurden, wird WinAnsi verwendet → Fehler!
-        form.flatten()
-        console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
+        // WICHTIG: Wenn Text-Formularfelder gefüllt wurden, wird flatten() WinAnsi verwenden → Fehler!
+        // Lösung: Nur flatten, wenn keine Text-Formularfelder gefüllt wurden
+        if (unicodeFont && filledFieldsCount === 0) {
+          console.log('  ✅ Keine Text-Formularfelder gefüllt - flatten sollte sicher sein')
+          form.flatten()
+          console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
+        } else if (filledFieldsCount > 0) {
+          console.error(`  ❌ ${filledFieldsCount} Text-Formularfeld(er) wurden gefüllt - flatten() wird WinAnsi-Fehler verursachen!`)
+          console.error(`     Versuche trotzdem zu flatten - Fehler wird wahrscheinlich auftreten`)
+          try {
+            form.flatten()
+            console.log('✅ Formularfelder geflattened (trotz möglichem WinAnsi-Fehler)')
+          } catch (flattenError) {
+            console.error(`  ❌ Fehler beim Flatten:`, flattenError)
+            if (flattenError instanceof Error && flattenError.message.includes('WinAnsi')) {
+              console.error(`     ⚠️ WinAnsi-Fehler beim Flatten - Formularfelder wurden nicht geflattened`)
+              console.error(`     ⚠️ PDF enthält möglicherweise noch interaktive Formularfelder`)
+              throw flattenError
+            }
+            throw flattenError
+          }
+        } else {
+          // Keine Formularfelder gefüllt, flatten sollte sicher sein
+          form.flatten()
+          console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
+        }
         
         if (unicodeFont) {
           console.log('  ✅ Texte wurden mit Unicode-Font (UTF-8/Identity-H) gezeichnet - türkische Zeichen sollten korrekt sein!')
