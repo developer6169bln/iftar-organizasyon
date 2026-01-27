@@ -762,9 +762,22 @@ async function fillTemplateWithMultipleGuests(
                 console.log(`     Zeichne bei: x=${textX}, y=${textY}`)
                 console.log(`     Feld-Rect: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
                 
-                // Zeichne Text direkt mit Unicode-Font (unterstützt UTF-8/Unicode, Identity-H Encoding)
+                // ROBUST: Zeichne Text direkt als Overlay mit Unicode-Font (100% Unicode-Kontrolle)
+                // Dies ist die robusteste Lösung: Wir zeichnen direkt, ohne Formularfelder zu füllen
                 // Der Font unterstützt türkische Zeichen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü
-                // WICHTIG: drawText() verwendet automatisch UTF-8/Unicode-Encoding wenn Font eingebettet ist
+                // WICHTIG: drawText() verwendet automatisch UTF-8/Unicode-Encoding (Identity-H) wenn Font eingebettet ist
+                // KEIN WinAnsi wird verwendet - 100% Unicode-Kontrolle!
+                
+                // Zeichne weißen Hintergrund, um eventuelle Formularfeld-Inhalte zu überschreiben
+                page.drawRectangle({
+                  x: fieldRect.x,
+                  y: fieldRect.y - fieldRect.height,
+                  width: fieldRect.width,
+                  height: fieldRect.height,
+                  color: rgb(1, 1, 1), // Weiß
+                })
+                
+                // Zeichne Text direkt mit Unicode-Font (Overlay-Ansatz)
                 page.drawText(sanitizedValue, {
                   x: textX,
                   y: textY,
@@ -791,8 +804,9 @@ async function fillTemplateWithMultipleGuests(
                 // Zusätzlicher Test: Prüfe ob Text korrekt gezeichnet wurde
                 console.log(`     ✅ Text gezeichnet mit Font: ${unicodeFont ? 'Unicode-Font' : 'Standard-Font'}`)
                 
-                console.log(`  ✅ Text erfolgreich mit Unicode-Font gezeichnet: "${sanitizedValue}"`)
+                console.log(`  ✅ Text erfolgreich als Overlay mit Unicode-Font gezeichnet: "${sanitizedValue}"`)
                 console.log(`     Türkische Zeichen sollten korrekt dargestellt werden!`)
+                console.log(`     ✅ ROBUST: Overlay-Ansatz - 100% Unicode-Kontrolle, KEIN WinAnsi!`)
                 console.log(`     ✅ Formularfeld wird NICHT gefüllt (verhindert ANSI/WinAnsi-Kodierung!)`)
                 
                 filledCount++
