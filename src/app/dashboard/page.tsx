@@ -429,7 +429,7 @@ export default function DashboardPage() {
           <div className="flex h-48 items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-white drop-shadow-lg">Iftar Organizasyon Sistemi</h1>
-              <p className="mt-2 text-lg text-white drop-shadow-md">Titanic Hotel - 27 Şubat 2026</p>
+              <p className="mt-2 text-lg text-white drop-shadow-md">Titanic Hotel 26.02.2026</p>
             </div>
             <button
               onClick={handleLogout}
@@ -560,7 +560,7 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm opacity-90">Tarih</p>
-              <p className="text-xl font-semibold">27 Şubat 2026</p>
+              <p className="text-xl font-semibold">26.02.2026</p>
             </div>
             <div>
               <p className="text-sm opacity-90">Lokasyon</p>
