@@ -351,8 +351,46 @@ async function fillTemplateWithMultipleGuests(
   let unicodeFont: PDFFont | null = null
   console.log('🔄 KRITISCH: Lade Unicode-Font für direkte Text-Zeichnung (UTF-8/Unicode)...')
   console.log('  📝 Bevorzugte Font: Arial Unicode MS (wie im PDF-Formular verwendet)')
+  console.log('  📝 Versuche zuerst Font aus dem PDF-Formular zu extrahieren (falls Arial Unicode MS eingebettet ist)')
   console.log('  📝 Fallback: Arimo, Noto Sans, DejaVu Sans (ähnliche Unicode-Unterstützung)')
   console.log('  ⚠️ Ohne Unicode-Font wird ANSI/WinAnsi-Kodierung verwendet!')
+  
+  // Versuche Font aus dem PDF-Formular zu extrahieren (falls Arial Unicode MS eingebettet ist)
+  try {
+    const embeddedFonts = filledDoc.getFontNames()
+    console.log(`  🔍 Gefundene eingebettete Fonts im PDF: ${embeddedFonts.length}`)
+    for (const fontName of embeddedFonts) {
+      console.log(`     - ${fontName}`)
+      // Prüfe ob Arial Unicode MS oder ähnliche Font vorhanden ist
+      if (fontName.toLowerCase().includes('arial') || fontName.toLowerCase().includes('unicode')) {
+        console.log(`  ✅ Gefunden: ${fontName} - versuche zu verwenden...`)
+        try {
+          const embeddedFont = await filledDoc.embedFont(fontName as any)
+          if (embeddedFont) {
+            // Test: Prüfe ob Font türkische Zeichen unterstützt
+            try {
+              const testText = 'İğşÇçÖöÜü'
+              const testWidth = embeddedFont.widthOfTextAtSize(testText, 12)
+              console.log(`  ✅ Eingebettete Font "${fontName}" unterstützt türkische Zeichen!`)
+              console.log(`     Test-Text "${testText}" Breite: ${testWidth}`)
+              unicodeFont = embeddedFont
+              break
+            } catch (testError) {
+              console.warn(`  ⚠️ Eingebettete Font "${fontName}" unterstützt keine türkischen Zeichen`)
+            }
+          }
+        } catch (embedError) {
+          console.warn(`  ⚠️ Konnte eingebettete Font "${fontName}" nicht verwenden:`, embedError)
+        }
+      }
+    }
+  } catch (extractError) {
+    console.warn(`  ⚠️ Konnte Fonts aus PDF nicht extrahieren:`, extractError)
+  }
+  
+  // Wenn keine Font aus dem PDF extrahiert werden konnte, lade von CDN
+  if (!unicodeFont) {
+    console.log('  🔄 Keine Font aus PDF extrahiert - lade von CDN...')
   
   // WICHTIG: Verwende Arial Unicode MS (wie im PDF-Formular verwendet)
   // Arial Unicode MS unterstützt türkische Zeichen vollständig
@@ -441,6 +479,7 @@ async function fillTemplateWithMultipleGuests(
       continue
     }
   }
+  } // Ende: Wenn keine Font aus PDF extrahiert werden konnte
   
   if (!unicodeFont) {
     console.error('  ❌ KRITISCH: Konnte keine Unicode-Font laden!')
