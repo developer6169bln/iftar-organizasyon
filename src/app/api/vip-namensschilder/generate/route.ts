@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont, TextAlignment } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont, TextAlignment } from '@pdfme/pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 
 export const runtime = 'nodejs'
