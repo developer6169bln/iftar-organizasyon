@@ -587,6 +587,7 @@ async function fillTemplateWithMultipleGuests(
         }
         
         // Versuche Feld-Position und Font-Größe zu erhalten (für Unicode-Wiederherstellung)
+        // WICHTIG: Positionen sind KRITISCH für die Wiederherstellung!
         try {
           const fieldAny = field as any
           const acroField = fieldAny.acroField
@@ -595,17 +596,33 @@ async function fillTemplateWithMultipleGuests(
           let fontSize = 12 // Standard-Font-Größe
           
           if (acroField) {
-            // Versuche Rectangle zu erhalten
-            if (acroField.getRectangle) {
-              const rect = acroField.getRectangle()
-              if (rect && rect.x !== undefined && rect.y !== undefined) {
-                fieldRect = {
-                  x: rect.x,
-                  y: rect.y,
-                  width: rect.width || 100,
-                  height: rect.height || 20
+            // Versuche Rectangle zu erhalten - KRITISCH für Position!
+            try {
+              if (acroField.getRectangle) {
+                const rect = acroField.getRectangle()
+                if (rect) {
+                  // Validiere Rectangle-Werte
+                  if (typeof rect.x === 'number' && typeof rect.y === 'number' && 
+                      !isNaN(rect.x) && !isNaN(rect.y) &&
+                      rect.x >= 0 && rect.y >= 0) {
+                    fieldRect = {
+                      x: rect.x,
+                      y: rect.y,
+                      width: rect.width || 100,
+                      height: rect.height || 20
+                    }
+                    console.log(`  ✅ Feld-Rectangle gefunden: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
+                  } else {
+                    console.warn(`  ⚠️ Ungültige Rectangle-Werte: x=${rect.x}, y=${rect.y}`)
+                  }
+                } else {
+                  console.warn(`  ⚠️ Rectangle ist null/undefined`)
                 }
+              } else {
+                console.warn(`  ⚠️ getRectangle() Methode nicht verfügbar`)
               }
+            } catch (rectError) {
+              console.error(`  ❌ Fehler beim Abrufen des Rectangles:`, rectError)
             }
             
             // Versuche Font-Größe zu extrahieren
@@ -618,16 +635,56 @@ async function fillTemplateWithMultipleGuests(
                   if (daMatch) {
                     fontSize = parseFloat(daMatch[1])
                     console.log(`  📏 Font-Größe extrahiert: ${fontSize}`)
+                  } else {
+                    console.warn(`  ⚠️ Konnte Font-Größe nicht aus DA extrahieren: "${da}"`)
                   }
+                } else {
+                  console.warn(`  ⚠️ DA (Default Appearance) nicht verfügbar`)
                 }
               }
             } catch (fontSizeError) {
               console.warn(`  ⚠️ Konnte Font-Größe nicht extrahieren, verwende Standard:`, fontSizeError)
             }
+            
+            // Alternative: Versuche Position über andere Methoden
+            if (!fieldRect) {
+              try {
+                // Versuche über acroField.dict
+                if (acroField.dict) {
+                  const rectArray = acroField.dict.get('Rect')
+                  if (rectArray && Array.isArray(rectArray) && rectArray.length >= 4) {
+                    // PDF Rectangle: [x0, y0, x1, y1] (bottom-left und top-right)
+                    const x0 = rectArray[0]?.valueOf() || 0
+                    const y0 = rectArray[1]?.valueOf() || 0
+                    const x1 = rectArray[2]?.valueOf() || 0
+                    const y1 = rectArray[3]?.valueOf() || 0
+                    
+                    if (x0 >= 0 && y0 >= 0 && x1 > x0 && y1 > y0) {
+                      fieldRect = {
+                        x: x0,
+                        y: y1, // Y-Koordinate von oben (für PDF drawText)
+                        width: x1 - x0,
+                        height: y1 - y0
+                      }
+                      console.log(`  ✅ Feld-Position über Rect-Array gefunden: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
+                    }
+                  }
+                }
+              } catch (altError) {
+                console.warn(`  ⚠️ Alternative Position-Methode fehlgeschlagen:`, altError)
+              }
+            }
+          } else {
+            console.warn(`  ⚠️ acroField nicht verfügbar`)
           }
           
           // Speichere Feld-Info (immer, wenn türkische Zeichen vorhanden sind oder konvertiert wurde)
           if (hasTurkishChars || originalValue !== convertedValue) {
+            if (!fieldRect) {
+              console.error(`  ❌ KRITISCH: Keine Position für Feld "${fieldName}" - Wiederherstellung wird nicht möglich sein!`)
+              console.error(`     Original: "${originalValue}", Konvertiert: "${convertedValue}"`)
+            }
+            
             fieldInfoMap.set(fieldName, {
               originalValue,
               convertedValue,
@@ -641,21 +698,28 @@ async function fillTemplateWithMultipleGuests(
             })
             
             if (fieldRect) {
-              console.log(`  📍 Feld-Position gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
+              console.log(`  ✅ Feld-Info gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
             } else {
-              console.log(`  📍 Feld-Info gespeichert (Position wird später ermittelt), fontSize=${fontSize}`)
+              console.error(`  ❌ Feld-Info gespeichert OHNE Position - Wiederherstellung wird fehlschlagen!`)
             }
           }
         } catch (posError) {
           // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
-          fieldInfoMap.set(fieldName, {
-            originalValue,
-            convertedValue,
-            fieldName,
-            pageIndex,
-            fontSize: 12
-          })
-          console.warn(`  ⚠️ Konnte Feld-Position nicht ermitteln:`, posError)
+          console.error(`  ❌ Fehler beim Ermitteln der Feld-Position:`, posError)
+          if (posError instanceof Error) {
+            console.error(`     Stack: ${posError.stack}`)
+          }
+          
+          if (hasTurkishChars || originalValue !== convertedValue) {
+            fieldInfoMap.set(fieldName, {
+              originalValue,
+              convertedValue,
+              fieldName,
+              pageIndex,
+              fontSize: 12
+            })
+            console.error(`  ❌ Feld-Info gespeichert OHNE Position - Wiederherstellung wird fehlschlagen!`)
+          }
         }
         
         try {
