@@ -749,8 +749,9 @@ async function fillTemplateWithMultipleGuests(
           // Sanitize Original-Wert (nur Steuerzeichen entfernen, behalte türkische Zeichen)
           const sanitizedValue = sanitizeTextForWinAnsi(originalValue)
           
-          // Zeichne Text direkt mit Unicode-Font, wenn Font verfügbar ist
-          // WICHTIG: Dies ist der Haupt-Pfad für türkische Zeichen!
+          // KRITISCH: Zeichne Text direkt mit Unicode-Font, wenn Font verfügbar ist
+          // WICHTIG: Dies ist der EINZIGE Pfad, der ANSI vermeidet und UTF-8/Unicode verwendet!
+          // Wenn dieser Pfad nicht ausgeführt wird, werden Formularfelder mit WinAnsi gefüllt!
           if (unicodeFont && fieldRect && sanitizedValue && sanitizedValue.trim() !== '') {
             try {
               const pages = filledDoc.getPages()
@@ -812,15 +813,18 @@ async function fillTemplateWithMultipleGuests(
               // Fallback: Verwende Formularfeld
             }
           } else {
+            // KRITISCH: Wenn direkte Zeichnung nicht möglich ist, wird WinAnsi verwendet!
+            console.error(`  ❌ KRITISCH: Direkte Unicode-Font-Zeichnung nicht möglich!`)
             if (!unicodeFont) {
-              console.warn(`  ⚠️ Unicode-Font nicht verfügbar, verwende Formularfeld-Füllung`)
+              console.error(`     ❌ Unicode-Font nicht verfügbar - PDF wird ANSI/WinAnsi verwenden!`)
             }
             if (!fieldRect) {
-              console.warn(`  ⚠️ Feld-Position nicht verfügbar, verwende Formularfeld-Füllung`)
+              console.error(`     ❌ Feld-Position nicht verfügbar - PDF wird ANSI/WinAnsi verwenden!`)
             }
             if (!sanitizedValue || sanitizedValue.trim() === '') {
-              console.warn(`  ⚠️ Sanitized-Wert ist leer, überspringe`)
+              console.warn(`     ⚠️ Sanitized-Wert ist leer, überspringe`)
             }
+            console.error(`     ⚠️ Fallback: Verwende Formularfeld-Füllung mit WinAnsi (türkische Zeichen werden konvertiert!)`)
           }
           
           // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
@@ -989,20 +993,45 @@ async function fillTemplateWithMultipleGuests(
       }
     }
     
-    console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern gefüllt`)
+    console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern verarbeitet`)
     
-    // Flatten form (macht Formularfelder zu statischem Text) - MUSS erfolgreich sein
-    // WICHTIG: Die Formularfelder wurden mit WinAnsi-kompatiblen Werten gefüllt (konvertierte türkische Zeichen)
-    // Nach dem Flatten werden wir die Original-Texte mit Unicode-Fonts (Identity-H) wiederherstellen
+    // Flatten form (macht Formularfelder zu statischem Text) - nur wenn Formularfelder gefüllt wurden
+    // WICHTIG: Wenn Unicode-Font verfügbar war und direkte Zeichnung verwendet wurde, sind die Formularfelder leer
+    // In diesem Fall müssen wir sie trotzdem flatten, damit sie nicht mehr interaktiv sind
     if (form) {
-      console.log(`🔄 Flatten Formularfelder (konvertiert zu normalem PDF)...`)
-      console.log(`  📝 Alle Werte sind WinAnsi-kompatibel, flatten sollte funktionieren...`)
+      const fieldsToFlatten = form.getFields()
+      const filledFieldsCount = fieldsToFlatten.filter((f: any) => {
+        try {
+          if (f.constructor.name === 'PDFTextField') {
+            const text = f.getText()
+            return text && text.trim() !== ''
+          }
+          return false
+        } catch {
+          return false
+        }
+      }).length
+      
+      console.log(`🔄 Flatten Formularfelder...`)
+      if (unicodeFont) {
+        console.log(`  ✅ Unicode-Font wurde verwendet - Texte wurden direkt gezeichnet`)
+        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt (Fallback)`)
+        console.log(`  📝 ${filledCount - filledFieldsCount} Text(e) wurden direkt mit Unicode-Font gezeichnet`)
+      } else {
+        console.log(`  ⚠️ Unicode-Font nicht verfügbar - Formularfelder wurden mit WinAnsi-Werten gefüllt`)
+        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt`)
+      }
       
       try {
-        // Flatten sollte jetzt funktionieren, da alle Werte WinAnsi-kompatibel sind
+        // Flatten alle Formularfelder (auch leere, damit sie nicht mehr interaktiv sind)
         form.flatten()
-        console.log('✅ Formularfelder gefüllt und geflattened - PDF ist jetzt normales PDF ohne Formularfelder')
-        console.log('  🔄 Starte Unicode-Wiederherstellung für türkische Zeichen...')
+        console.log('✅ Formularfelder geflattened - PDF ist jetzt normales PDF ohne interaktive Formularfelder')
+        
+        if (unicodeFont) {
+          console.log('  ✅ Texte wurden mit Unicode-Font (UTF-8/Identity-H) gezeichnet - türkische Zeichen sollten korrekt sein!')
+        } else {
+          console.log('  ⚠️ Texte wurden mit WinAnsi-Encoding gezeichnet - türkische Zeichen wurden konvertiert')
+          console.log('  🔄 Starte Unicode-Wiederherstellung für türkische Zeichen...')
         
         // Versuche Unicode-Fonts einzubetten und Original-Texte wiederherzustellen
         if (fieldInfoMap.size > 0) {
