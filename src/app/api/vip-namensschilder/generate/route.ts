@@ -1032,9 +1032,9 @@ async function fillTemplateWithMultipleGuests(
         } else {
           console.log('  ⚠️ Texte wurden mit WinAnsi-Encoding gezeichnet - türkische Zeichen wurden konvertiert')
           console.log('  🔄 Starte Unicode-Wiederherstellung für türkische Zeichen...')
-        
-        // Versuche Unicode-Fonts einzubetten und Original-Texte wiederherzustellen
-        if (fieldInfoMap.size > 0) {
+          
+          // Versuche Unicode-Fonts einzubetten und Original-Texte wiederherzustellen
+          if (fieldInfoMap.size > 0) {
           console.log(`\n🔄 Versuche türkische Zeichen mit Unicode-Fonts wiederherzustellen...`)
           console.log(`  📊 ${fieldInfoMap.size} Feld(er) mit konvertierten Werten gefunden`)
           
@@ -1232,11 +1232,12 @@ async function fillTemplateWithMultipleGuests(
             console.warn('  ⚠️ Unicode-Wiederherstellung fehlgeschlagen:', unicodeError)
             console.log('  ℹ️ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, etc.)')
           }
-        } else {
-          if (unicodeFont) {
-            console.log('  ✅ Keine Wiederherstellung nötig - alle Texte wurden direkt mit Unicode-Font gezeichnet!')
           } else {
-            console.log('  ℹ️ Keine konvertierten Werte gefunden, alle Texte sind bereits WinAnsi-kompatibel')
+            if (unicodeFont) {
+              console.log('  ✅ Keine Wiederherstellung nötig - alle Texte wurden direkt mit Unicode-Font gezeichnet!')
+            } else {
+              console.log('  ℹ️ Keine konvertierten Werte gefunden, alle Texte sind bereits WinAnsi-kompatibel')
+            }
           }
         }
       } catch (flattenError) {
