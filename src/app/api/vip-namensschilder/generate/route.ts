@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, PDFImage, degrees, PDFPage, PDFFont, TextAlignment } from 'pdf-lib'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -318,6 +318,15 @@ async function fillTemplateWithMultipleGuests(
           
           if (fieldType === 'PDFTextField') {
             fieldAny.setText(value)
+            // Zentriere den Text
+            try {
+              if (typeof fieldAny.setAlignment === 'function') {
+                fieldAny.setAlignment(TextAlignment.Center)
+                console.log(`  ✅ TextField zentriert`)
+              }
+            } catch (alignError) {
+              console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
+            }
             const currentValue = fieldAny.getText()
             console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
             filledCount++
@@ -340,12 +349,21 @@ async function fillTemplateWithMultipleGuests(
               filledCount++
             } catch (e) {
               console.warn(`  ⚠️ Wert "${value}" nicht in Dropdown-Liste:`, e)
-              // Versuche als Text zu setzen, falls möglich
-              if (typeof dropdown.setText === 'function') {
-                dropdown.setText(value)
-                console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
-                filledCount++
+            // Versuche als Text zu setzen, falls möglich
+            if (typeof dropdown.setText === 'function') {
+              dropdown.setText(value)
+              // Zentriere den Text
+              try {
+                if (typeof dropdown.setAlignment === 'function') {
+                  dropdown.setAlignment(TextAlignment.Center)
+                  console.log(`  ✅ Dropdown-Text zentriert`)
+                }
+              } catch (alignError) {
+                console.warn(`  ⚠️ Konnte Dropdown-Text nicht zentrieren:`, alignError)
               }
+              console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
+              filledCount++
+            }
             }
           } else if (fieldType === 'PDFRadioGroup') {
             const radioGroup = field as any
@@ -362,6 +380,15 @@ async function fillTemplateWithMultipleGuests(
             if (typeof fieldAny.setText === 'function') {
               try {
                 fieldAny.setText(value)
+                // Zentriere den Text
+                try {
+                  if (typeof fieldAny.setAlignment === 'function') {
+                    fieldAny.setAlignment(TextAlignment.Center)
+                    console.log(`  ✅ Feld-Text zentriert`)
+                  }
+                } catch (alignError) {
+                  console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
+                }
                 console.log(`  ✅ Feld mit setText() gesetzt: "${value}"`)
                 filledCount++
               } catch (e) {
@@ -372,6 +399,15 @@ async function fillTemplateWithMultipleGuests(
               try {
                 if (typeof fieldAny.setText === 'function') {
                   fieldAny.setText(value)
+                  // Zentriere den Text
+                  try {
+                    if (typeof fieldAny.setAlignment === 'function') {
+                      fieldAny.setAlignment(TextAlignment.Center)
+                      console.log(`  ✅ Feld-Text zentriert`)
+                    }
+                  } catch (alignError) {
+                    console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
+                  }
                 }
                 fieldAny.updateAppearances()
                 console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${value}"`)
