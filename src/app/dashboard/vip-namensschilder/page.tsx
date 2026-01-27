@@ -158,24 +158,55 @@ export default function VIPNamensschilderPage() {
       return guest.tableNumber ? String(guest.tableNumber) : ''
     }
     if (fieldName === 'Staat/Institution' || fieldName === 'Staat / Institution') {
-      // Zuerst in additionalData suchen
+      // Zuerst in additionalData suchen mit erweiterten Varianten
       if (guest.additionalData) {
         try {
           const additional = JSON.parse(guest.additionalData)
-          // Prüfe verschiedene mögliche Feldnamen
-          if (additional.hasOwnProperty('Staat/Institution')) {
-            return String(additional['Staat/Institution'] || '')
+          
+          // Erweiterte Suche nach verschiedenen Varianten
+          const institutionKeys = [
+            'Staat/Institution',
+            'Staat / Institution',
+            'Staat/Institution',
+            'Staat /Institution',
+            'Staat/ Institution',
+            'StaatInstitution',
+            'Staat_Institution',
+            'Institution',
+            'Staat',
+            'Organisation',
+            'Organization',
+            'Partei / Organisation / Unternehmen',
+            'Partei/Organisation/Unternehmen',
+          ]
+          
+          for (const key of institutionKeys) {
+            if (additional.hasOwnProperty(key)) {
+              const value = additional[key]
+              if (value !== null && value !== undefined && String(value).trim() !== '') {
+                return String(value)
+              }
+            }
           }
-          if (additional.hasOwnProperty('Staat / Institution')) {
-            return String(additional['Staat / Institution'] || '')
-          }
-          if (additional.hasOwnProperty('Staat/Institution')) {
-            return String(additional['Staat/Institution'] || '')
+          
+          // Fallback: Suche nach Keys die "Staat" oder "Institution" enthalten
+          for (const key of Object.keys(additional)) {
+            const keyLower = key.toLowerCase()
+            if ((keyLower.includes('staat') || keyLower.includes('institution') || 
+                 keyLower.includes('organisation') || keyLower.includes('organization')) &&
+                additional[key] !== null && additional[key] !== undefined) {
+              const value = String(additional[key]).trim()
+              if (value !== '') {
+                return value
+              }
+            }
           }
         } catch (e) {
-          // Ignoriere Parse-Fehler
+          console.error('Fehler beim Parsen von additionalData für Staat/Institution:', e)
         }
       }
+      
+      // Fallback zu guest.organization
       return guest.organization || ''
     }
     
