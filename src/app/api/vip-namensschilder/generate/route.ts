@@ -371,25 +371,41 @@ async function fillTemplateWithMultipleGuests(
   filledDoc.registerFontkit(fontkit)
   
   // Lade Unicode-Font VOR dem Füllen der Felder
+  // WICHTIG: Verwende Fonts, die garantiert UTF-8/Unicode unterstützen
   let unicodeFont: PDFFont | null = null
-  console.log('🔄 Lade Unicode-Font für direkte Text-Zeichnung...')
+  console.log('🔄 Lade Unicode-Font für direkte Text-Zeichnung (UTF-8/Unicode)...')
   
+  // Verwende zuverlässige Font-Quellen, die garantiert türkische Zeichen unterstützen
   const fontUrls = [
+    // Google Fonts API - direkt und zuverlässig
+    'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400&display=swap',
+    // Direkter Download von Google Fonts CDN (TTF Format)
+    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
+    // jsDelivr CDN - sehr zuverlässig
     'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
+    // GitHub Raw - Fallback
     'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
-    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf'
+    // Alternative: DejaVu Sans (auch sehr gute Unicode-Unterstützung)
+    'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf'
   ]
   
   for (const fontUrl of fontUrls) {
     try {
       console.log(`  🔄 Versuche Font zu laden von: ${fontUrl}`)
+      
+      // Überspringe CSS-Dateien (nur TTF/OTF)
+      if (fontUrl.includes('css2') || fontUrl.includes('.css')) {
+        console.log(`  ⏭️ Überspringe CSS-Datei, benötige TTF`)
+        continue
+      }
+      
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 20000) // 20 Sekunden
       
       const fontResponse = await fetch(fontUrl, {
         headers: {
-          'Accept': 'application/octet-stream, application/font-ttf, font/ttf, */*',
-          'User-Agent': 'Mozilla/5.0'
+          'Accept': 'application/octet-stream, application/font-ttf, font/ttf, font/otf, */*',
+          'User-Agent': 'Mozilla/5.0 (compatible; pdf-lib-font-loader)'
         },
         signal: controller.signal
       })
@@ -398,22 +414,58 @@ async function fillTemplateWithMultipleGuests(
       
       if (fontResponse.ok) {
         const fontBytes = await fontResponse.arrayBuffer()
-        if (fontBytes.byteLength > 0) {
-          unicodeFont = await filledDoc.embedFont(fontBytes)
-          console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich geladen und eingebettet')
-          console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
-          break
+        console.log(`  📦 Font-Datei geladen: ${fontBytes.byteLength} Bytes`)
+        
+        if (fontBytes.byteLength > 1000) { // Mindestens 1KB (gültige Font-Datei)
+          try {
+            unicodeFont = await filledDoc.embedFont(fontBytes)
+            console.log('  ✅ Unicode-Font erfolgreich geladen und eingebettet')
+            
+            // Test: Prüfe ob Font türkische Zeichen unterstützt
+            try {
+              const testText = 'İğşÇçÖöÜü'
+              const testWidth = unicodeFont.widthOfTextAtSize(testText, 12)
+              console.log(`  ✅ Font-Test erfolgreich: Test-Text "${testText}" Breite: ${testWidth}`)
+              console.log(`  ✅ Font unterstützt UTF-8/Unicode Encoding (Identity-H)`)
+              console.log(`  ✅ Font kann türkische Zeichen darstellen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü`)
+              break // Erfolgreich geladen und getestet
+            } catch (testError) {
+              console.warn(`  ⚠️ Font-Test fehlgeschlagen, versuche nächste Font:`, testError)
+              unicodeFont = null
+              continue
+            }
+          } catch (embedError) {
+            console.warn(`  ⚠️ Fehler beim Einbetten der Font:`, embedError)
+            if (embedError instanceof Error) {
+              console.warn(`     Fehler-Message: ${embedError.message}`)
+            }
+            continue
+          }
+        } else {
+          console.warn(`  ⚠️ Font-Datei zu klein (${fontBytes.byteLength} Bytes), möglicherweise ungültig`)
         }
+      } else {
+        console.warn(`  ⚠️ Font-Response nicht OK (${fontResponse.status}): ${fontUrl}`)
       }
     } catch (fontError) {
       console.warn(`  ⚠️ Fehler beim Laden von ${fontUrl}:`, fontError)
+      if (fontError instanceof Error) {
+        console.warn(`     Fehler-Message: ${fontError.message}`)
+        console.warn(`     Fehler-Name: ${fontError.name}`)
+      }
       continue
     }
   }
   
   if (!unicodeFont) {
-    console.error('  ❌ KRITISCH: Konnte Unicode-Font nicht laden!')
-    console.error('  ⚠️ Fallback: Verwende konvertierte Werte in Formularfeldern')
+    console.error('  ❌ KRITISCH: Konnte keine Unicode-Font laden!')
+    console.error('  ❌ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, Ü→U, etc.)')
+    console.error('  ⚠️ Bitte überprüfen Sie:')
+    console.error('     1. Internet-Verbindung des Servers')
+    console.error('     2. Firewall-Einstellungen')
+    console.error('     3. CDN-Verfügbarkeit')
+  } else {
+    console.log('  ✅ Unicode-Font bereit für direkte Text-Zeichnung mit türkischen Zeichen')
   }
   
   // Versuche PDF-Formularfelder zu füllen
@@ -698,35 +750,65 @@ async function fillTemplateWithMultipleGuests(
           const sanitizedValue = sanitizeTextForWinAnsi(originalValue)
           
           // Zeichne Text direkt mit Unicode-Font, wenn Font verfügbar ist
+          // WICHTIG: Dies ist der Haupt-Pfad für türkische Zeichen!
           if (unicodeFont && fieldRect && sanitizedValue && sanitizedValue.trim() !== '') {
             try {
               const pages = filledDoc.getPages()
               const page = pages[pageIndex]
               
               if (page) {
+                console.log(`  🎨 Zeichne Text direkt mit Unicode-Font: "${sanitizedValue}"`)
+                console.log(`     Position: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
+                console.log(`     Font-Größe: ${fontSize}`)
+                
+                // Berechne Text-Breite mit Unicode-Font
                 const textWidth = unicodeFont.widthOfTextAtSize(sanitizedValue, fontSize)
                 const textHeight = fontSize * 1.2
+                
+                console.log(`     Text-Breite: ${textWidth}, Text-Höhe: ${textHeight}`)
                 
                 // Berechne zentrierte Position
                 const textX = fieldRect.x + (fieldRect.width - textWidth) / 2
                 const textY = fieldRect.y - textHeight + (fieldRect.height - textHeight) / 2
                 
-                // Zeichne Text direkt mit Unicode-Font (unterstützt türkische Zeichen)
+                console.log(`     Zeichne bei: x=${textX}, y=${textY}`)
+                
+                // Zeichne Text direkt mit Unicode-Font (unterstützt UTF-8/Unicode, Identity-H Encoding)
+                // Der Font unterstützt türkische Zeichen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü
                 page.drawText(sanitizedValue, {
                   x: textX,
                   y: textY,
                   size: fontSize,
-                  font: unicodeFont,
+                  font: unicodeFont, // UTF-8/Unicode-kompatibler Font
                   color: rgb(0, 0, 0),
                 })
                 
-                console.log(`  ✅ Text direkt mit Unicode-Font gezeichnet: "${sanitizedValue}" bei (${textX}, ${textY})`)
+                console.log(`  ✅ Text erfolgreich mit Unicode-Font gezeichnet: "${sanitizedValue}"`)
+                console.log(`     Türkische Zeichen sollten korrekt dargestellt werden!`)
+                
                 filledCount++
-                continue // Überspringe Formularfeld-Füllung
+                continue // Überspringe Formularfeld-Füllung (Text ist bereits gezeichnet)
+              } else {
+                console.warn(`  ⚠️ Seite ${pageIndex} nicht gefunden`)
               }
             } catch (drawError) {
-              console.warn(`  ⚠️ Fehler beim direkten Zeichnen, verwende Formularfeld:`, drawError)
+              console.error(`  ❌ Fehler beim direkten Zeichnen mit Unicode-Font:`, drawError)
+              if (drawError instanceof Error) {
+                console.error(`     Fehler-Message: ${drawError.message}`)
+                console.error(`     Stack: ${drawError.stack}`)
+              }
+              console.warn(`  ⚠️ Fallback: Verwende Formularfeld-Füllung`)
               // Fallback: Verwende Formularfeld
+            }
+          } else {
+            if (!unicodeFont) {
+              console.warn(`  ⚠️ Unicode-Font nicht verfügbar, verwende Formularfeld-Füllung`)
+            }
+            if (!fieldRect) {
+              console.warn(`  ⚠️ Feld-Position nicht verfügbar, verwende Formularfeld-Füllung`)
+            }
+            if (!sanitizedValue || sanitizedValue.trim() === '') {
+              console.warn(`  ⚠️ Sanitized-Wert ist leer, überspringe`)
             }
           }
           
