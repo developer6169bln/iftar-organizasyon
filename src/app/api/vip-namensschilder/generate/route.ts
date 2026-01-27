@@ -64,11 +64,66 @@ function getFieldValue(guest: any, fieldName: string): string {
     return guest.tableNumber ? String(guest.tableNumber) : ''
   }
   if (fieldName === 'Staat/Institution' || fieldName === 'Staat / Institution') {
+    // Prüfe zuerst guest.organization
     const orgValue = guest.organization || ''
-    if (orgValue) {
+    if (orgValue && orgValue.trim() !== '') {
       console.log('✅ Gefunden in guest.organization:', orgValue)
       return orgValue
     }
+    
+    // Prüfe auch in additionalData mit verschiedenen Varianten
+    if (guest.additionalData) {
+      try {
+        const additional = JSON.parse(guest.additionalData)
+        
+        // Erweiterte Suche nach Staat/Institution Varianten
+        const institutionKeys = [
+          'Staat/Institution',
+          'Staat / Institution',
+          'Staat/Institution',
+          'Staat /Institution',
+          'Staat/ Institution',
+          'Staat/Institution',
+          'StaatInstitution',
+          'Staat_Institution',
+          'Institution',
+          'Staat',
+          'Organisation',
+          'Organization',
+          'Partei / Organisation / Unternehmen',
+          'Partei/Organisation/Unternehmen',
+        ]
+        
+        for (const key of institutionKeys) {
+          if (additional.hasOwnProperty(key)) {
+            const value = additional[key]
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+              console.log(`✅ Gefunden "${key}" in additionalData:`, value)
+              return String(value)
+            }
+          }
+        }
+        
+        // Fallback: Suche nach Keys die "Staat" oder "Institution" enthalten
+        for (const key of Object.keys(additional)) {
+          const keyLower = key.toLowerCase()
+          if ((keyLower.includes('staat') || keyLower.includes('institution') || 
+               keyLower.includes('organisation') || keyLower.includes('organization')) &&
+              additional[key] !== null && additional[key] !== undefined) {
+            const value = String(additional[key]).trim()
+            if (value !== '') {
+              console.log(`✅ Gefunden ähnlicher Key "${key}" in additionalData:`, value)
+              return value
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Fehler beim Parsen von additionalData für Staat/Institution:', e)
+      }
+    }
+    
+    console.log(`⚠️ Staat/Institution nicht gefunden für Gast: ${guest.name || guest.id}`)
+    return ''
   }
   
   console.log(`⚠️ Feld "${fieldName}" nicht gefunden für Gast:`, guest.name || guest.id)
@@ -363,8 +418,43 @@ async function fillTemplateWithMultipleGuests(
           console.log(`  🔄 Name zusammengesetzt: Vorname="${vorname}", Nachname="${nachname}" → "${value}"`)
         }
         
+        // Spezielle Behandlung für "Staat/Institution" - erweiterte Suche
+        if ((guestFieldName === 'Staat/Institution' || guestFieldName === 'Staat / Institution') && (!value || value.trim() === '')) {
+          console.log(`  🔍 Erweiterte Suche nach Staat/Institution...`)
+          // Versuche alle möglichen Varianten
+          const variants = [
+            'Staat/Institution',
+            'Staat / Institution',
+            'Staat/Institution',
+            'Staat /Institution',
+            'Staat/ Institution',
+            'Partei / Organisation / Unternehmen',
+            'Partei/Organisation/Unternehmen',
+            'Organisation',
+            'Organization',
+          ]
+          
+          for (const variant of variants) {
+            const variantValue = getFieldValue(guest, variant)
+            if (variantValue && variantValue.trim() !== '') {
+              value = variantValue
+              console.log(`  ✅ Gefunden über Variante "${variant}": "${value}"`)
+              break
+            }
+          }
+        }
+        
         if (!value || value.trim() === '') {
-          console.log(`  ⚠️ Kein Wert gefunden, überspringe`)
+          console.log(`  ⚠️ Kein Wert gefunden für "${guestFieldName}", überspringe`)
+          // Zeige Debug-Info für Staat/Institution
+          if (guestFieldName === 'Staat/Institution' || guestFieldName === 'Staat / Institution') {
+            console.log(`  🔍 Debug: Guest-Daten:`, {
+              id: guest.id,
+              name: guest.name,
+              organization: guest.organization,
+              hasAdditionalData: !!guest.additionalData,
+            })
+          }
           continue
         }
         
