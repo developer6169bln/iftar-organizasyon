@@ -371,24 +371,27 @@ async function fillTemplateWithMultipleGuests(
   // Registriere fontkit für Unicode-Unterstützung
   filledDoc.registerFontkit(fontkit)
   
-  // Lade Unicode-Font VOR dem Füllen der Felder
-  // WICHTIG: Verwende Fonts, die garantiert UTF-8/Unicode unterstützen
+  // KRITISCH: Lade Unicode-Font VOR dem Füllen der Felder
+  // WICHTIG: Dies ist ESSENTIELL, um ANSI/WinAnsi-Kodierung zu vermeiden!
+  // Ohne Unicode-Font werden Formularfelder mit WinAnsi gefüllt → ANSI-Kodierung!
   let unicodeFont: PDFFont | null = null
-  console.log('🔄 Lade Unicode-Font für direkte Text-Zeichnung (UTF-8/Unicode)...')
+  console.log('🔄 KRITISCH: Lade Unicode-Font für direkte Text-Zeichnung (UTF-8/Unicode)...')
+  console.log('  ⚠️ Ohne Unicode-Font wird ANSI/WinAnsi-Kodierung verwendet!')
   
   // Verwende zuverlässige Font-Quellen, die garantiert türkische Zeichen unterstützen
+  // PRIORITÄT: Direkte TTF-Downloads (keine CSS-Dateien)
   const fontUrls = [
-    // Google Fonts API - direkt und zuverlässig
-    'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400&display=swap',
-    // Direkter Download von Google Fonts CDN (TTF Format)
-    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
-    // jsDelivr CDN - sehr zuverlässig
+    // jsDelivr CDN - sehr zuverlässig, direktes TTF
     'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
-    // GitHub Raw - Fallback
+    // GitHub Raw - Fallback, direktes TTF
     'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
+    // Google Fonts CDN - direktes TTF
+    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
     // Alternative: DejaVu Sans (auch sehr gute Unicode-Unterstützung)
-    'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf'
-  ]
+    'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf',
+    // Weitere Alternative: Noto Sans von cdnjs
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/webfonts/fa-solid-900.ttf' // Falsch, entfernen
+  ].filter(url => !url.includes('fa-solid')) // Entferne falsche URLs
   
   for (const fontUrl of fontUrls) {
     try {
