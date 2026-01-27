@@ -796,29 +796,22 @@ async function fillTemplateWithMultipleGuests(
                 console.error(`     Fehler-Message: ${drawError.message}`)
                 console.error(`     Stack: ${drawError.stack}`)
               }
-              console.error(`  ❌ KRITISCH: Direkte Zeichnung fehlgeschlagen - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
-              console.error(`     ⚠️ Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
-              console.error(`     ⚠️ Bitte prüfen Sie die Logs, warum direkte Zeichnung fehlgeschlagen ist`)
-              // KEIN Fallback zu Formularfeld-Füllung - das würde WinAnsi-Fehler verursachen!
-              continue // Überspringe dieses Feld
+              console.warn(`  ⚠️ Direkte Zeichnung fehlgeschlagen - verwende Formularfeld-Füllung (mit UTF-8 nach updateFieldAppearances)`)
+              // Fallback: Verwende Formularfeld-Füllung (nach updateFieldAppearances sollte UTF-8 funktionieren)
             }
           } else {
-            // KRITISCH: Wenn direkte Zeichnung nicht möglich ist, können wir Formularfelder NICHT füllen!
-            // pdf-lib verwendet WinAnsi für Formularfelder → Fehler "WinAnsi cannot encode"
-            console.error(`  ❌ KRITISCH: Direkte Unicode-Font-Zeichnung nicht möglich!`)
+            // Direkte Zeichnung nicht möglich - verwende Formularfeld-Füllung
             if (!unicodeFont) {
-              console.error(`     ❌ Unicode-Font nicht verfügbar - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
+              console.warn(`  ⚠️ Unicode-Font nicht verfügbar - verwende Formularfeld-Füllung (könnte WinAnsi verwenden)`)
             }
             if (!fieldRect) {
-              console.error(`     ❌ Feld-Position nicht verfügbar - kann Formularfeld nicht füllen (würde WinAnsi-Fehler verursachen!)`)
+              console.warn(`  ⚠️ Feld-Position nicht verfügbar - verwende Formularfeld-Füllung statt direkter Zeichnung`)
             }
             if (!sanitizedValue || sanitizedValue.trim() === '') {
-              console.warn(`     ⚠️ Sanitized-Wert ist leer, überspringe`)
+              console.warn(`  ⚠️ Sanitized-Wert ist leer, überspringe`)
+              continue
             }
-            console.error(`     ⚠️ Formularfeld wird NICHT gefüllt, um WinAnsi-Fehler zu vermeiden`)
-            console.error(`     ⚠️ Bitte prüfen Sie die Logs, warum direkte Zeichnung nicht möglich ist`)
-            // KEIN Fallback zu Formularfeld-Füllung - das würde WinAnsi-Fehler verursachen!
-            continue // Überspringe dieses Feld
+            console.log(`  ℹ️ Direkte Zeichnung nicht möglich - verwende Formularfeld-Füllung (mit UTF-8 nach updateFieldAppearances)`)
           }
           
           // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
@@ -848,24 +841,7 @@ async function fillTemplateWithMultipleGuests(
         // Beim Flatten wird WinAnsi verwendet → Fehler "WinAnsi cannot encode"
         // Lösung: Nur direkte Zeichnung verwenden, Formularfelder leer lassen
         
-        // Prüfe ob Text bereits mit Unicode-Font gezeichnet wurde
-        if (fieldInfoMap.has(fieldName)) {
-          const fieldInfo = fieldInfoMap.get(fieldName)
-          if (fieldInfo && fieldInfo.drawnDirectly === true) {
-            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet (drawnDirectly=true), überspringe Formularfeld-Füllung (verhindert WinAnsi!)`)
-            continue
-          }
-          if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined && unicodeFont) {
-            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld-Füllung (verhindert WinAnsi!)`)
-            continue
-          }
-        }
-        
-        // WICHTIG: Wenn Unicode-Font verfügbar ist UND updateFieldAppearances() aufgerufen wurde,
-        // können wir Formularfelder jetzt mit UTF-8 füllen (kein WinAnsi mehr!)
-        const fieldType = field.constructor.name
-        
-        // Prüfe ob direkte Zeichnung bereits verwendet wurde (bevorzuge direkte Zeichnung)
+        // Prüfe ob Text bereits mit direkter Zeichnung gezeichnet wurde
         if (fieldInfoMap.has(fieldName)) {
           const fieldInfo = fieldInfoMap.get(fieldName)
           if (fieldInfo && fieldInfo.drawnDirectly === true) {
@@ -874,11 +850,9 @@ async function fillTemplateWithMultipleGuests(
           }
         }
         
-        // Wenn Unicode-Font verfügbar ist, können wir Formularfelder jetzt mit UTF-8 füllen
-        // (updateFieldAppearances wurde bereits aufgerufen)
-        if (unicodeFont && (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown')) {
-          console.log(`  ✅ Unicode-Font verfügbar - Formularfeld kann jetzt mit UTF-8 gefüllt werden (kein WinAnsi!)`)
-        }
+        // Wenn direkte Zeichnung nicht möglich war, verwende Formularfeld-Füllung
+        // (nach updateFieldAppearances sollte UTF-8 funktionieren)
+        const fieldType = field.constructor.name
         
         // Prüfe ob convertedValue definiert ist
         if (!convertedValue || convertedValue.trim() === '') {
