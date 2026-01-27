@@ -240,8 +240,9 @@ async function fillTemplateWithGuestData(
   const filledDoc = await PDFDocument.load(templateBytes)
   
   // Versuche PDF-Formularfelder zu füllen
+  let form: any = null
   try {
-    const form = filledDoc.getForm()
+    form = filledDoc.getForm()
     const fields = form.getFields()
     
     console.log(`🔍 Gefundene Formularfelder: ${fields.length}`)
@@ -364,15 +365,31 @@ async function fillTemplateWithGuestData(
     console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern gefüllt`)
     
     // Flatten form (macht Formularfelder zu statischem Text)
-    console.log(`🔄 Flatten Formularfelder...`)
-    form.flatten()
-    console.log('✅ Formularfelder gefüllt und geflattened')
+    if (form) {
+      console.log(`🔄 Flatten Formularfelder...`)
+      try {
+        form.flatten()
+        console.log('✅ Formularfelder gefüllt und geflattened')
+      } catch (flattenError) {
+        console.warn('⚠️ Fehler beim Flatten, versuche ohne Flatten:', flattenError)
+        // Flatten ist optional - wenn es fehlschlägt, können wir trotzdem fortfahren
+        // Die Felder sollten bereits gefüllt sein
+        if (flattenError instanceof Error) {
+          console.warn('   Flatten-Fehler:', flattenError.message)
+        }
+      }
+    } else {
+      console.warn('⚠️ Kein Formular-Objekt verfügbar zum Flatten')
+    }
   } catch (e) {
     console.error('❌ Fehler beim Füllen der Formularfelder:', e)
     if (e instanceof Error) {
+      console.error('   Fehler-Name:', e.name)
+      console.error('   Fehler-Message:', e.message)
       console.error('   Stack:', e.stack)
     }
-    throw new Error('Fehler beim Füllen der PDF-Formularfelder: ' + (e instanceof Error ? e.message : 'Unbekannter Fehler'))
+    // Wir werfen den Fehler weiter, damit der Aufrufer ihn sehen kann
+    throw new Error(`Fehler beim Füllen der PDF-Formularfelder: ${e instanceof Error ? e.message : 'Unbekannter Fehler'}`)
   }
   
   return filledDoc
@@ -461,19 +478,38 @@ export async function POST(request: NextRequest) {
           const guest = guests[i]
           console.log(`📝 Verarbeite Gast ${i + 1}/${guests.length}: ${guest.name || guest.id}`)
           
-          // Fülle Template mit Gast-Daten (jedes Mal neu laden für saubere Kopie)
-          const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue, fieldMapping)
-          
-          // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
-          const pageCount = filledDoc.getPageCount()
-          const pageIndices = Array.from({ length: pageCount }, (_, i) => i)
-          const copiedPages = await finalDoc.copyPages(filledDoc, pageIndices)
-          
-          for (const page of copiedPages) {
-            finalDoc.addPage(page)
+          try {
+            // Fülle Template mit Gast-Daten (jedes Mal neu laden für saubere Kopie)
+            const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue, fieldMapping)
+            
+            // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
+            const pageCount = filledDoc.getPageCount()
+            console.log(`  📄 Seiten im gefüllten Template: ${pageCount}`)
+            
+            if (pageCount === 0) {
+              console.warn(`  ⚠️ Template hat keine Seiten für Gast ${i + 1}`)
+              continue
+            }
+            
+            const pageIndices = Array.from({ length: pageCount }, (_, idx) => idx)
+            console.log(`  📋 Kopiere Seiten: [${pageIndices.join(', ')}]`)
+            
+            const copiedPages = await finalDoc.copyPages(filledDoc, pageIndices)
+            console.log(`  ✅ ${copiedPages.length} Seite(n) kopiert`)
+            
+            for (const page of copiedPages) {
+              finalDoc.addPage(page)
+            }
+            
+            console.log(`✅ Gast ${i + 1}/${guests.length} verarbeitet (${pageCount} Seite(n))`)
+          } catch (guestError) {
+            console.error(`❌ Fehler beim Verarbeiten von Gast ${i + 1} (${guest.name || guest.id}):`, guestError)
+            if (guestError instanceof Error) {
+              console.error('   Stack:', guestError.stack)
+            }
+            // Weiter mit nächstem Gast, aber Fehler protokollieren
+            throw new Error(`Fehler beim Verarbeiten von Gast "${guest.name || guest.id}": ${guestError instanceof Error ? guestError.message : 'Unbekannter Fehler'}`)
           }
-          
-          console.log(`✅ Gast ${i + 1}/${guests.length} verarbeitet (${pageCount} Seite(n))`)
         }
         
         // PDF generieren
@@ -488,14 +524,36 @@ export async function POST(request: NextRequest) {
           },
         })
       } catch (error) {
-        console.error('Fehler beim Verarbeiten des Templates:', error)
+        console.error('❌ Fehler beim Verarbeiten des Templates:', error)
         if (error instanceof Error) {
-          console.error('Fehler-Stack:', error.stack)
+          console.error('   Fehler-Name:', error.name)
+          console.error('   Fehler-Message:', error.message)
+          console.error('   Fehler-Stack:', error.stack)
         }
+        
+        // Detaillierte Fehlermeldung für den Client
+        let errorMessage = 'Fehler beim Verarbeiten des PDF-Templates'
+        if (error instanceof Error) {
+          errorMessage = error.message
+          // Spezifische Fehlermeldungen
+          if (error.message.includes('getForm')) {
+            errorMessage = 'Das PDF enthält keine Formularfelder. Bitte erstellen Sie ein PDF mit Formularfeldern.'
+          } else if (error.message.includes('setText')) {
+            errorMessage = 'Fehler beim Ausfüllen der Formularfelder. Bitte prüfen Sie die Feld-Zuordnung.'
+          } else if (error.message.includes('flatten')) {
+            errorMessage = 'Fehler beim Verarbeiten des PDF-Formulars. Das PDF könnte beschädigt sein.'
+          }
+        }
+        
         return NextResponse.json(
           { 
-            error: 'Fehler beim Verarbeiten des PDF-Templates',
-            details: error instanceof Error ? error.message : 'Unbekannter Fehler'
+            error: errorMessage,
+            details: error instanceof Error ? error.message : 'Unbekannter Fehler',
+            // In Development: Mehr Details
+            ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
+              stack: error.stack,
+              name: error.name,
+            } : {})
           },
           { status: 500 }
         )
