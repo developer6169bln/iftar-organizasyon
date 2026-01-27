@@ -861,14 +861,23 @@ async function fillTemplateWithMultipleGuests(
           }
         }
         
-        // KRITISCH: Wenn Unicode-Font verfügbar ist, fülle KEINE Text-Formularfelder!
-        // pdf-lib verwendet WinAnsi beim Flatten → Fehler "WinAnsi cannot encode"
+        // WICHTIG: Wenn Unicode-Font verfügbar ist UND updateFieldAppearances() aufgerufen wurde,
+        // können wir Formularfelder jetzt mit UTF-8 füllen (kein WinAnsi mehr!)
         const fieldType = field.constructor.name
+        
+        // Prüfe ob direkte Zeichnung bereits verwendet wurde (bevorzuge direkte Zeichnung)
+        if (fieldInfoMap.has(fieldName)) {
+          const fieldInfo = fieldInfoMap.get(fieldName)
+          if (fieldInfo && fieldInfo.drawnDirectly === true) {
+            console.log(`  ✅ Text bereits mit direkter Zeichnung gezeichnet, überspringe Formularfeld-Füllung`)
+            continue
+          }
+        }
+        
+        // Wenn Unicode-Font verfügbar ist, können wir Formularfelder jetzt mit UTF-8 füllen
+        // (updateFieldAppearances wurde bereits aufgerufen)
         if (unicodeFont && (fieldType === 'PDFTextField' || fieldType === 'PDFDropdown')) {
-          console.log(`  ⚠️ Unicode-Font verfügbar - überspringe Formularfeld-Füllung für ${fieldType} (verhindert WinAnsi-Fehler!)`)
-          console.log(`     Text sollte bereits mit direkter Zeichnung gezeichnet worden sein`)
-          console.log(`     Wenn nicht, ist direkte Zeichnung fehlgeschlagen - bitte Logs prüfen`)
-          continue // Überspringe Formularfeld-Füllung - verhindert WinAnsi-Fehler!
+          console.log(`  ✅ Unicode-Font verfügbar - Formularfeld kann jetzt mit UTF-8 gefüllt werden (kein WinAnsi!)`)
         }
         
         // Prüfe ob convertedValue definiert ist
@@ -890,24 +899,38 @@ async function fillTemplateWithMultipleGuests(
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // WARNUNG: pdf-lib verwendet WinAnsi für Formularfelder!
-            // Dies sollte nur passieren, wenn Unicode-Font NICHT verfügbar ist
-            console.error(`  ❌ FEHLER: PDFTextField wird gefüllt, obwohl Unicode-Font verfügbar sein sollte!`)
-            console.error(`     Dies wird WinAnsi-Fehler verursachen: "WinAnsi cannot encode"`)
-            console.error(`     Bitte prüfen Sie, warum direkte Zeichnung nicht verwendet wurde`)
-            throw new Error(`PDFTextField sollte nicht gefüllt werden, wenn Unicode-Font verfügbar ist (verhindert WinAnsi-Fehler)`)
-            // Zentriere den Text
-            try {
-              if (typeof fieldAny.setAlignment === 'function') {
-                fieldAny.setAlignment(TextAlignment.Center)
-                console.log(`  ✅ TextField zentriert`)
-              }
-            } catch (alignError) {
-              console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
+            // WICHTIG: Wenn Unicode-Font verfügbar ist UND updateFieldAppearances() aufgerufen wurde,
+            // kann pdf-lib jetzt UTF-8 verwenden (kein WinAnsi mehr!)
+            if (unicodeFont) {
+              console.log(`  ✅ Unicode-Font verfügbar - setText() verwendet jetzt UTF-8 (kein WinAnsi!)`)
+            } else {
+              console.warn(`  ⚠️ Unicode-Font nicht verfügbar - setText() könnte WinAnsi verwenden`)
             }
-            const currentValue = fieldAny.getText()
-            console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
-            filledCount++
+            
+            try {
+              fieldAny.setText(convertedValue) // Original-Text mit türkischen Zeichen (UTF-8)
+              console.log(`  ✅ TextField gesetzt mit UTF-8 (Original-Text): "${convertedValue}"`)
+              // Zentriere den Text
+              try {
+                if (typeof fieldAny.setAlignment === 'function') {
+                  fieldAny.setAlignment(TextAlignment.Center)
+                  console.log(`  ✅ TextField zentriert`)
+                }
+              } catch (alignError) {
+                console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
+              }
+              const currentValue = fieldAny.getText()
+              console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
+              filledCount++
+            } catch (setTextError) {
+              console.error(`  ❌ Fehler beim Setzen des Textes:`, setTextError)
+              if (setTextError instanceof Error && setTextError.message.includes('WinAnsi')) {
+                console.error(`     ⚠️ WinAnsi-Fehler trotz Unicode-Font!`)
+                console.error(`     ⚠️ Möglicherweise wurde updateFieldAppearances() nicht korrekt aufgerufen`)
+                throw setTextError
+              }
+              throw setTextError
+            }
           } else if (fieldType === 'PDFCheckBox') {
             const checkBox = field as any
             const boolValue = value.toLowerCase() === 'true' || value.toLowerCase() === 'ja' || value === '1'
