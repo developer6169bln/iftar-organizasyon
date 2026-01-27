@@ -367,6 +367,55 @@ async function fillTemplateWithMultipleGuests(
   // Lade Template
   const filledDoc = await PDFDocument.load(templateBytes)
   
+  // Registriere fontkit für Unicode-Unterstützung
+  filledDoc.registerFontkit(fontkit)
+  
+  // Lade Unicode-Font VOR dem Füllen der Felder
+  let unicodeFont: PDFFont | null = null
+  console.log('🔄 Lade Unicode-Font für direkte Text-Zeichnung...')
+  
+  const fontUrls = [
+    'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
+    'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
+    'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf'
+  ]
+  
+  for (const fontUrl of fontUrls) {
+    try {
+      console.log(`  🔄 Versuche Font zu laden von: ${fontUrl}`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      
+      const fontResponse = await fetch(fontUrl, {
+        headers: {
+          'Accept': 'application/octet-stream, application/font-ttf, font/ttf, */*',
+          'User-Agent': 'Mozilla/5.0'
+        },
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (fontResponse.ok) {
+        const fontBytes = await fontResponse.arrayBuffer()
+        if (fontBytes.byteLength > 0) {
+          unicodeFont = await filledDoc.embedFont(fontBytes)
+          console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich geladen und eingebettet')
+          console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
+          break
+        }
+      }
+    } catch (fontError) {
+      console.warn(`  ⚠️ Fehler beim Laden von ${fontUrl}:`, fontError)
+      continue
+    }
+  }
+  
+  if (!unicodeFont) {
+    console.error('  ❌ KRITISCH: Konnte Unicode-Font nicht laden!')
+    console.error('  ⚠️ Fallback: Verwende konvertierte Werte in Formularfeldern')
+  }
+  
   // Versuche PDF-Formularfelder zu füllen
   let form: any = null
   try {
@@ -586,8 +635,7 @@ async function fillTemplateWithMultipleGuests(
           console.log(`  ℹ️ Feld enthält türkische Zeichen, wird mit Unicode-Font dargestellt: "${originalValue}"`)
         }
         
-        // Versuche Feld-Position und Font-Größe zu erhalten (für Unicode-Wiederherstellung)
-        // WICHTIG: Positionen sind KRITISCH für die Wiederherstellung!
+        // Versuche Feld-Position und Font-Größe zu erhalten (für direkte Text-Zeichnung)
         try {
           const fieldAny = field as any
           const acroField = fieldAny.acroField
@@ -596,130 +644,127 @@ async function fillTemplateWithMultipleGuests(
           let fontSize = 12 // Standard-Font-Größe
           
           if (acroField) {
-            // Versuche Rectangle zu erhalten - KRITISCH für Position!
+            // Versuche Rectangle zu erhalten
             try {
               if (acroField.getRectangle) {
                 const rect = acroField.getRectangle()
-                if (rect) {
-                  // Validiere Rectangle-Werte
-                  if (typeof rect.x === 'number' && typeof rect.y === 'number' && 
-                      !isNaN(rect.x) && !isNaN(rect.y) &&
-                      rect.x >= 0 && rect.y >= 0) {
-                    fieldRect = {
-                      x: rect.x,
-                      y: rect.y,
-                      width: rect.width || 100,
-                      height: rect.height || 20
-                    }
-                    console.log(`  ✅ Feld-Rectangle gefunden: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
-                  } else {
-                    console.warn(`  ⚠️ Ungültige Rectangle-Werte: x=${rect.x}, y=${rect.y}`)
+                if (rect && typeof rect.x === 'number' && typeof rect.y === 'number' && 
+                    !isNaN(rect.x) && !isNaN(rect.y) && rect.x >= 0 && rect.y >= 0) {
+                  fieldRect = {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width || 100,
+                    height: rect.height || 20
                   }
-                } else {
-                  console.warn(`  ⚠️ Rectangle ist null/undefined`)
                 }
-              } else {
-                console.warn(`  ⚠️ getRectangle() Methode nicht verfügbar`)
               }
             } catch (rectError) {
-              console.error(`  ❌ Fehler beim Abrufen des Rectangles:`, rectError)
+              // Ignoriere Fehler, versuche alternative Methode
+            }
+            
+            // Alternative: Versuche Position über Rect-Array
+            if (!fieldRect && acroField.dict) {
+              try {
+                const rectArray = acroField.dict.get('Rect')
+                if (rectArray && Array.isArray(rectArray) && rectArray.length >= 4) {
+                  const x0 = rectArray[0]?.valueOf() || 0
+                  const y0 = rectArray[1]?.valueOf() || 0
+                  const x1 = rectArray[2]?.valueOf() || 0
+                  const y1 = rectArray[3]?.valueOf() || 0
+                  
+                  if (x0 >= 0 && y0 >= 0 && x1 > x0 && y1 > y0) {
+                    fieldRect = {
+                      x: x0,
+                      y: y1,
+                      width: x1 - x0,
+                      height: y1 - y0
+                    }
+                  }
+                }
+              } catch (altError) {
+                // Ignoriere Fehler
+              }
             }
             
             // Versuche Font-Größe zu extrahieren
             try {
               if (acroField.dict) {
-                const da = acroField.dict.get('DA') // Default Appearance
+                const da = acroField.dict.get('DA')
                 if (da) {
-                  // Parse DA String für Font-Größe (z.B. "/Helv 12 Tf")
                   const daMatch = da.match(/(\d+(?:\.\d+)?)\s+Tf/)
                   if (daMatch) {
                     fontSize = parseFloat(daMatch[1])
-                    console.log(`  📏 Font-Größe extrahiert: ${fontSize}`)
-                  } else {
-                    console.warn(`  ⚠️ Konnte Font-Größe nicht aus DA extrahieren: "${da}"`)
                   }
-                } else {
-                  console.warn(`  ⚠️ DA (Default Appearance) nicht verfügbar`)
                 }
               }
             } catch (fontSizeError) {
-              console.warn(`  ⚠️ Konnte Font-Größe nicht extrahieren, verwende Standard:`, fontSizeError)
+              // Verwende Standard-Größe
             }
-            
-            // Alternative: Versuche Position über andere Methoden
-            if (!fieldRect) {
-              try {
-                // Versuche über acroField.dict
-                if (acroField.dict) {
-                  const rectArray = acroField.dict.get('Rect')
-                  if (rectArray && Array.isArray(rectArray) && rectArray.length >= 4) {
-                    // PDF Rectangle: [x0, y0, x1, y1] (bottom-left und top-right)
-                    const x0 = rectArray[0]?.valueOf() || 0
-                    const y0 = rectArray[1]?.valueOf() || 0
-                    const x1 = rectArray[2]?.valueOf() || 0
-                    const y1 = rectArray[3]?.valueOf() || 0
-                    
-                    if (x0 >= 0 && y0 >= 0 && x1 > x0 && y1 > y0) {
-                      fieldRect = {
-                        x: x0,
-                        y: y1, // Y-Koordinate von oben (für PDF drawText)
-                        width: x1 - x0,
-                        height: y1 - y0
-                      }
-                      console.log(`  ✅ Feld-Position über Rect-Array gefunden: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}`)
-                    }
-                  }
-                }
-              } catch (altError) {
-                console.warn(`  ⚠️ Alternative Position-Methode fehlgeschlagen:`, altError)
-              }
-            }
-          } else {
-            console.warn(`  ⚠️ acroField nicht verfügbar`)
           }
           
-          // Speichere Feld-Info (immer, wenn türkische Zeichen vorhanden sind oder konvertiert wurde)
-          if (hasTurkishChars || originalValue !== convertedValue) {
-            if (!fieldRect) {
-              console.error(`  ❌ KRITISCH: Keine Position für Feld "${fieldName}" - Wiederherstellung wird nicht möglich sein!`)
-              console.error(`     Original: "${originalValue}", Konvertiert: "${convertedValue}"`)
+          // Zeichne Text direkt mit Unicode-Font, wenn Font verfügbar ist
+          if (unicodeFont && fieldRect) {
+            try {
+              const pages = filledDoc.getPages()
+              const page = pages[pageIndex]
+              
+              if (page) {
+                const textWidth = unicodeFont.widthOfTextAtSize(sanitizedValue, fontSize)
+                const textHeight = fontSize * 1.2
+                
+                // Berechne zentrierte Position
+                const textX = fieldRect.x + (fieldRect.width - textWidth) / 2
+                const textY = fieldRect.y - textHeight + (fieldRect.height - textHeight) / 2
+                
+                // Zeichne Text direkt mit Unicode-Font (unterstützt türkische Zeichen)
+                page.drawText(sanitizedValue, {
+                  x: textX,
+                  y: textY,
+                  size: fontSize,
+                  font: unicodeFont,
+                  color: rgb(0, 0, 0),
+                })
+                
+                console.log(`  ✅ Text direkt mit Unicode-Font gezeichnet: "${sanitizedValue}" bei (${textX}, ${textY})`)
+                filledCount++
+                continue // Überspringe Formularfeld-Füllung
+              }
+            } catch (drawError) {
+              console.warn(`  ⚠️ Fehler beim direkten Zeichnen, verwende Formularfeld:`, drawError)
+              // Fallback: Verwende Formularfeld
             }
-            
-            fieldInfoMap.set(fieldName, {
-              originalValue,
-              convertedValue,
-              fieldName,
-              pageIndex,
-              x: fieldRect?.x,
-              y: fieldRect?.y,
-              width: fieldRect?.width,
-              height: fieldRect?.height,
-              fontSize
-            })
-            
-            if (fieldRect) {
-              console.log(`  ✅ Feld-Info gespeichert: x=${fieldRect.x}, y=${fieldRect.y}, width=${fieldRect.width}, height=${fieldRect.height}, fontSize=${fontSize}`)
-            } else {
-              console.error(`  ❌ Feld-Info gespeichert OHNE Position - Wiederherstellung wird fehlschlagen!`)
+          }
+          
+          // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
+          // Konvertiere für WinAnsi (Fallback)
+          let convertedValue = originalValue
+            .replace(/İ/g, 'I').replace(/ı/g, 'i')
+            .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+            .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+            .replace(/Ş/g, 'S').replace(/ş/g, 's')
+            .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+            .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+          
+          convertedValue = sanitizeTextForWinAnsi(convertedValue)
+          
+          if (convertedValue && convertedValue.trim() !== '') {
+            // Speichere für spätere Wiederherstellung (falls nötig)
+            if (hasTurkishChars || originalValue !== convertedValue) {
+              fieldInfoMap.set(fieldName, {
+                originalValue,
+                convertedValue,
+                fieldName,
+                pageIndex,
+                x: fieldRect?.x,
+                y: fieldRect?.y,
+                width: fieldRect?.width,
+                height: fieldRect?.height,
+                fontSize
+              })
             }
           }
         } catch (posError) {
-          // Falls Position nicht verfügbar, speichere trotzdem Original-Wert
-          console.error(`  ❌ Fehler beim Ermitteln der Feld-Position:`, posError)
-          if (posError instanceof Error) {
-            console.error(`     Stack: ${posError.stack}`)
-          }
-          
-          if (hasTurkishChars || originalValue !== convertedValue) {
-            fieldInfoMap.set(fieldName, {
-              originalValue,
-              convertedValue,
-              fieldName,
-              pageIndex,
-              fontSize: 12
-            })
-            console.error(`  ❌ Feld-Info gespeichert OHNE Position - Wiederherstellung wird fehlschlagen!`)
-          }
+          console.warn(`  ⚠️ Fehler beim Ermitteln der Feld-Position:`, posError)
         }
         
         try {
@@ -731,10 +776,25 @@ async function fillTemplateWithMultipleGuests(
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            // Verwende konvertierten Wert (WinAnsi-kompatibel)
-            // Original-Wert wird nach dem Flatten mit Unicode-Font wiederhergestellt
-            fieldAny.setText(convertedValue)
-            console.log(`  ✅ TextField gesetzt (WinAnsi-kompatibel): "${convertedValue}"`)
+            // Wenn Unicode-Font verfügbar und Text bereits gezeichnet wurde, überspringe
+            // Ansonsten verwende konvertierten Wert (Fallback)
+            if (unicodeFont && fieldInfoMap.has(fieldName)) {
+              const fieldInfo = fieldInfoMap.get(fieldName)
+              if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+                console.log(`  ℹ️ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld`)
+                continue
+              }
+            }
+            
+            // Fallback: Fülle Formularfeld mit konvertiertem Wert
+            // convertedValue wurde bereits oben berechnet
+            if (convertedValue && convertedValue.trim() !== '') {
+              fieldAny.setText(convertedValue)
+              console.log(`  ✅ TextField gesetzt (Fallback, WinAnsi-kompatibel): "${convertedValue}"`)
+            } else {
+              console.warn(`  ⚠️ Konvertierter Wert ist leer, überspringe`)
+              continue
+            }
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
