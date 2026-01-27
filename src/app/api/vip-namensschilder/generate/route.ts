@@ -383,28 +383,38 @@ async function fillTemplateWithMultipleGuests(
       console.log(`  📋 Zugeordnet zu Gast-Feld: "${guestFieldName}"`)
       
       // Fülle jedes Feld in der Gruppe mit dem entsprechenden Gast basierend auf Index
-      const filledGuestsInGroup = new Set<string>()
+      // WICHTIG: Jeder Gast darf nur EINMAL pro Feld-Gruppe verwendet werden
+      const usedGuestIndices = new Set<number>()
       
-      for (let i = 0; i < fieldList.length; i++) {
-        const field = fieldList[i]
-        const fieldIndex = indices[i] // Index aus Feldname (0-basiert: 0, 1, 2, 3)
-        const guest = guests[fieldIndex] // Nimm den Gast am entsprechenden Index
+      // Sortiere Felder nach Index, um sicherzustellen dass Feld1 → Gast0, Feld2 → Gast1, etc.
+      const fieldIndexPairs = fieldList.map((field, i) => ({ field, index: indices[i] }))
+      fieldIndexPairs.sort((a, b) => a.index - b.index) // Sortiere nach Index
+      
+      for (let i = 0; i < fieldIndexPairs.length; i++) {
+        const { field, index: fieldIndex } = fieldIndexPairs[i]
+        const fieldNumber = fieldIndex + 1 // Feldnummer für Logging (Index 0 → Feldnummer 1)
+        
+        // Prüfe ob dieser Index bereits verwendet wurde (verhindert doppelte Gäste)
+        if (usedGuestIndices.has(fieldIndex)) {
+          console.warn(`  ⚠️ Index ${fieldIndex} (Feldnummer ${fieldNumber}) wurde bereits für ein anderes Feld verwendet, überspringe Duplikat`)
+          continue
+        }
+        
+        // Prüfe ob Gast für diesen Index existiert
+        if (fieldIndex >= guests.length) {
+          console.log(`  ⏭️ Kein Gast für Index ${fieldIndex} (Feldnummer ${fieldNumber}, nur ${guests.length} Gäste verfügbar), überspringe`)
+          continue
+        }
+        
+        const guest = guests[fieldIndex] // Nimm den Gast am entsprechenden Index (0-basiert)
         
         if (!guest) {
-          console.log(`  ⏭️ Kein Gast für Index ${fieldIndex} (Feld ${i + 1}/${fieldList.length}), überspringe`)
+          console.log(`  ⏭️ Kein Gast für Index ${fieldIndex} (Feldnummer ${fieldNumber}), überspringe`)
           continue
         }
         
-        const guestId = guest.id || guest.name || JSON.stringify(guest)
-        
-        // Prüfe ob dieser Gast bereits in dieser Gruppe verarbeitet wurde
-        if (filledGuestsInGroup.has(guestId)) {
-          console.warn(`  ⚠️ Gast ${guest.name || guest.id} wurde bereits in dieser Gruppe verarbeitet, überspringe Duplikat`)
-          continue
-        }
-        
-        filledGuestsInGroup.add(guestId)
-        console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} (Index ${fieldIndex}) mit Gast: ${guest.name || guest.id}`)
+        usedGuestIndices.add(fieldIndex)
+        console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} (Feldnummer ${fieldNumber}, Index ${fieldIndex}) mit Gast: ${guest.name || guest.id}`)
         
         // Hole Wert aus Gast-Daten
         let value = getFieldValue(guest, guestFieldName)
@@ -579,22 +589,23 @@ async function fillTemplateWithMultipleGuests(
     
     console.log(`\n📊 Zusammenfassung: ${filledCount} von ${fields.length} Feldern gefüllt`)
     
-    // Flatten form (macht Formularfelder zu statischem Text)
+    // Flatten form (macht Formularfelder zu statischem Text) - MUSS erfolgreich sein
     if (form) {
-      console.log(`🔄 Flatten Formularfelder...`)
+      console.log(`🔄 Flatten Formularfelder (konvertiert zu normalem PDF)...`)
       try {
         form.flatten()
-        console.log('✅ Formularfelder gefüllt und geflattened')
+        console.log('✅ Formularfelder gefüllt und geflattened - PDF ist jetzt normales PDF ohne Formularfelder')
       } catch (flattenError) {
-        console.warn('⚠️ Fehler beim Flatten, versuche ohne Flatten:', flattenError)
-        // Flatten ist optional - wenn es fehlschlägt, können wir trotzdem fortfahren
-        // Die Felder sollten bereits gefüllt sein
+        console.error('❌ Fehler beim Flatten:', flattenError)
         if (flattenError instanceof Error) {
-          console.warn('   Flatten-Fehler:', flattenError.message)
+          console.error('   Flatten-Fehler:', flattenError.message)
+          console.error('   Stack:', flattenError.stack)
         }
+        throw new Error(`Fehler beim Flatten des PDFs: ${flattenError instanceof Error ? flattenError.message : 'Unbekannter Fehler'}`)
       }
     } else {
       console.warn('⚠️ Kein Formular-Objekt verfügbar zum Flatten')
+      throw new Error('PDF enthält keine Formularfelder zum Flatten')
     }
   } catch (e) {
     console.error('❌ Fehler beim Füllen der Formularfelder:', e)
@@ -695,8 +706,8 @@ export async function POST(request: NextRequest) {
         const tempFields = tempForm.getFields()
         
         // Analysiere Felder: Finde höchste Nummer in Feldnamen (z.B. "Name4" → 4 Gäste)
-        let maxGuestsPerPage = 1
-        const fieldAnalysis: { [baseName: string]: { count: number, maxIndex: number, mapped: string } } = {}
+        let maxGuestsPerPage = 4 // Standard: 4 Gäste pro Seite
+        const fieldAnalysis: { [baseName: string]: { count: number, maxIndex: number, mapped: string, indices: number[] } } = {}
         
         for (const field of tempFields) {
           const fieldName = field.getName()
@@ -705,13 +716,16 @@ export async function POST(request: NextRequest) {
           if (numberMatch) {
             // Feld hat Nummer am Ende
             const baseName = numberMatch[1]
-            const fieldIndex = parseInt(numberMatch[2])
+            const fieldIndex = parseInt(numberMatch[2]) // 1-9
             
             if (!fieldAnalysis[baseName]) {
-              fieldAnalysis[baseName] = { count: 0, maxIndex: 0, mapped: '' }
+              fieldAnalysis[baseName] = { count: 0, maxIndex: 0, mapped: '', indices: [] }
             }
             fieldAnalysis[baseName].count++
             fieldAnalysis[baseName].maxIndex = Math.max(fieldAnalysis[baseName].maxIndex, fieldIndex)
+            if (!fieldAnalysis[baseName].indices.includes(fieldIndex)) {
+              fieldAnalysis[baseName].indices.push(fieldIndex)
+            }
             
             // Prüfe Zuordnung
             if (fieldMapping[baseName]) {
@@ -727,7 +741,7 @@ export async function POST(request: NextRequest) {
           } else {
             // Feld ohne Nummer
             if (!fieldAnalysis[fieldName]) {
-              fieldAnalysis[fieldName] = { count: 1, maxIndex: 0, mapped: fieldMapping[fieldName] || '' }
+              fieldAnalysis[fieldName] = { count: 1, maxIndex: 0, mapped: fieldMapping[fieldName] || '', indices: [] }
             }
           }
         }
@@ -735,10 +749,13 @@ export async function POST(request: NextRequest) {
         console.log(`📊 Feld-Analyse:`)
         for (const [name, data] of Object.entries(fieldAnalysis)) {
           const mapped = data.mapped ? ` → ${data.mapped}` : ''
-          const indexInfo = data.maxIndex > 0 ? ` (max Index: ${data.maxIndex})` : ''
+          const indexInfo = data.maxIndex > 0 ? ` (max Index: ${data.maxIndex}, Indizes: [${data.indices.sort((a,b) => a-b).join(', ')}])` : ''
           console.log(`  - "${name}": ${data.count}x${mapped}${indexInfo}`)
         }
         console.log(`📊 Maximale Gäste pro Seite (basierend auf Feldnummern): ${maxGuestsPerPage}`)
+        
+        // Sicherstellen, dass maxGuestsPerPage mindestens 1 ist und maximal die Anzahl der verfügbaren Gäste
+        maxGuestsPerPage = Math.max(1, Math.min(maxGuestsPerPage, 9)) // Maximal 9 (Feldnummern 1-9)
         
         // Entferne Duplikate basierend auf Gast-ID
         const uniqueGuests: any[] = []
@@ -759,10 +776,12 @@ export async function POST(request: NextRequest) {
         
         console.log(`👥 Eindeutige Gäste: ${uniqueGuests.length} von ${guests.length} ursprünglichen Gästen`)
         
-        // Gruppiere Gäste: maxGuestsPerPage Gäste pro Seite
+        // Gruppiere Gäste: maxGuestsPerPage Gäste pro Seite (z.B. 4 Gäste pro Seite)
         const guestGroups: any[][] = []
         for (let i = 0; i < uniqueGuests.length; i += maxGuestsPerPage) {
-          guestGroups.push(uniqueGuests.slice(i, i + maxGuestsPerPage))
+          const group = uniqueGuests.slice(i, i + maxGuestsPerPage)
+          guestGroups.push(group)
+          console.log(`  📋 Gruppe ${guestGroups.length}: Gäste ${i + 1}-${Math.min(i + maxGuestsPerPage, uniqueGuests.length)} (${group.length} Gast/Gäste)`)
         }
         
         console.log(`📄 Erstelle ${guestGroups.length} Seite(n) mit je bis zu ${maxGuestsPerPage} Gast/Gästen`)
@@ -774,7 +793,7 @@ export async function POST(request: NextRequest) {
           throw new Error(`Nicht alle Gäste konnten gruppiert werden. Erwartet: ${uniqueGuests.length}, Gefunden: ${totalGuestsInGroups}`)
         }
         
-        // Tracking: Welche Gäste wurden verarbeitet
+        // Tracking: Welche Gäste wurden verarbeitet (global über alle Seiten)
         const processedGuestIds = new Set<string>()
         
         // Für jede Gruppe: Template kopieren und füllen
@@ -782,10 +801,13 @@ export async function POST(request: NextRequest) {
           const guestGroup = guestGroups[groupIndex]
           const groupGuestIds = guestGroup.map(g => g.id || g.name || JSON.stringify(g))
           
-          console.log(`\n📝 Verarbeite Gruppe ${groupIndex + 1}/${guestGroups.length} mit ${guestGroup.length} Gast/Gästen`)
-          console.log(`  👥 Gäste in Gruppe: ${guestGroup.map(g => g.name || g.id).join(', ')}`)
+          console.log(`\n📝 Verarbeite Gruppe ${groupIndex + 1}/${guestGroups.length} (Seite ${groupIndex + 1}) mit ${guestGroup.length} Gast/Gästen`)
+          console.log(`  👥 Gäste in dieser Gruppe:`)
+          guestGroup.forEach((g, idx) => {
+            console.log(`    ${idx + 1}. ${g.name || g.id} (Index ${idx})`)
+          })
           
-          // Prüfe ob Gäste bereits verarbeitet wurden
+          // Prüfe ob Gäste bereits verarbeitet wurden (sollte nicht passieren)
           const alreadyProcessed = groupGuestIds.filter(id => processedGuestIds.has(id))
           if (alreadyProcessed.length > 0) {
             console.error(`  ❌ FEHLER: ${alreadyProcessed.length} Gast/Gäste wurden bereits verarbeitet: ${alreadyProcessed.join(', ')}`)
@@ -794,12 +816,15 @@ export async function POST(request: NextRequest) {
           
           try {
             // Fülle Template mit Gast-Gruppe (jedes Mal neu laden für saubere Kopie)
+            // WICHTIG: guestGroup enthält genau die Gäste für diese Seite (z.B. Gäste 0-3 für Seite 1, Gäste 4-7 für Seite 2)
             const filledDoc = await fillTemplateWithMultipleGuests(templateBytes, guestGroup, getFieldValue, fieldMapping)
             
             // Markiere Gäste als verarbeitet
             for (const guestId of groupGuestIds) {
               processedGuestIds.add(guestId)
             }
+            
+            console.log(`  ✅ Gäste ${groupIndex * maxGuestsPerPage + 1}-${groupIndex * maxGuestsPerPage + guestGroup.length} verarbeitet`)
             
             // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
             const pageCount = filledDoc.getPageCount()
