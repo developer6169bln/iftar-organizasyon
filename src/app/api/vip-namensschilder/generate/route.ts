@@ -155,7 +155,51 @@ async function drawNamensschild(
     color: rgb(1, 1, 1), // Weiß
   })
 
-  // Hilfsfunktion: Sanitize Text für PDF
+  // Hilfsfunktion: Konvertiere Text für WinAnsi-Encoding (PDF-Formularfelder)
+  // WinAnsi kann nicht alle Unicode-Zeichen kodieren, daher müssen wir problematische Zeichen konvertieren
+  const sanitizeTextForWinAnsi = (text: string): string => {
+    if (!text) return ''
+    
+    // Konvertiere problematische Unicode-Zeichen zu ASCII-ähnlichen Zeichen
+    let sanitized = text
+      // Türkische Zeichen
+      .replace(/İ/g, 'I')  // Großes I mit Punkt → I
+      .replace(/ı/g, 'i')  // Kleines i ohne Punkt → i
+      .replace(/Ğ/g, 'G')  // Großes G mit Breve → G
+      .replace(/ğ/g, 'g')  // Kleines g mit Breve → g
+      .replace(/Ü/g, 'U')  // Großes U mit Umlaut → U
+      .replace(/ü/g, 'u')  // Kleines u mit Umlaut → u
+      .replace(/Ş/g, 'S')  // Großes S mit Cedilla → S
+      .replace(/ş/g, 's')  // Kleines s mit Cedilla → s
+      .replace(/Ö/g, 'O')  // Großes O mit Umlaut → O
+      .replace(/ö/g, 'o')  // Kleines o mit Umlaut → o
+      .replace(/Ç/g, 'C')  // Großes C mit Cedilla → C
+      .replace(/ç/g, 'c')  // Kleines c mit Cedilla → c
+      // Andere problematische Zeichen
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Steuerzeichen
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Unsichtbare Zeichen
+      // Entferne Zeichen die nicht in WinAnsi sind (behalte nur ASCII + erweiterte ASCII)
+      .split('')
+      .map(char => {
+        const code = char.charCodeAt(0)
+        // WinAnsi unterstützt 0x00-0xFF, aber einige Bereiche sind problematisch
+        // Behalte nur druckbare ASCII-Zeichen (0x20-0x7E) und erweiterte ASCII (0xA0-0xFF)
+        if (code >= 0x20 && code <= 0x7E) {
+          return char // Standard ASCII
+        } else if (code >= 0xA0 && code <= 0xFF) {
+          return char // Erweiterte ASCII (Latin-1)
+        } else {
+          // Konvertiere zu ähnlichem ASCII-Zeichen oder entferne
+          return ''
+        }
+      })
+      .join('')
+      .trim()
+    
+    return sanitized
+  }
+  
+  // Hilfsfunktion: Sanitize Text für PDF (für drawText, nicht für Formularfelder)
   const sanitizeText = (text: string): string => {
     if (!text) return ''
     return text
@@ -282,6 +326,50 @@ async function drawNamensschild(
       console.error('Fehler beim Zeichnen des Namens:', e)
     }
   }
+}
+
+// Hilfsfunktion: Konvertiere Text für WinAnsi-Encoding (PDF-Formularfelder)
+// WinAnsi kann nicht alle Unicode-Zeichen kodieren, daher müssen wir problematische Zeichen konvertieren
+function sanitizeTextForWinAnsi(text: string): string {
+  if (!text) return ''
+  
+  // Konvertiere problematische Unicode-Zeichen zu ASCII-ähnlichen Zeichen
+  let sanitized = text
+    // Türkische Zeichen
+    .replace(/İ/g, 'I')  // Großes I mit Punkt → I
+    .replace(/ı/g, 'i')  // Kleines i ohne Punkt → i
+    .replace(/Ğ/g, 'G')  // Großes G mit Breve → G
+    .replace(/ğ/g, 'g')  // Kleines g mit Breve → g
+    .replace(/Ü/g, 'U')  // Großes U mit Umlaut → U
+    .replace(/ü/g, 'u')  // Kleines u mit Umlaut → u
+    .replace(/Ş/g, 'S')  // Großes S mit Cedilla → S
+    .replace(/ş/g, 's')  // Kleines s mit Cedilla → s
+    .replace(/Ö/g, 'O')  // Großes O mit Umlaut → O
+    .replace(/ö/g, 'o')  // Kleines o mit Umlaut → o
+    .replace(/Ç/g, 'C')  // Großes C mit Cedilla → C
+    .replace(/ç/g, 'c')  // Kleines c mit Cedilla → c
+    // Andere problematische Zeichen
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Steuerzeichen
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Unsichtbare Zeichen
+    // Entferne Zeichen die nicht in WinAnsi sind (behalte nur ASCII + erweiterte ASCII)
+    .split('')
+    .map(char => {
+      const code = char.charCodeAt(0)
+      // WinAnsi unterstützt 0x00-0xFF, aber einige Bereiche sind problematisch
+      // Behalte nur druckbare ASCII-Zeichen (0x20-0x7E) und erweiterte ASCII (0xA0-0xFF)
+      if (code >= 0x20 && code <= 0x7E) {
+        return char // Standard ASCII
+      } else if (code >= 0xA0 && code <= 0xFF) {
+        return char // Erweiterte ASCII (Latin-1)
+      } else {
+        // Konvertiere zu ähnlichem ASCII-Zeichen oder entferne
+        return ''
+      }
+    })
+    .join('')
+    .trim()
+  
+  return sanitized
 }
 
 // Hilfsfunktion: Fülle PDF-Template mit mehreren Gästen (wenn mehrere Felder mit gleichem Namen)
@@ -468,16 +556,27 @@ async function fillTemplateWithMultipleGuests(
           continue
         }
         
+        // Sanitize Text für WinAnsi-Encoding (PDF-Formularfelder)
+        const sanitizedValue = sanitizeTextForWinAnsi(value)
+        if (sanitizedValue !== value) {
+          console.log(`  🔄 Text konvertiert für WinAnsi: "${value}" → "${sanitizedValue}"`)
+        }
+        
+        if (!sanitizedValue || sanitizedValue.trim() === '') {
+          console.log(`  ⚠️ Wert wurde nach Sanitization leer, überspringe`)
+          continue
+        }
+        
         try {
           const fieldType = field.constructor.name
           console.log(`  📝 Feld-Typ: ${fieldType}`)
-          console.log(`  ✏️ Setze Wert: "${value}"`)
+          console.log(`  ✏️ Setze Wert: "${sanitizedValue}"`)
           
           // Versuche verschiedene Methoden, um das Feld zu setzen
           const fieldAny = field as any
           
           if (fieldType === 'PDFTextField') {
-            fieldAny.setText(value)
+            fieldAny.setText(sanitizedValue)
             // Zentriere den Text
             try {
               if (typeof fieldAny.setAlignment === 'function') {
@@ -504,14 +603,22 @@ async function fillTemplateWithMultipleGuests(
           } else if (fieldType === 'PDFDropdown') {
             const dropdown = field as any
             try {
-              dropdown.select(value)
-              console.log(`  ✅ Dropdown ausgewählt: "${value}"`)
-              filledCount++
+              // Versuche zuerst mit originalem Wert, dann mit sanitized
+              try {
+                dropdown.select(value)
+                console.log(`  ✅ Dropdown ausgewählt: "${value}"`)
+                filledCount++
+              } catch (e1) {
+                // Falls originaler Wert fehlschlägt, versuche sanitized
+                dropdown.select(sanitizedValue)
+                console.log(`  ✅ Dropdown ausgewählt (sanitized): "${sanitizedValue}"`)
+                filledCount++
+              }
             } catch (e) {
-              console.warn(`  ⚠️ Wert "${value}" nicht in Dropdown-Liste:`, e)
+              console.warn(`  ⚠️ Wert "${sanitizedValue}" nicht in Dropdown-Liste:`, e)
             // Versuche als Text zu setzen, falls möglich
             if (typeof dropdown.setText === 'function') {
-              dropdown.setText(value)
+              dropdown.setText(sanitizedValue)
               // Zentriere den Text
               try {
                 if (typeof dropdown.setAlignment === 'function') {
@@ -521,16 +628,23 @@ async function fillTemplateWithMultipleGuests(
               } catch (alignError) {
                 console.warn(`  ⚠️ Konnte Dropdown-Text nicht zentrieren:`, alignError)
               }
-              console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
+              console.log(`  ✅ Dropdown als Text gesetzt: "${sanitizedValue}"`)
               filledCount++
             }
             }
           } else if (fieldType === 'PDFRadioGroup') {
             const radioGroup = field as any
             try {
-              radioGroup.select(value)
-              console.log(`  ✅ Radio-Button ausgewählt: "${value}"`)
-              filledCount++
+              // Versuche zuerst mit originalem Wert, dann mit sanitized
+              try {
+                radioGroup.select(value)
+                console.log(`  ✅ Radio-Button ausgewählt: "${value}"`)
+                filledCount++
+              } catch (e1) {
+                radioGroup.select(sanitizedValue)
+                console.log(`  ✅ Radio-Button ausgewählt (sanitized): "${sanitizedValue}"`)
+                filledCount++
+              }
             } catch (e) {
               console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
             }
@@ -539,7 +653,7 @@ async function fillTemplateWithMultipleGuests(
             // Versuche generische Methoden
             if (typeof fieldAny.setText === 'function') {
               try {
-                fieldAny.setText(value)
+                fieldAny.setText(sanitizedValue)
                 // Zentriere den Text
                 try {
                   if (typeof fieldAny.setAlignment === 'function') {
@@ -549,7 +663,7 @@ async function fillTemplateWithMultipleGuests(
                 } catch (alignError) {
                   console.warn(`  ⚠️ Konnte Text nicht zentrieren:`, alignError)
                 }
-                console.log(`  ✅ Feld mit setText() gesetzt: "${value}"`)
+                console.log(`  ✅ Feld mit setText() gesetzt: "${sanitizedValue}"`)
                 filledCount++
               } catch (e) {
                 console.warn(`  ⚠️ setText() fehlgeschlagen:`, e)
@@ -558,7 +672,7 @@ async function fillTemplateWithMultipleGuests(
               // Manche Felder benötigen updateAppearances
               try {
                 if (typeof fieldAny.setText === 'function') {
-                  fieldAny.setText(value)
+                  fieldAny.setText(sanitizedValue)
                   // Zentriere den Text
                   try {
                     if (typeof fieldAny.setAlignment === 'function') {
@@ -570,7 +684,7 @@ async function fillTemplateWithMultipleGuests(
                   }
                 }
                 fieldAny.updateAppearances()
-                console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${value}"`)
+                console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${sanitizedValue}"`)
                 filledCount++
               } catch (e) {
                 console.warn(`  ⚠️ updateAppearances() fehlgeschlagen:`, e)
