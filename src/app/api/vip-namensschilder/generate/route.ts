@@ -356,6 +356,7 @@ interface FieldInfo {
   width?: number
   height?: number
   fontSize?: number
+  drawnDirectly?: boolean // Flag: Text wurde direkt mit Unicode-Font gezeichnet (verhindert ANSI)
 }
 
 async function fillTemplateWithMultipleGuests(
@@ -792,11 +793,27 @@ async function fillTemplateWithMultipleGuests(
                   color: rgb(0, 0, 0),
                 })
                 
+                // KRITISCH: Speichere in fieldInfoMap, dass direkte Zeichnung erfolgreich war
+                // Dies verhindert, dass das Formularfeld später gefüllt wird
+                fieldInfoMap.set(fieldName, {
+                  originalValue,
+                  convertedValue: sanitizedValue, // Verwende sanitizedValue (behält Unicode)
+                  fieldName,
+                  pageIndex,
+                  x: fieldRect.x,
+                  y: fieldRect.y,
+                  width: fieldRect.width,
+                  height: fieldRect.height,
+                  fontSize,
+                  drawnDirectly: true // Flag: Text wurde direkt gezeichnet
+                })
+                
                 // Zusätzlicher Test: Prüfe ob Text korrekt gezeichnet wurde
                 console.log(`     ✅ Text gezeichnet mit Font: ${unicodeFont ? 'Unicode-Font' : 'Standard-Font'}`)
                 
                 console.log(`  ✅ Text erfolgreich mit Unicode-Font gezeichnet: "${sanitizedValue}"`)
                 console.log(`     Türkische Zeichen sollten korrekt dargestellt werden!`)
+                console.log(`     ✅ Formularfeld wird NICHT gefüllt (verhindert ANSI/WinAnsi-Kodierung!)`)
                 
                 filledCount++
                 continue // Überspringe Formularfeld-Füllung (Text ist bereits gezeichnet)
@@ -852,9 +869,13 @@ async function fillTemplateWithMultipleGuests(
         // KRITISCH: Wenn Unicode-Font verfügbar ist und direkte Zeichnung möglich war, 
         // FÜLLE KEINE FORMULARFELDER - das würde ANSI verwenden!
         // Prüfe ob Text bereits mit Unicode-Font gezeichnet wurde
-        if (unicodeFont && fieldInfoMap.has(fieldName)) {
+        if (fieldInfoMap.has(fieldName)) {
           const fieldInfo = fieldInfoMap.get(fieldName)
-          if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+          if (fieldInfo && fieldInfo.drawnDirectly === true) {
+            console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet (drawnDirectly=true), überspringe Formularfeld-Füllung (verhindert ANSI!)`)
+            continue
+          }
+          if (fieldInfo && fieldInfo.x !== undefined && fieldInfo.y !== undefined && unicodeFont) {
             console.log(`  ✅ Text bereits mit Unicode-Font gezeichnet, überspringe Formularfeld-Füllung (verhindert ANSI!)`)
             continue
           }
@@ -1017,14 +1038,20 @@ async function fillTemplateWithMultipleGuests(
         }
       }).length
       
+      // Zähle wie viele Felder direkt gezeichnet wurden
+      const directlyDrawnCount = Array.from(fieldInfoMap.values()).filter(fi => fi.drawnDirectly === true).length
+      
       console.log(`🔄 Flatten Formularfelder...`)
       if (unicodeFont) {
         console.log(`  ✅ Unicode-Font wurde verwendet - Texte wurden direkt gezeichnet`)
-        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt (Fallback)`)
-        console.log(`  📝 ${filledCount - filledFieldsCount} Text(e) wurden direkt mit Unicode-Font gezeichnet`)
+        console.log(`  📝 ${directlyDrawnCount} Text(e) wurden direkt mit Unicode-Font gezeichnet (UTF-8/Identity-H, KEIN ANSI!)`)
+        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt (Fallback, WinAnsi/ANSI)`)
+        if (directlyDrawnCount > 0) {
+          console.log(`  ✅ ${directlyDrawnCount} Feld(er) verwenden Unicode-Font - KEIN ANSI/WinAnsi!`)
+        }
       } else {
         console.log(`  ⚠️ Unicode-Font nicht verfügbar - Formularfelder wurden mit WinAnsi-Werten gefüllt`)
-        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt`)
+        console.log(`  📝 ${filledFieldsCount} Formularfeld(er) wurden gefüllt (ANSI/WinAnsi-Kodierung)`)
       }
       
       try {
