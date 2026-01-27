@@ -837,18 +837,27 @@ async function fillTemplateWithMultipleGuests(
               // Fallback: Verwende Formularfeld-Füllung (nach updateFieldAppearances sollte UTF-8 funktionieren)
             }
           } else {
-            // Direkte Zeichnung nicht möglich - verwende Formularfeld-Füllung
+            // KRITISCH: Direkte Zeichnung nicht möglich - aber wir können Formularfelder NICHT füllen!
+            // Formularfeld-Füllung würde WinAnsi-Fehler verursachen
+            // Lösung: Versuche trotzdem zu zeichnen mit geschätzter Position oder überspringe
             if (!unicodeFont) {
-              console.warn(`  ⚠️ Unicode-Font nicht verfügbar - verwende Formularfeld-Füllung (könnte WinAnsi verwenden)`)
+              console.error(`  ❌ Unicode-Font nicht verfügbar - kann Text nicht zeichnen!`)
+              console.error(`     Formularfeld wird NICHT gefüllt (würde WinAnsi-Fehler verursachen)`)
+              continue // Überspringe - kann nicht zeichnen und kann nicht füllen
             }
             if (!fieldRect) {
-              console.warn(`  ⚠️ Feld-Position nicht verfügbar - verwende Formularfeld-Füllung statt direkter Zeichnung`)
+              console.error(`  ❌ Feld-Position nicht verfügbar - kann Text nicht zeichnen!`)
+              console.error(`     Formularfeld wird NICHT gefüllt (würde WinAnsi-Fehler verursachen)`)
+              console.error(`     ⚠️ Bitte prüfen Sie das PDF-Template - Positionen müssen verfügbar sein!`)
+              continue // Überspringe - kann nicht zeichnen und kann nicht füllen
             }
             if (!sanitizedValue || sanitizedValue.trim() === '') {
               console.warn(`  ⚠️ Sanitized-Wert ist leer, überspringe`)
               continue
             }
-            console.log(`  ℹ️ Direkte Zeichnung nicht möglich - verwende Formularfeld-Füllung (mit UTF-8 nach updateFieldAppearances)`)
+            // Dies sollte nicht erreicht werden, da wir bereits alle Bedingungen geprüft haben
+            console.error(`  ❌ Unerwarteter Zustand: Direkte Zeichnung nicht möglich, aber alle Bedingungen erfüllt`)
+            continue
           }
           
           // Fallback: Fülle Formularfeld (wenn Unicode-Font nicht verfügbar oder Position fehlt)
