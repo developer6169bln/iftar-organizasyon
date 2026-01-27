@@ -813,32 +813,60 @@ async function fillTemplateWithMultipleGuests(
             // Versuche Unicode-Font zu laden (Unicode-Unterstützung für türkische Zeichen)
             // pdf-lib unterstützt Identity-H Encoding für Unicode-Zeichen
             let unicodeFont: PDFFont | null = null
+            
+            // Verwende eine zuverlässige Font-Quelle (jsDelivr CDN ist sehr zuverlässig)
             const fontUrls = [
+              'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
               'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
-              'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf',
-              'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf'
+              'https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNb4j5Ba_2c7A.ttf'
             ]
             
             for (const fontUrl of fontUrls) {
               try {
                 console.log(`  🔄 Versuche Font zu laden von: ${fontUrl}`)
+                
+                // Verwende fetch ohne Timeout (manche Server haben langsamere Verbindungen)
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 Sekunden Timeout
+                
                 const fontResponse = await fetch(fontUrl, {
                   headers: {
-                    'Accept': 'application/octet-stream',
+                    'Accept': 'application/octet-stream, application/font-ttf, font/ttf, */*',
+                    'User-Agent': 'Mozilla/5.0'
                   },
-                  // Timeout nach 10 Sekunden
-                  signal: AbortSignal.timeout(10000)
+                  signal: controller.signal
                 })
+                
+                clearTimeout(timeoutId)
                 
                 if (fontResponse.ok) {
                   const fontBytes = await fontResponse.arrayBuffer()
                   console.log(`  📦 Font-Datei geladen: ${fontBytes.byteLength} Bytes`)
                   
-                  unicodeFont = await filledDoc.embedFont(fontBytes)
-                  console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich eingebettet')
-                  console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
-                  console.log(`  ✅ Font kann türkische Zeichen darstellen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü`)
-                  break // Erfolgreich geladen, breche Schleife ab
+                  if (fontBytes.byteLength > 0) {
+                    try {
+                      unicodeFont = await filledDoc.embedFont(fontBytes)
+                      console.log('  ✅ Unicode-Font (Noto Sans) erfolgreich eingebettet')
+                      console.log('  ✅ Font unterstützt Unicode/UTF-8 Encoding (Identity-H)')
+                      console.log(`  ✅ Font kann türkische Zeichen darstellen: İ, ğ, ş, Ç, ç, Ö, ö, Ü, ü`)
+                      
+                      // Test: Prüfe ob Font türkische Zeichen unterstützt
+                      try {
+                        const testText = 'İğşÇçÖöÜü'
+                        const testWidth = unicodeFont.widthOfTextAtSize(testText, 12)
+                        console.log(`  ✅ Font-Test erfolgreich: Test-Text "${testText}" Breite: ${testWidth}`)
+                      } catch (testError) {
+                        console.warn(`  ⚠️ Font-Test fehlgeschlagen:`, testError)
+                      }
+                      
+                      break // Erfolgreich geladen, breche Schleife ab
+                    } catch (embedError) {
+                      console.warn(`  ⚠️ Fehler beim Einbetten der Font:`, embedError)
+                      continue
+                    }
+                  } else {
+                    console.warn(`  ⚠️ Font-Datei ist leer: ${fontUrl}`)
+                  }
                 } else {
                   console.warn(`  ⚠️ Font-Response nicht OK (${fontResponse.status}): ${fontUrl}`)
                 }
@@ -846,6 +874,7 @@ async function fillTemplateWithMultipleGuests(
                 console.warn(`  ⚠️ Fehler beim Laden von ${fontUrl}:`, fontError)
                 if (fontError instanceof Error) {
                   console.warn(`     Fehler-Message: ${fontError.message}`)
+                  console.warn(`     Fehler-Name: ${fontError.name}`)
                 }
                 // Versuche nächste URL
                 continue
@@ -853,9 +882,12 @@ async function fillTemplateWithMultipleGuests(
             }
             
             if (!unicodeFont) {
-              console.error('  ❌ Konnte Unicode-Font von keiner Quelle laden!')
+              console.error('  ❌ KRITISCH: Konnte Unicode-Font von keiner Quelle laden!')
               console.error('  ❌ PDF wird mit konvertierten Werten ausgegeben (İ→I, ğ→g, ş→s, Ü→U, etc.)')
-              console.error('  ❌ Bitte überprüfen Sie die Internet-Verbindung oder verwenden Sie eine lokale Font-Datei')
+              console.error('  ❌ Bitte überprüfen Sie:')
+              console.error('     1. Internet-Verbindung des Servers')
+              console.error('     2. Firewall-Einstellungen')
+              console.error('     3. CDN-Verfügbarkeit')
             }
             
             if (unicodeFont) {
@@ -864,14 +896,28 @@ async function fillTemplateWithMultipleGuests(
               let restoredCount = 0
               let skippedCount = 0
               
+              console.log(`  📋 Beginne Wiederherstellung für ${fieldInfoMap.size} Feld(er)...`)
+              
               for (const [fieldName, fieldInfo] of fieldInfoMap.entries()) {
                 // Wiederherstellen, wenn Original-Wert türkische Zeichen enthält ODER konvertiert wurde
-                const needsRestore = fieldInfo.originalValue !== fieldInfo.convertedValue || /[İıĞğŞşÇçÖöÜü]/.test(fieldInfo.originalValue)
+                const hasTurkishChars = /[İıĞğŞşÇçÖöÜü]/.test(fieldInfo.originalValue)
+                const wasConverted = fieldInfo.originalValue !== fieldInfo.convertedValue
+                const needsRestore = wasConverted || hasTurkishChars
+                
+                console.log(`  🔍 Prüfe Feld "${fieldName}":`)
+                console.log(`     Original: "${fieldInfo.originalValue}"`)
+                console.log(`     Konvertiert: "${fieldInfo.convertedValue}"`)
+                console.log(`     Hat türkische Zeichen: ${hasTurkishChars}`)
+                console.log(`     Wurde konvertiert: ${wasConverted}`)
+                console.log(`     Benötigt Wiederherstellung: ${needsRestore}`)
+                console.log(`     Position: x=${fieldInfo.x}, y=${fieldInfo.y}`)
                 
                 if (needsRestore) {
                   console.log(`  🔄 Verarbeite Feld "${fieldName}": "${fieldInfo.originalValue}" (konvertiert: "${fieldInfo.convertedValue}")`)
                   
-                  if (fieldInfo.x !== undefined && fieldInfo.y !== undefined) {
+                  if (fieldInfo.x !== undefined && fieldInfo.y !== undefined && 
+                      !isNaN(fieldInfo.x) && !isNaN(fieldInfo.y) &&
+                      fieldInfo.x >= 0 && fieldInfo.y >= 0) {
                     try {
                       const page = pages[fieldInfo.pageIndex]
                       if (page) {
@@ -933,8 +979,11 @@ async function fillTemplateWithMultipleGuests(
                     }
                   } else {
                     skippedCount++
-                    console.warn(`    ⚠️ Keine Position für Feld "${fieldName}" verfügbar (x=${fieldInfo.x}, y=${fieldInfo.y})`)
-                    console.warn(`       Original: "${fieldInfo.originalValue}", Konvertiert: "${fieldInfo.convertedValue}"`)
+                    console.error(`    ❌ KRITISCH: Keine gültige Position für Feld "${fieldName}"!`)
+                    console.error(`       x=${fieldInfo.x}, y=${fieldInfo.y}`)
+                    console.error(`       Original: "${fieldInfo.originalValue}"`)
+                    console.error(`       Konvertiert: "${fieldInfo.convertedValue}"`)
+                    console.error(`       Dieses Feld wird NICHT wiederhergestellt - türkische Zeichen werden als ASCII dargestellt!`)
                   }
                 } else {
                   // Keine Konvertierung nötig, Original-Wert ist bereits WinAnsi-kompatibel
