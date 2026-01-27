@@ -229,10 +229,10 @@ async function drawNamensschild(
   }
 }
 
-// Hilfsfunktion: Fülle PDF-Template mit Gast-Daten
-async function fillTemplateWithGuestData(
+// Hilfsfunktion: Fülle PDF-Template mit mehreren Gästen (wenn mehrere Felder mit gleichem Namen)
+async function fillTemplateWithMultipleGuests(
   templateBytes: ArrayBuffer,
-  guest: any,
+  guests: any[],
   getFieldValue: (guest: any, fieldName: string) => string,
   fieldMapping: { [pdfFieldName: string]: string }
 ): Promise<PDFDocument> {
@@ -247,15 +247,30 @@ async function fillTemplateWithGuestData(
     
     console.log(`🔍 Gefundene Formularfelder: ${fields.length}`)
     console.log(`📋 Mapping:`, JSON.stringify(fieldMapping, null, 2))
-    console.log(`👤 Gast: ${guest.name || guest.id}`)
+    console.log(`👥 Gäste: ${guests.length}`)
+    
+    // Gruppiere Felder nach Namen
+    const fieldsByName: { [name: string]: any[] } = {}
+    for (const field of fields) {
+      const pdfFieldName = field.getName()
+      if (!fieldsByName[pdfFieldName]) {
+        fieldsByName[pdfFieldName] = []
+      }
+      fieldsByName[pdfFieldName].push(field)
+    }
+    
+    console.log(`📊 Feld-Gruppierung: ${Object.keys(fieldsByName).length} verschiedene Feldnamen`)
+    for (const [name, fieldList] of Object.entries(fieldsByName)) {
+      console.log(`  - "${name}": ${fieldList.length} Feld(er)`)
+    }
     
     let filledCount = 0
     
-    for (const field of fields) {
-      const pdfFieldName = field.getName()
+    // Für jedes Feld-Gruppe: Fülle mit entsprechendem Gast
+    for (const [pdfFieldName, fieldList] of Object.entries(fieldsByName)) {
       const guestFieldName = fieldMapping[pdfFieldName]
       
-      console.log(`\n🔍 Prüfe Feld: "${pdfFieldName}"`)
+      console.log(`\n🔍 Verarbeite Feld-Gruppe: "${pdfFieldName}" (${fieldList.length} Feld(er))`)
       
       if (!guestFieldName || guestFieldName === '') {
         console.log(`  ⏭️ Nicht zugeordnet, überspringe`)
@@ -264,100 +279,113 @@ async function fillTemplateWithGuestData(
       
       console.log(`  📋 Zugeordnet zu Gast-Feld: "${guestFieldName}"`)
       
-      // Hole Wert aus Gast-Daten
-      let value = getFieldValue(guest, guestFieldName)
-      console.log(`  📊 Wert vor Verarbeitung: "${value}"`)
-      
-      // Spezielle Behandlung für "Name" (Vollständiger Name)
-      if (guestFieldName === 'Name') {
-        const vorname = getFieldValue(guest, 'Vorname')
-        const nachname = getFieldValue(guest, 'Name')
-        value = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
-        console.log(`  🔄 Name zusammengesetzt: Vorname="${vorname}", Nachname="${nachname}" → "${value}"`)
-      }
-      
-      if (!value || value.trim() === '') {
-        console.log(`  ⚠️ Kein Wert gefunden, überspringe`)
-        continue
-      }
-      
-      try {
-        const fieldType = field.constructor.name
-        console.log(`  📝 Feld-Typ: ${fieldType}`)
-        console.log(`  ✏️ Setze Wert: "${value}"`)
+      // Fülle jedes Feld in der Gruppe mit einem anderen Gast
+      for (let i = 0; i < fieldList.length; i++) {
+        const field = fieldList[i]
+        const guest = guests[i] // Nimm den i-ten Gast
         
-        // Versuche verschiedene Methoden, um das Feld zu setzen
-        const fieldAny = field as any
-        
-        if (fieldType === 'PDFTextField') {
-          fieldAny.setText(value)
-          const currentValue = fieldAny.getText()
-          console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
-          filledCount++
-        } else if (fieldType === 'PDFCheckBox') {
-          const checkBox = field as any
-          const boolValue = value.toLowerCase() === 'true' || value.toLowerCase() === 'ja' || value === '1'
-          if (boolValue) {
-            checkBox.check()
-            console.log(`  ✅ CheckBox aktiviert`)
-          } else {
-            checkBox.uncheck()
-            console.log(`  ✅ CheckBox deaktiviert`)
-          }
-          filledCount++
-        } else if (fieldType === 'PDFDropdown') {
-          const dropdown = field as any
-          try {
-            dropdown.select(value)
-            console.log(`  ✅ Dropdown ausgewählt: "${value}"`)
-            filledCount++
-          } catch (e) {
-            console.warn(`  ⚠️ Wert "${value}" nicht in Dropdown-Liste:`, e)
-            // Versuche als Text zu setzen, falls möglich
-            if (typeof dropdown.setText === 'function') {
-              dropdown.setText(value)
-              console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
-              filledCount++
-            }
-          }
-        } else if (fieldType === 'PDFRadioGroup') {
-          const radioGroup = field as any
-          try {
-            radioGroup.select(value)
-            console.log(`  ✅ Radio-Button ausgewählt: "${value}"`)
-            filledCount++
-          } catch (e) {
-            console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
-          }
-        } else {
-          console.warn(`  ⚠️ Unbekannter Feld-Typ: ${fieldType}, versuche generische Methoden`)
-          // Versuche generische Methoden
-          if (typeof fieldAny.setText === 'function') {
-            try {
-              fieldAny.setText(value)
-              console.log(`  ✅ Feld mit setText() gesetzt: "${value}"`)
-              filledCount++
-            } catch (e) {
-              console.warn(`  ⚠️ setText() fehlgeschlagen:`, e)
-            }
-          } else if (typeof fieldAny.updateAppearances === 'function') {
-            // Manche Felder benötigen updateAppearances
-            try {
-              if (typeof fieldAny.setText === 'function') {
-                fieldAny.setText(value)
-              }
-              fieldAny.updateAppearances()
-              console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${value}"`)
-              filledCount++
-            } catch (e) {
-              console.warn(`  ⚠️ updateAppearances() fehlgeschlagen:`, e)
-            }
-          }
+        if (!guest) {
+          console.log(`  ⏭️ Kein Gast für Feld ${i + 1}/${fieldList.length}, überspringe`)
+          continue
         }
-      } catch (e) {
-        console.error(`  ❌ Fehler beim Füllen des Feldes "${pdfFieldName}":`, e)
-        if (e instanceof Error) {
-          console.error(`     Stack:`, e.stack)
+        
+        console.log(`  👤 Fülle Feld ${i + 1}/${fieldList.length} mit Gast: ${guest.name || guest.id}`)
+        
+        // Hole Wert aus Gast-Daten
+        let value = getFieldValue(guest, guestFieldName)
+        console.log(`  📊 Wert vor Verarbeitung: "${value}"`)
+        
+        // Spezielle Behandlung für "Name" (Vollständiger Name)
+        if (guestFieldName === 'Name') {
+          const vorname = getFieldValue(guest, 'Vorname')
+          const nachname = getFieldValue(guest, 'Name')
+          value = [vorname, nachname].filter(n => n && n.trim() !== '').join(' ')
+          console.log(`  🔄 Name zusammengesetzt: Vorname="${vorname}", Nachname="${nachname}" → "${value}"`)
+        }
+        
+        if (!value || value.trim() === '') {
+          console.log(`  ⚠️ Kein Wert gefunden, überspringe`)
+          continue
+        }
+        
+        try {
+          const fieldType = field.constructor.name
+          console.log(`  📝 Feld-Typ: ${fieldType}`)
+          console.log(`  ✏️ Setze Wert: "${value}"`)
+          
+          // Versuche verschiedene Methoden, um das Feld zu setzen
+          const fieldAny = field as any
+          
+          if (fieldType === 'PDFTextField') {
+            fieldAny.setText(value)
+            const currentValue = fieldAny.getText()
+            console.log(`  ✅ TextField gesetzt. Aktueller Wert: "${currentValue}"`)
+            filledCount++
+          } else if (fieldType === 'PDFCheckBox') {
+            const checkBox = field as any
+            const boolValue = value.toLowerCase() === 'true' || value.toLowerCase() === 'ja' || value === '1'
+            if (boolValue) {
+              checkBox.check()
+              console.log(`  ✅ CheckBox aktiviert`)
+            } else {
+              checkBox.uncheck()
+              console.log(`  ✅ CheckBox deaktiviert`)
+            }
+            filledCount++
+          } else if (fieldType === 'PDFDropdown') {
+            const dropdown = field as any
+            try {
+              dropdown.select(value)
+              console.log(`  ✅ Dropdown ausgewählt: "${value}"`)
+              filledCount++
+            } catch (e) {
+              console.warn(`  ⚠️ Wert "${value}" nicht in Dropdown-Liste:`, e)
+              // Versuche als Text zu setzen, falls möglich
+              if (typeof dropdown.setText === 'function') {
+                dropdown.setText(value)
+                console.log(`  ✅ Dropdown als Text gesetzt: "${value}"`)
+                filledCount++
+              }
+            }
+          } else if (fieldType === 'PDFRadioGroup') {
+            const radioGroup = field as any
+            try {
+              radioGroup.select(value)
+              console.log(`  ✅ Radio-Button ausgewählt: "${value}"`)
+              filledCount++
+            } catch (e) {
+              console.warn(`  ⚠️ Konnte Radio-Button nicht setzen:`, e)
+            }
+          } else {
+            console.warn(`  ⚠️ Unbekannter Feld-Typ: ${fieldType}, versuche generische Methoden`)
+            // Versuche generische Methoden
+            if (typeof fieldAny.setText === 'function') {
+              try {
+                fieldAny.setText(value)
+                console.log(`  ✅ Feld mit setText() gesetzt: "${value}"`)
+                filledCount++
+              } catch (e) {
+                console.warn(`  ⚠️ setText() fehlgeschlagen:`, e)
+              }
+            } else if (typeof fieldAny.updateAppearances === 'function') {
+              // Manche Felder benötigen updateAppearances
+              try {
+                if (typeof fieldAny.setText === 'function') {
+                  fieldAny.setText(value)
+                }
+                fieldAny.updateAppearances()
+                console.log(`  ✅ Feld mit updateAppearances() gesetzt: "${value}"`)
+                filledCount++
+              } catch (e) {
+                console.warn(`  ⚠️ updateAppearances() fehlgeschlagen:`, e)
+              }
+            }
+          }
+        } catch (e) {
+          console.error(`  ❌ Fehler beim Füllen des Feldes "${pdfFieldName}" (Index ${i}):`, e)
+          if (e instanceof Error) {
+            console.error(`     Stack:`, e.stack)
+          }
         }
       }
     }
@@ -473,21 +501,57 @@ export async function POST(request: NextRequest) {
         // Erstelle neues PDF-Dokument
         const finalDoc = await PDFDocument.create()
         
-        // Für jeden Gast: Template kopieren und füllen
-        for (let i = 0; i < guests.length; i++) {
-          const guest = guests[i]
-          console.log(`📝 Verarbeite Gast ${i + 1}/${guests.length}: ${guest.name || guest.id}`)
+        // Bestimme Anzahl Gäste pro Seite basierend auf Feldanzahl
+        // Lade Template einmal, um Feldanzahl zu bestimmen
+        const tempDoc = await PDFDocument.load(templateBytes)
+        const tempForm = tempDoc.getForm()
+        const tempFields = tempForm.getFields()
+        
+        // Finde das Feld mit den meisten Vorkommen (z.B. "Name" mit 4 Vorkommen = 4 Gäste pro Seite)
+        const fieldCounts: { [name: string]: number } = {}
+        for (const field of tempFields) {
+          const fieldName = field.getName()
+          fieldCounts[fieldName] = (fieldCounts[fieldName] || 0) + 1
+        }
+        
+        // Finde das zugeordnete Feld mit den meisten Vorkommen
+        let maxGuestsPerPage = 1
+        for (const [pdfFieldName, count] of Object.entries(fieldCounts)) {
+          if (fieldMapping[pdfFieldName]) {
+            maxGuestsPerPage = Math.max(maxGuestsPerPage, count)
+          }
+        }
+        
+        console.log(`📊 Feld-Analyse:`)
+        for (const [name, count] of Object.entries(fieldCounts)) {
+          const mapped = fieldMapping[name] ? ` → ${fieldMapping[name]}` : ''
+          console.log(`  - "${name}": ${count}x${mapped}`)
+        }
+        console.log(`📊 Maximale Gäste pro Seite: ${maxGuestsPerPage}`)
+        
+        // Gruppiere Gäste: maxGuestsPerPage Gäste pro Seite
+        const guestGroups: any[][] = []
+        for (let i = 0; i < guests.length; i += maxGuestsPerPage) {
+          guestGroups.push(guests.slice(i, i + maxGuestsPerPage))
+        }
+        
+        console.log(`📄 Erstelle ${guestGroups.length} Seite(n) mit je bis zu ${maxGuestsPerPage} Gast/Gästen`)
+        
+        // Für jede Gruppe: Template kopieren und füllen
+        for (let groupIndex = 0; groupIndex < guestGroups.length; groupIndex++) {
+          const guestGroup = guestGroups[groupIndex]
+          console.log(`\n📝 Verarbeite Gruppe ${groupIndex + 1}/${guestGroups.length} mit ${guestGroup.length} Gast/Gästen`)
           
           try {
-            // Fülle Template mit Gast-Daten (jedes Mal neu laden für saubere Kopie)
-            const filledDoc = await fillTemplateWithGuestData(templateBytes, guest, getFieldValue, fieldMapping)
+            // Fülle Template mit Gast-Gruppe (jedes Mal neu laden für saubere Kopie)
+            const filledDoc = await fillTemplateWithMultipleGuests(templateBytes, guestGroup, getFieldValue, fieldMapping)
             
             // Kopiere alle Seiten des gefüllten Templates ins finale Dokument
             const pageCount = filledDoc.getPageCount()
             console.log(`  📄 Seiten im gefüllten Template: ${pageCount}`)
             
             if (pageCount === 0) {
-              console.warn(`  ⚠️ Template hat keine Seiten für Gast ${i + 1}`)
+              console.warn(`  ⚠️ Template hat keine Seiten für Gruppe ${groupIndex + 1}`)
               continue
             }
             
@@ -501,14 +565,14 @@ export async function POST(request: NextRequest) {
               finalDoc.addPage(page)
             }
             
-            console.log(`✅ Gast ${i + 1}/${guests.length} verarbeitet (${pageCount} Seite(n))`)
-          } catch (guestError) {
-            console.error(`❌ Fehler beim Verarbeiten von Gast ${i + 1} (${guest.name || guest.id}):`, guestError)
-            if (guestError instanceof Error) {
-              console.error('   Stack:', guestError.stack)
+            console.log(`✅ Gruppe ${groupIndex + 1}/${guestGroups.length} verarbeitet (${pageCount} Seite(n), ${guestGroup.length} Gast/Gäste)`)
+          } catch (groupError) {
+            console.error(`❌ Fehler beim Verarbeiten von Gruppe ${groupIndex + 1}:`, groupError)
+            if (groupError instanceof Error) {
+              console.error('   Stack:', groupError.stack)
             }
-            // Weiter mit nächstem Gast, aber Fehler protokollieren
-            throw new Error(`Fehler beim Verarbeiten von Gast "${guest.name || guest.id}": ${guestError instanceof Error ? guestError.message : 'Unbekannter Fehler'}`)
+            // Weiter mit nächster Gruppe, aber Fehler protokollieren
+            throw new Error(`Fehler beim Verarbeiten von Gruppe ${groupIndex + 1}: ${groupError instanceof Error ? groupError.message : 'Unbekannter Fehler'}`)
           }
         }
         
