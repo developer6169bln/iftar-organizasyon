@@ -702,8 +702,11 @@ async function fillTemplateWithMultipleGuests(
             }
           }
           
+          // Sanitize Original-Wert (nur Steuerzeichen entfernen, behalte türkische Zeichen)
+          const sanitizedValue = sanitizeTextForWinAnsi(originalValue)
+          
           // Zeichne Text direkt mit Unicode-Font, wenn Font verfügbar ist
-          if (unicodeFont && fieldRect) {
+          if (unicodeFont && fieldRect && sanitizedValue && sanitizedValue.trim() !== '') {
             try {
               const pages = filledDoc.getPages()
               const page = pages[pageIndex]
