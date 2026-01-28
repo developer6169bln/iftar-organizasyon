@@ -238,6 +238,11 @@ export default function InvitationsPage() {
         return
       }
 
+      if (configForm.type === 'ICLOUD' && !configForm.appPassword) {
+        alert('iCloud App-Passwort ist erforderlich')
+        return
+      }
+
       if (configForm.type === 'IMAP' && (!configForm.smtpHost || !configForm.smtpPort)) {
         alert('SMTP Host und Port sind erforderlich')
         return
@@ -1880,10 +1885,11 @@ export default function InvitationsPage() {
                   </label>
                   <select
                     value={configForm.type}
-                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'IMAP' })}
+                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'ICLOUD' | 'IMAP' })}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   >
                     <option value="GMAIL">Gmail</option>
+                    <option value="ICLOUD">iCloud Mail</option>
                     <option value="IMAP">Eigener Mail-Server (SMTP/IMAP)</option>
                   </select>
                 </div>
@@ -1928,6 +1934,40 @@ export default function InvitationsPage() {
                         <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline ml-1">
                           Google Account → Sicherheit → App-Passwörter
                         </a>
+                      </p>
+                    </div>
+                  </>
+                ) : configForm.type === 'ICLOUD' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        iCloud App-Passwort *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={configForm.appPassword}
+                          onChange={(e) => setConfigForm({ ...configForm, appPassword: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="App-spezifisches Passwort"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Erstellen Sie ein app-spezifisches Passwort in Ihren Apple-ID-Einstellungen: 
+                        <a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline ml-1">
+                          appleid.apple.com
+                        </a>
+                        {' → Anmelden → Sicherheit → App-spezifische Passwörter'}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        💡 <strong>Hinweis:</strong> Sie benötigen Zwei-Faktor-Authentifizierung für Ihr Apple-ID-Konto aktiviert.
                       </p>
                     </div>
                   </>
