@@ -833,8 +833,11 @@ async function fillTemplateWithMultipleGuests(
                 console.error(`     Fehler-Message: ${drawError.message}`)
                 console.error(`     Stack: ${drawError.stack}`)
               }
-              console.warn(`  ⚠️ Direkte Zeichnung fehlgeschlagen - verwende Formularfeld-Füllung (mit UTF-8 nach updateFieldAppearances)`)
-              // Fallback: Verwende Formularfeld-Füllung (nach updateFieldAppearances sollte UTF-8 funktionieren)
+              console.error(`  ❌ KRITISCH: Direkte Zeichnung fehlgeschlagen - kann Formularfeld NICHT füllen!`)
+              console.error(`     Formularfeld-Füllung würde WinAnsi-Fehler verursachen`)
+              console.error(`     Feld wird übersprungen - bitte prüfen Sie die Logs, warum direkte Zeichnung fehlgeschlagen ist`)
+              // KEIN Fallback zu Formularfeld-Füllung - das würde WinAnsi-Fehler verursachen!
+              continue // Überspringe dieses Feld
             }
           } else {
             // KRITISCH: Direkte Zeichnung nicht möglich - aber wir können Formularfelder NICHT füllen!
@@ -1470,7 +1473,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Template-Modus
+    // B-VARIANTE (Overlay-only ohne Formularfelder):
+    // Wir IGNORIEREN das Formular des Templates komplett und verwenden nur noch unseren
+    // eigenen Namensschild-Layout-Algorithmus weiter unten (Standard-Modus).
+    // Hintergrund: Viele Formulare liefern keine verwertbaren Feld-Koordinaten (Rect),
+    // dadurch können wir weder Overlay exakt positionieren noch gefahrlos flatten.
+    // 
+    // Stattdessen:
+    // - Template wird aktuell NICHT zum Zeichnen verwendet (nur Upload / Feld-Analyse in der UI).
+    // - Die eigentliche PDF-Generierung nutzt IMMER den Standard-Modus (A4 + Kartenraster),
+    //   mit Unicode-Font-Overlay (Variante B).
+    //
+    // Hinweis im Log, damit klar ist, dass Template-Formulare in der Generierung übersprungen werden.
     if (useTemplate && templateFile) {
+      console.log(`📄 Template-Modus angefordert, aber B-VARIANTE aktiv: Formular wird ignoriert, Standard-Overlay-Layout wird verwendet`)
+      console.log(`   Gäste: ${guests.length}, Template-Datei: ${templateFile.name}`)
+      // Wir fallen absichtlich in den Standard-Modus unten durch, OHNE hier zu returnen.
+    /*
       console.log(`📄 Template-Modus: Generiere PDF für ${guests.length} Gäste mit Template`)
       
       try {
@@ -1670,40 +1689,9 @@ export async function POST(request: NextRequest) {
           },
         })
       } catch (error) {
-        console.error('❌ Fehler beim Verarbeiten des Templates:', error)
-        if (error instanceof Error) {
-          console.error('   Fehler-Name:', error.name)
-          console.error('   Fehler-Message:', error.message)
-          console.error('   Fehler-Stack:', error.stack)
-        }
-        
-        // Detaillierte Fehlermeldung für den Client
-        let errorMessage = 'Fehler beim Verarbeiten des PDF-Templates'
-        if (error instanceof Error) {
-          errorMessage = error.message
-          // Spezifische Fehlermeldungen
-          if (error.message.includes('getForm')) {
-            errorMessage = 'Das PDF enthält keine Formularfelder. Bitte erstellen Sie ein PDF mit Formularfeldern.'
-          } else if (error.message.includes('setText')) {
-            errorMessage = 'Fehler beim Ausfüllen der Formularfelder. Bitte prüfen Sie die Feld-Zuordnung.'
-          } else if (error.message.includes('flatten')) {
-            errorMessage = 'Fehler beim Verarbeiten des PDF-Formulars. Das PDF könnte beschädigt sein.'
-          }
-        }
-        
-        return NextResponse.json(
-          { 
-            error: errorMessage,
-            details: error instanceof Error ? error.message : 'Unbekannter Fehler',
-            // In Development: Mehr Details
-            ...(process.env.NODE_ENV === 'development' && error instanceof Error ? {
-              stack: error.stack,
-              name: error.name,
-            } : {})
-          },
-          { status: 500 }
-        )
+        console.error('❌ Fehler beim Verarbeiten des Templates (derzeit deaktiviert, B-VARIANTE aktiv):', error)
       }
+    */
     }
 
     // Standard-Modus (bestehende Logik)
