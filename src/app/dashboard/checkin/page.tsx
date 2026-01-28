@@ -87,84 +87,89 @@ export default function EingangskontrollePage() {
 
     try {
       setLoading(true)
-      const response = await fetch(`/api/invitations/list?eventId=${eventId}&response=ACCEPTED`)
+      // Lade alle Gäste für das Event
+      const response = await fetch(`/api/guests?eventId=${eventId}`)
       if (!response.ok) {
-        console.error('Fehler beim Laden der Einladungen')
+        console.error('Fehler beim Laden der Gäste')
         setRows([])
         setFilteredRows([])
         return
       }
 
-      const invitations = await response.json()
-      console.log(`📥 Eingangskontrolle: ${invitations.length} Einladungen mit Zusage geladen`)
+      const guests = await response.json()
+      
+      // Filtere nach Gästen mit Zusage = true in additionalData
+      const guestsWithZusage = guests.filter((g: any) => {
+        const add = parseAdditionalData(g.additionalData)
+        return add['Zusage'] === true || add['Zusage'] === 'true'
+      })
+      
+      console.log(`📥 Eingangskontrolle: ${guestsWithZusage.length} Gäste mit Zusage geladen`)
 
-      const mapped: EingangGuestRow[] = invitations
-        .filter((inv: any) => inv.guest)
-        .map((inv: any) => {
-          const g = inv.guest
-          const add = parseAdditionalData(g.additionalData)
+      const mapped: EingangGuestRow[] = guestsWithZusage.map((g: any) => {
+        const add = parseAdditionalData(g.additionalData)
 
-          const fullName: string = g.name || ''
-          const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
-          const vorname = nameParts[0] || ''
-          const nachname = nameParts.slice(1).join(' ') || fullName
+        const fullName: string = g.name || ''
+        const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
+        const vorname = nameParts[0] || ''
+        const nachname = nameParts.slice(1).join(' ') || fullName
 
-          const tischNummer =
-            g.tableNumber != null
-              ? String(g.tableNumber)
-              : getFromAdditional(add, ['Tisch-Nummer', 'Tischnummer', 'Tisch'])
+        const tischNummer =
+          g.tableNumber != null
+            ? String(g.tableNumber)
+            : getFromAdditional(add, ['Tisch-Nummer', 'Tischnummer', 'Tisch'])
 
-          const kategorie = getFromAdditional(add, ['Kategorie', 'Kategorie ', 'KATEGORIE'])
+        const kategorie = getFromAdditional(add, ['Kategorie', 'Kategorie ', 'KATEGORIE'])
 
-          // Staat/Institution: zuerst organization, dann additionalData
-          let staatInstitution = ''
-          if (g.organization && String(g.organization).trim() !== '') {
-            staatInstitution = String(g.organization).trim()
-          } else {
-            staatInstitution =
-              getFromAdditional(add, [
-                'Staat/Institution',
-                'Staat / Institution',
-                'StaatInstitution',
-                'Staat_Institution',
-                'Institution',
-                'Staat',
-              ]) ||
-              // Fallback: irgendein Key mit Staat/Institution im Namen
-              (() => {
-                for (const [key, value] of Object.entries(add)) {
-                  const k = key.toLowerCase()
-                  if (
-                    (k.includes('staat') || k.includes('institution')) &&
-                    value != null &&
-                    String(value).trim() !== ''
-                  ) {
-                    return String(value).trim()
-                  }
+        // Staat/Institution: zuerst organization, dann additionalData
+        let staatInstitution = ''
+        if (g.organization && String(g.organization).trim() !== '') {
+          staatInstitution = String(g.organization).trim()
+        } else {
+          staatInstitution =
+            getFromAdditional(add, [
+              'Staat/Institution',
+              'Staat / Institution',
+              'StaatInstitution',
+              'Staat_Institution',
+              'Institution',
+              'Staat',
+            ]) ||
+            // Fallback: irgendein Key mit Staat/Institution im Namen
+            (() => {
+              for (const [key, value] of Object.entries(add)) {
+                const k = key.toLowerCase()
+                if (
+                  (k.includes('staat') || k.includes('institution')) &&
+                  value != null &&
+                  String(value).trim() !== ''
+                ) {
+                  return String(value).trim()
                 }
-                return ''
-              })()
-          }
+              }
+              return ''
+            })()
+        }
 
-          const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
-          const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
-          const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
+        const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
+        const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
+        const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
 
-          return {
-            id: g.id,
-            name: fullName,
-            vorname,
-            nachname,
-            tischNummer: tischNummer || '',
-            kategorie: kategorie || '',
-            isVip: !!g.isVip,
-            staatInstitution: staatInstitution || '',
-            anrede1,
-            anrede2,
-            anrede3,
-            notizen: g.notes || '',
-          }
-        })
+        return {
+          id: g.id,
+          name: fullName,
+          vorname,
+          nachname,
+          tischNummer: tischNummer || '',
+          kategorie: kategorie || '',
+          isVip: !!g.isVip,
+          staatInstitution: staatInstitution || '',
+          anrede1,
+          anrede2,
+          anrede3,
+          notizen: g.notes || '',
+        }
+      })
 
       setRows(mapped)
       setFilteredRows(mapped)
