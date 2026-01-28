@@ -24,6 +24,11 @@ export async function GET(request: NextRequest) {
             name: true,
             email: true,
             status: true,
+            tableNumber: true,
+            isVip: true,
+            organization: true,
+            additionalData: true,
+            notes: true,
           },
         },
         event: {

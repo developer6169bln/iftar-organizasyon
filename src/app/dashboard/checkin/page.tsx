@@ -3,12 +3,54 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-export default function CheckinPage() {
-  const [guests, setGuests] = useState<any[]>([])
-  const [filteredGuests, setFilteredGuests] = useState<any[]>([])
+interface EingangGuestRow {
+  id: string
+  name: string
+  vorname: string
+  nachname: string
+  tischNummer: string
+  kategorie: string
+  isVip: boolean
+  staatInstitution: string
+  anrede1: string
+  anrede2: string
+  anrede3: string
+  notizen: string
+}
+
+function parseAdditionalData(additionalData: any): Record<string, any> {
+  if (!additionalData) return {}
+  try {
+    if (typeof additionalData === 'string') {
+      return JSON.parse(additionalData)
+    }
+    if (typeof additionalData === 'object') {
+      return additionalData as Record<string, any>
+    }
+  } catch {
+    // ignorieren
+  }
+  return {}
+}
+
+function getFromAdditional(add: Record<string, any>, keys: string[]): string {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(add, key) && add[key] != null) {
+      const v = String(add[key]).trim()
+      if (v !== '') return v
+    }
+  }
+  return ''
+}
+
+export default function EingangskontrollePage() {
+  const [rows, setRows] = useState<EingangGuestRow[]>([])
+  const [filteredRows, setFilteredRows] = useState<EingangGuestRow[]>([])
   const [loading, setLoading] = useState(true)
   const [eventId, setEventId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingNotes, setEditingNotes] = useState<string>('')
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -16,8 +58,15 @@ export default function CheckinPage() {
         const response = await fetch('/api/events')
         if (response.ok) {
           const events = await response.json()
-          if (events.length > 0) {
-            setEventId(events[0].id)
+          // API kann einzelnes Event oder Array zurückgeben
+          let event = null
+          if (Array.isArray(events)) {
+            event = events.length > 0 ? events[0] : null
+          } else {
+            event = events
+          }
+          if (event && event.id) {
+            setEventId(event.id)
           }
         }
       } catch (error) {
@@ -29,100 +78,160 @@ export default function CheckinPage() {
 
   useEffect(() => {
     if (eventId) {
-      loadGuests()
+      loadAcceptedGuests()
     }
   }, [eventId])
 
-  const loadGuests = async () => {
+  const loadAcceptedGuests = async () => {
     if (!eventId) return
-    
+
     try {
       setLoading(true)
-      const response = await fetch(`/api/guests?eventId=${eventId}`)
-      if (response.ok) {
-        const allGuests = await response.json()
-        
-        // Zeige ALLE Gäste ohne Filter
-        console.log(`Geladen: ${allGuests.length} Gäste insgesamt`)
-        
-        setGuests(allGuests)
-        setFilteredGuests(allGuests)
-      } else {
-        console.error('Fehler beim Laden der Gäste')
+      const response = await fetch(`/api/invitations/list?eventId=${eventId}&response=ACCEPTED`)
+      if (!response.ok) {
+        console.error('Fehler beim Laden der Einladungen')
+        setRows([])
+        setFilteredRows([])
+        return
       }
+
+      const invitations = await response.json()
+      console.log(`📥 Eingangskontrolle: ${invitations.length} Einladungen mit Zusage geladen`)
+
+      const mapped: EingangGuestRow[] = invitations
+        .filter((inv: any) => inv.guest)
+        .map((inv: any) => {
+          const g = inv.guest
+          const add = parseAdditionalData(g.additionalData)
+
+          const fullName: string = g.name || ''
+          const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
+          const vorname = nameParts[0] || ''
+          const nachname = nameParts.slice(1).join(' ') || fullName
+
+          const tischNummer =
+            g.tableNumber != null
+              ? String(g.tableNumber)
+              : getFromAdditional(add, ['Tisch-Nummer', 'Tischnummer', 'Tisch'])
+
+          const kategorie = getFromAdditional(add, ['Kategorie', 'Kategorie ', 'KATEGORIE'])
+
+          // Staat/Institution: zuerst organization, dann additionalData
+          let staatInstitution = ''
+          if (g.organization && String(g.organization).trim() !== '') {
+            staatInstitution = String(g.organization).trim()
+          } else {
+            staatInstitution =
+              getFromAdditional(add, [
+                'Staat/Institution',
+                'Staat / Institution',
+                'StaatInstitution',
+                'Staat_Institution',
+                'Institution',
+                'Staat',
+              ]) ||
+              // Fallback: irgendein Key mit Staat/Institution im Namen
+              (() => {
+                for (const [key, value] of Object.entries(add)) {
+                  const k = key.toLowerCase()
+                  if (
+                    (k.includes('staat') || k.includes('institution')) &&
+                    value != null &&
+                    String(value).trim() !== ''
+                  ) {
+                    return String(value).trim()
+                  }
+                }
+                return ''
+              })()
+          }
+
+          const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
+          const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
+          const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
+
+          return {
+            id: g.id,
+            name: fullName,
+            vorname,
+            nachname,
+            tischNummer: tischNummer || '',
+            kategorie: kategorie || '',
+            isVip: !!g.isVip,
+            staatInstitution: staatInstitution || '',
+            anrede1,
+            anrede2,
+            anrede3,
+            notizen: g.notes || '',
+          }
+        })
+
+      setRows(mapped)
+      setFilteredRows(mapped)
     } catch (error) {
-      console.error('Fehler:', error)
+      console.error('Fehler beim Laden der Eingangskontrolle-Gäste:', error)
+      setRows([])
+      setFilteredRows([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    // Filtere nach Suchbegriff
-    if (searchQuery.trim() === '') {
-      setFilteredGuests(guests)
+    if (!searchQuery.trim()) {
+      setFilteredRows(rows)
       return
     }
+    const q = searchQuery.toLowerCase()
+    setFilteredRows(
+      rows.filter((row) => {
+        return (
+          row.name.toLowerCase().includes(q) ||
+          row.vorname.toLowerCase().includes(q) ||
+          row.nachname.toLowerCase().includes(q) ||
+          row.staatInstitution.toLowerCase().includes(q) ||
+          row.tischNummer.toLowerCase().includes(q) ||
+          row.kategorie.toLowerCase().includes(q)
+        )
+      })
+    )
+  }, [searchQuery, rows])
 
-    const query = searchQuery.toLowerCase()
-    const filtered = guests.filter(guest => {
-      const name = guest.name || 
-        (guest.additionalData ? (() => {
-          try {
-            const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
-            return add.Name || add.name || ''
-          } catch { return '' }
-        })() : '')
-      
-      const vipEscort = guest.receptionBy || 
-        (guest.additionalData ? (() => {
-          try {
-            const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
-            return add['VIP Begleiter (Name)'] || add['VIP Begleiter'] || ''
-          } catch { return '' }
-        })() : '')
-      
-      return name.toLowerCase().includes(query) || 
-             vipEscort.toLowerCase().includes(query)
-    })
-    setFilteredGuests(filtered)
-  }, [searchQuery, guests])
-
-  // Helper-Funktion: Hole Status nur aus guest.status
-  const getGuestStatus = (guest: any): string => {
-    return (guest.status || '').toString().trim()
+  const handleEditNotes = (row: EingangGuestRow) => {
+    setEditingId(row.id)
+    setEditingNotes(row.notizen || '')
   }
 
-  const handleAnwesendChange = async (guestId: string, isAnwesend: boolean) => {
+  const handleSaveNotes = async (guestId: string) => {
     try {
-      // Hole aktuellen Gast, um den Status zu erhalten
-      const currentGuest = guests.find(g => g.id === guestId)
-      const currentStatus = (currentGuest?.status || '').toString().trim().toUpperCase()
-      
-      // Wenn anwesend, setze auf ATTENDED, sonst auf den vorherigen Status oder CONFIRMED
-      const newStatus = isAnwesend ? 'ATTENDED' : (currentStatus === 'ATTENDED' || currentStatus === 'ANWESEND' ? 'CONFIRMED' : currentGuest?.status || 'CONFIRMED')
-      
       const response = await fetch('/api/guests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: guestId,
-          status: newStatus,
+          notes: editingNotes,
         }),
       })
 
-      if (response.ok) {
-        // Aktualisiere lokalen State
-        const updatedGuest = { ...currentGuest, status: newStatus }
-        setGuests(guests.map(g => g.id === guestId ? updatedGuest : g))
-        setFilteredGuests(filteredGuests.map(g => g.id === guestId ? updatedGuest : g))
-      } else {
+      if (!response.ok) {
         const error = await response.json()
-        alert(error.error || 'Fehler beim Aktualisieren')
+        alert(error.error || 'Fehler beim Speichern der Notizen')
+        return
       }
+
+      const updated = await response.json()
+
+      setRows((prev) =>
+        prev.map((r) => (r.id === guestId ? { ...r, notizen: updated.notes || '' } : r))
+      )
+      setFilteredRows((prev) =>
+        prev.map((r) => (r.id === guestId ? { ...r, notizen: updated.notes || '' } : r))
+      )
+      setEditingId(null)
+      setEditingNotes('')
     } catch (error) {
-      console.error('Fehler beim Aktualisieren:', error)
-      alert('Fehler beim Aktualisieren')
+      console.error('Fehler beim Speichern der Notizen:', error)
+      alert('Fehler beim Speichern der Notizen')
     }
   }
 
@@ -132,13 +241,10 @@ export default function CheckinPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link
-                href="/dashboard"
-                className="text-gray-600 hover:text-gray-900"
-              >
+              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
                 ← Zurück
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Check-in</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Eingangskontrolle</h1>
             </div>
           </div>
         </div>
@@ -147,15 +253,15 @@ export default function CheckinPage() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Check-in Liste</h2>
+            <h2 className="text-xl font-semibold">Liste der Gäste mit Zusage</h2>
             <div className="flex items-center gap-4">
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Name oder VIP Begleiter suchen..."
+                  placeholder="Suche nach Name, Tisch, Staat/Institution..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-64 rounded-lg border border-gray-300 px-4 py-2 pl-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-72 rounded-lg border border-gray-300 px-4 py-2 pl-10 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 <svg
                   className="absolute left-3 top-2.5 h-5 w-5 text-gray-400"
@@ -184,98 +290,137 @@ export default function CheckinPage() {
 
           {loading ? (
             <p className="text-gray-500">Lädt...</p>
-          ) : filteredGuests.length === 0 ? (
+          ) : filteredRows.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
               <p className="text-gray-500">
-                {searchQuery ? 'Keine Ergebnisse gefunden' : 'Keine bestätigten Gäste vorhanden'}
+                {searchQuery
+                  ? 'Keine Gäste mit Zusage gefunden'
+                  : 'Keine Gäste mit Zusage vorhanden'}
               </p>
               <p className="mt-2 text-xs text-gray-400">
-                Alle Gäste werden angezeigt
+                Gäste erscheinen hier, sobald sie per Einladungs-E-Mail zugesagt haben (ACCEPTED).
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Name</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">VIP Begleiter (Name)</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Anwesend</th>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Tisch-Nummer
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Kategorie
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      VIP
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Staat/Institution
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Vorname
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Anrede 1
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Anrede 2
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Anrede 3
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Notizen
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredGuests.map((guest) => {
-                    const guestName = guest.name || 
-                      (guest.additionalData ? (() => {
-                        try {
-                          const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
-                          return add.Name || add.name || '-'
-                        } catch { return '-' }
-                      })() : '-')
-                    
-                    const vipEscort = guest.receptionBy || 
-                      (guest.additionalData ? (() => {
-                        try {
-                          const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
-                          return add['VIP Begleiter (Name)'] || add['VIP Begleiter'] || '-'
-                        } catch { return '-' }
-                      })() : '-')
-                    
-                    const currentStatus = (guest.status || '').toString().trim().toUpperCase()
-                    const isAttended = currentStatus === 'ATTENDED' || currentStatus === 'ANWESEND'
-                    
-                    return (
-                      <tr
-                        key={guest.id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 ${
-                          isAttended ? 'bg-green-50' : ''
-                        }`}
-                      >
-                        <td className="px-4 py-3">
-                          <span className="font-medium text-gray-900">{guestName}</span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {vipEscort}
-                        </td>
-                        <td className="px-4 py-3">
-                          <select
-                            value={isAttended ? 'Ja' : 'Nein'}
-                            onChange={(e) => {
-                              const isAnwesend = e.target.value === 'Ja'
-                              handleAnwesendChange(guest.id, isAnwesend)
-                            }}
-                            className={`rounded-full px-3 py-1 text-xs font-medium border-0 focus:ring-2 focus:ring-indigo-500 ${
-                              isAttended
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            <option value="Nein">Nein</option>
-                            <option value="Ja">Ja</option>
-                          </select>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {filteredRows.map((row) => (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.tischNummer || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.kategorie || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center text-sm">
+                        {row.isVip ? (
+                          <span className="inline-flex rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">
+                            VIP
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-500">
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.staatInstitution || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.vorname || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.nachname || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.anrede1 || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.anrede2 || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.anrede3 || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {editingId === row.id ? (
+                          <div className="flex flex-col gap-1">
+                            <textarea
+                              value={editingNotes}
+                              onChange={(e) => setEditingNotes(e.target.value)}
+                              className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                              rows={2}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSaveNotes(row.id)}
+                                className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700"
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingId(null)
+                                  setEditingNotes('')
+                                }}
+                                className="rounded bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-300"
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="flex-1 break-words">
+                              {row.notizen && row.notizen.trim() !== '' ? row.notizen : '-'}
+                            </span>
+                            <button
+                              onClick={() => handleEditNotes(row)}
+                              className="whitespace-nowrap text-xs text-indigo-600 hover:text-indigo-800"
+                            >
+                              Notizen
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
-            </div>
-          )}
-
-          {!loading && filteredGuests.length > 0 && (
-            <div className="mt-4 text-sm text-gray-600">
-              {filteredGuests.length} Gäste insgesamt
-              {filteredGuests.filter(g => {
-                const status = (g.status || '').toString().trim().toUpperCase()
-                return status === 'ATTENDED' || status === 'ANWESEND'
-              }).length > 0 && (
-                <span className="ml-2 text-green-600">
-                  ({filteredGuests.filter(g => {
-                    const status = (g.status || '').toString().trim().toUpperCase()
-                    return status === 'ATTENDED' || status === 'ANWESEND'
-                  }).length} anwesend)
-                </span>
-              )}
             </div>
           )}
         </div>
