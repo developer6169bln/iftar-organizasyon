@@ -216,8 +216,16 @@ export default function VIPNamensschilderPage() {
   const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      if (file.type !== 'application/pdf') {
-        alert('Bitte laden Sie eine PDF-Datei hoch')
+      const fileName = file.name.toLowerCase()
+      const isPdf =
+        file.type === 'application/pdf' ||
+        fileName.endsWith('.pdf')
+      const isDocx =
+        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        fileName.endsWith('.docx')
+
+      if (!isPdf && !isDocx) {
+        alert('Bitte laden Sie eine PDF- oder Word-Datei (DOCX) hoch')
         return
       }
       
@@ -228,7 +236,7 @@ export default function VIPNamensschilderPage() {
       setFieldMapping({})
       
       try {
-        // Extrahiere Formularfelder aus dem PDF
+        // Extrahiere Felder / Platzhalter aus dem Template (PDF oder DOCX)
         const formData = new FormData()
         formData.append('template', file)
         
@@ -256,13 +264,18 @@ export default function VIPNamensschilderPage() {
             }
           })
           setFieldMapping(autoMapping)
-          alert(`✅ ${data.fields.length} Formularfeld(er) gefunden. Bitte ordnen Sie die Felder zu.`)
+          const templateTypeLabel = isPdf ? 'Formularfeld(er) im PDF' : 'Platzhalter im DOCX ({{...}})'
+          alert(`✅ ${data.fields.length} ${templateTypeLabel} gefunden. Bitte ordnen Sie die Felder zu.`)
         } else {
-          alert('⚠️ Keine Formularfelder im PDF gefunden. Bitte erstellen Sie ein PDF mit Formularfeldern.')
+          if (isPdf) {
+            alert('⚠️ Keine Formularfelder im PDF gefunden. Bitte erstellen Sie ein PDF mit Formularfeldern.')
+          } else {
+            alert('⚠️ Keine Platzhalter im DOCX gefunden. Bitte verwenden Sie z.B. {{NAME}}, {{VORNAME}}, {{STAAT_INSTITUTION}}.')
+          }
         }
       } catch (error) {
-        console.error('Fehler beim Extrahieren der Formularfelder:', error)
-        alert('Fehler beim Extrahieren der Formularfelder: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
+        console.error('Fehler beim Extrahieren der Template-Felder:', error)
+        alert('Fehler beim Extrahieren der Template-Felder: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
       } finally {
         setExtractingFields(false)
       }
@@ -275,14 +288,14 @@ export default function VIPNamensschilderPage() {
     }
 
     if (useTemplate && !templateFile) {
-      alert('Bitte laden Sie ein PDF-Template hoch')
+      alert('Bitte laden Sie ein Template (PDF oder DOCX) hoch')
       return
     }
 
     if (useTemplate && templateFields.length > 0) {
       const mappedFields = Object.values(fieldMapping).filter(v => v !== '')
       if (mappedFields.length === 0) {
-        alert('Bitte ordnen Sie mindestens ein PDF-Feld einem Gast-Datenfeld zu.')
+        alert('Bitte ordnen Sie mindestens ein Template-Feld/Platzhalter einem Gast-Datenfeld zu.')
         return
       }
     }
@@ -413,7 +426,7 @@ export default function VIPNamensschilderPage() {
                 className="h-4 w-4 rounded border-gray-300"
               />
               <label htmlFor="useTemplate" className="text-sm font-medium text-gray-700">
-                PDF-Template verwenden
+                Template verwenden (PDF mit Formularfeldern oder Word mit Platzhaltern, z.B. &#123;&#123;NAME&#125;&#125;)
               </label>
             </div>
             {useTemplate && (
