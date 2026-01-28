@@ -50,6 +50,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (config.type === 'ICLOUD' && !config.appPassword && !config.password) {
+      return NextResponse.json(
+        { error: 'iCloud App-Passwort fehlt' },
+        { status: 400 }
+      )
+    }
+
     if (config.type === 'IMAP' && (!config.smtpHost || !config.password)) {
       return NextResponse.json(
         { error: 'SMTP-Host oder Passwort fehlt' },
@@ -75,6 +82,21 @@ export async function POST(request: NextRequest) {
           },
         } as any)
         console.log('📧 Gmail-Transporter erstellt (SMTP) für:', config.email)
+      } else if (config.type === 'ICLOUD') {
+        const password = config.appPassword || config.password || ''
+        transporter = require('nodemailer').createTransport({
+          host: 'smtp.mail.me.com',
+          port: 587,
+          secure: false, // TLS auf Port 587
+          auth: {
+            user: config.email,
+            pass: password,
+          },
+          tls: {
+            rejectUnauthorized: true,
+          },
+        } as any)
+        console.log('📧 iCloud-Transporter erstellt (SMTP) für:', config.email)
       } else {
         transporter = require('nodemailer').createTransport({
           host: config.smtpHost || 'smtp.gmail.com',
@@ -116,7 +138,13 @@ export async function POST(request: NextRequest) {
         const errorCode = (verifyError as any).code || ''
         
         if (errorCode === 'EAUTH' || errorMsg.includes('invalid login') || errorMsg.includes('authentication failed')) {
-          errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Gmail: Verwenden Sie ein App-Passwort (nicht Ihr normales Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. E-Mail-Adresse ist korrekt'
+          if (config.type === 'GMAIL') {
+            errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein App-Passwort (nicht Ihr normales Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. E-Mail-Adresse ist korrekt'
+          } else if (config.type === 'ICLOUD') {
+            errorMessage = 'iCloud-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein app-spezifisches Passwort (nicht Ihr normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. iCloud-E-Mail-Adresse ist korrekt'
+          } else {
+            errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
+          }
         } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection')) {
           errorMessage = 'Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
         } else {
