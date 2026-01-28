@@ -13,6 +13,8 @@ export default function VIPNamensschilderPage() {
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [templateFile, setTemplateFile] = useState<File | null>(null)
   const [useTemplate, setUseTemplate] = useState(false)
+  const [templateIsDocx, setTemplateIsDocx] = useState(false)
+  const [useDocxOutput, setUseDocxOutput] = useState(false)
   const [templateFields, setTemplateFields] = useState<Array<{ name: string; type: string }>>([])
   const [fieldMapping, setFieldMapping] = useState<{ [pdfFieldName: string]: string }>({})
   const [extractingFields, setExtractingFields] = useState(false)
@@ -228,8 +230,10 @@ export default function VIPNamensschilderPage() {
         alert('Bitte laden Sie eine PDF- oder Word-Datei (DOCX) hoch')
         return
       }
-      
+
       setTemplateFile(file)
+      setTemplateIsDocx(isDocx)
+      setUseDocxOutput(isDocx) // Standard: wenn DOCX, Ausgabe auch als DOCX vorschlagen
       setUseTemplate(true)
       setExtractingFields(true)
       setTemplateFields([])
@@ -325,8 +329,26 @@ export default function VIPNamensschilderPage() {
           formData.append('logo', logoFile)
         }
       }
+      // Entscheide, ob PDF oder DOCX generiert werden soll
+      const isDocxTemplate =
+        useTemplate &&
+        templateFile &&
+        (templateFile.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+          templateFile.name.toLowerCase().endsWith('.docx'))
 
-      const response = await fetch('/api/vip-namensschilder/generate', {
+      const useDocx = Boolean(isDocxTemplate && useDocxOutput)
+
+      if (useDocx) {
+        formData.append('outputFormat', 'docx')
+      } else {
+        formData.append('outputFormat', 'pdf')
+      }
+
+      const endpoint = useDocx
+        ? '/api/vip-namensschilder/generate-docx'
+        : '/api/vip-namensschilder/generate'
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       })
@@ -340,13 +362,14 @@ export default function VIPNamensschilderPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `namensschilder-${new Date().toISOString().split('T')[0]}.pdf`
+      const ext = useDocx ? 'docx' : 'pdf'
+      a.download = `namensschilder-${new Date().toISOString().split('T')[0]}.${ext}`
       document.body.appendChild(a)
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
 
-      alert('✅ Namensschilder-PDF erfolgreich erstellt!')
+      alert(useDocx ? '✅ Namensschilder-DOCX erfolgreich erstellt!' : '✅ Namensschilder-PDF erfolgreich erstellt!')
     } catch (error) {
       console.error('Fehler beim Generieren des PDFs:', error)
       alert('Fehler: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
@@ -432,11 +455,11 @@ export default function VIPNamensschilderPage() {
             {useTemplate && (
               <div className="mt-2">
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  PDF-Template hochladen *
+                  Template hochladen (PDF oder Word/DOCX) *
                 </label>
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={handleTemplateUpload}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                 />
@@ -448,6 +471,8 @@ export default function VIPNamensschilderPage() {
                         onClick={() => {
                           setTemplateFile(null)
                           setUseTemplate(false)
+                          setTemplateIsDocx(false)
+                          setUseDocxOutput(false)
                           setTemplateFields([])
                           setFieldMapping({})
                         }}
@@ -462,8 +487,27 @@ export default function VIPNamensschilderPage() {
                   </div>
                 )}
                 <p className="mt-1 text-xs text-gray-500">
-                  Laden Sie ein PDF-Formular hoch. Die Formularfelder werden automatisch erkannt und können zugeordnet werden.
+                  Laden Sie ein PDF-Formular (mit Formularfeldern) oder ein Word-Dokument (DOCX) mit Platzhaltern wie &#123;&#123;NAME&#125;&#125; hoch. Die Felder/Platzhalter werden automatisch erkannt und können zugeordnet werden.
                 </p>
+                {templateFile && templateIsDocx && (
+                  <div className="mt-3 rounded-md bg-white p-3 shadow-sm border border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="useDocxOutput"
+                        type="checkbox"
+                        checked={useDocxOutput}
+                        onChange={(e) => setUseDocxOutput(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <label htmlFor="useDocxOutput" className="text-sm font-medium text-gray-700">
+                        Diese DOCX-Vorlage als Ausgabeformat verwenden (statt PDF)?
+                      </label>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Wenn aktiviert, wird beim Generieren eine Word-Datei (.docx) erstellt, in der alle Platzhalter &#123;&#123;...&#125;&#125; mit den Gastdaten ersetzt werden.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             
