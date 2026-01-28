@@ -64,7 +64,97 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Erstelle Transporter
+    if (config.type === 'MAILGUN' && (!config.mailgunDomain || !config.mailgunApiKey)) {
+      return NextResponse.json(
+        { error: 'Mailgun Domain oder API Key fehlt' },
+        { status: 400 }
+      )
+    }
+
+    // Mailgun verwendet HTTP API, kein SMTP-Transporter
+    if (config.type === 'MAILGUN') {
+      try {
+        const region = config.mailgunRegion || 'US'
+        const apiBaseUrl = region === 'EU' ? 'https://api.eu.mailgun.net/v3' : 'https://api.mailgun.net/v3'
+        const apiUrl = `${apiBaseUrl}/${config.mailgunDomain}/messages`
+
+        const auth = Buffer.from(`api:${config.mailgunApiKey}`).toString('base64')
+
+        const formData = new URLSearchParams()
+        formData.append('from', `"Iftar Organizasyon Test" <${config.email}>`)
+        formData.append('to', testEmail)
+        formData.append('subject', 'Test-E-Mail von Iftar Organizasyon')
+        formData.append('html', '<p>Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.</p>')
+        formData.append('text', 'Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.')
+
+        console.log('📧 Teste Mailgun API...')
+        console.log('📧 API URL:', apiUrl)
+        console.log('📧 Domain:', config.mailgunDomain)
+        console.log('📧 Region:', region)
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString(),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('❌ Mailgun API Fehler:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+          })
+
+          let errorMessage = `Mailgun API Fehler: ${response.status} ${response.statusText}`
+          try {
+            const errorJson = JSON.parse(errorText)
+            if (errorJson.message) {
+              errorMessage = `Mailgun: ${errorJson.message}`
+            }
+          } catch {
+            // Ignoriere Parse-Fehler
+          }
+
+          return NextResponse.json(
+            {
+              error: 'Fehler beim Senden der Test-E-Mail via Mailgun',
+              details: errorMessage,
+            },
+            { status: 500 }
+          )
+        }
+
+        const result = await response.json()
+        console.log('✅ Mailgun Test-E-Mail erfolgreich gesendet:', result.id || result.message)
+
+        return NextResponse.json({
+          success: true,
+          message: 'Test-E-Mail erfolgreich gesendet',
+          messageId: result.id || result.message || 'mailgun-sent',
+        })
+      } catch (error) {
+        console.error('❌ Fehler beim Senden der Mailgun Test-E-Mail:', error)
+
+        let errorMessage = 'Fehler beim Senden der Test-E-Mail via Mailgun'
+        if (error instanceof Error) {
+          errorMessage = error.message
+        }
+
+        return NextResponse.json(
+          {
+            error: 'Fehler beim Senden der Test-E-Mail',
+            details: errorMessage,
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Erstelle Transporter (für SMTP-basierte Provider)
     let transporter
     try {
       if (config.type === 'GMAIL') {
@@ -150,9 +240,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Teste Verbindung
+    // Teste Verbindung (nur für SMTP-basierte Provider)
     try {
-      console.log('📧 Teste Email-Verbindung...')
+      console.log('📧 Teste Email-Verbindung (SMTP)...')
       await transporter.verify()
       console.log('✅ Email-Verbindung erfolgreich')
     } catch (verifyError) {

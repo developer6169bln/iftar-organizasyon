@@ -33,7 +33,7 @@ export default function InvitationsPage() {
   })
   const [configForm, setConfigForm] = useState({
     name: '',
-    type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP',
+    type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILGUN',
     email: '',
     appPassword: '',
     password: '',
@@ -41,6 +41,9 @@ export default function InvitationsPage() {
     smtpPort: 587,
     imapHost: '',
     imapPort: 993,
+    mailgunDomain: '',
+    mailgunApiKey: '',
+    mailgunRegion: 'US' as 'US' | 'EU',
     isActive: false,
   })
   const [editingConfig, setEditingConfig] = useState<any>(null)
@@ -248,6 +251,11 @@ export default function InvitationsPage() {
         return
       }
 
+      if (configForm.type === 'MAILGUN' && (!configForm.mailgunDomain || !configForm.mailgunApiKey)) {
+        alert('Mailgun Domain und API Key sind erforderlich')
+        return
+      }
+
       const url = editingConfig ? '/api/email-config' : '/api/email-config'
       const method = editingConfig ? 'PUT' : 'POST'
 
@@ -269,6 +277,9 @@ export default function InvitationsPage() {
           smtpPort: 587,
           imapHost: '',
           imapPort: 993,
+          mailgunDomain: '',
+          mailgunApiKey: '',
+          mailgunRegion: 'US',
           isActive: false,
         })
         setEditingConfig(null)
@@ -295,6 +306,9 @@ export default function InvitationsPage() {
       smtpPort: config.smtpPort || 587,
       imapHost: config.imapHost || '',
       imapPort: config.imapPort || 993,
+      mailgunDomain: config.mailgunDomain || '',
+      mailgunApiKey: '',
+      mailgunRegion: (config.mailgunRegion || 'US') as 'US' | 'EU',
       isActive: config.isActive || false,
     })
   }
@@ -1885,12 +1899,13 @@ export default function InvitationsPage() {
                   </label>
                   <select
                     value={configForm.type}
-                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'ICLOUD' | 'IMAP' })}
+                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILGUN' })}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   >
                     <option value="GMAIL">Gmail</option>
                     <option value="ICLOUD">iCloud Mail</option>
                     <option value="IMAP">Eigener Mail-Server (SMTP/IMAP)</option>
+                    <option value="MAILGUN">Mailgun (API)</option>
                   </select>
                 </div>
 
@@ -1968,6 +1983,66 @@ export default function InvitationsPage() {
                       </p>
                       <p className="mt-1 text-xs text-gray-400">
                         💡 <strong>Hinweis:</strong> Sie benötigen Zwei-Faktor-Authentifizierung für Ihr Apple-ID-Konto aktiviert.
+                      </p>
+                    </div>
+                  </>
+                ) : configForm.type === 'MAILGUN' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mailgun Domain *
+                      </label>
+                      <input
+                        type="text"
+                        value={configForm.mailgunDomain}
+                        onChange={(e) => setConfigForm({ ...configForm, mailgunDomain: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="mg.deinedomain.de"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Die Domain, die in Mailgun verifiziert ist (z.B. <span className="font-mono">mg.example.com</span>).
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mailgun Region *
+                      </label>
+                      <select
+                        value={configForm.mailgunRegion}
+                        onChange={(e) => setConfigForm({ ...configForm, mailgunRegion: e.target.value as 'US' | 'EU' })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                      >
+                        <option value="US">US (api.mailgun.net)</option>
+                        <option value="EU">EU (api.eu.mailgun.net)</option>
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Wählen Sie die Region entsprechend Ihrer Mailgun Domain.
+                      </p>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mailgun Private API Key *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={configForm.mailgunApiKey}
+                          onChange={(e) => setConfigForm({ ...configForm, mailgunApiKey: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="key-..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Verwenden Sie den <strong>Private API Key</strong> aus Mailgun (nicht Public).
                       </p>
                     </div>
                   </>
@@ -2085,6 +2160,9 @@ export default function InvitationsPage() {
                         smtpPort: 587,
                         imapHost: '',
                         imapPort: 993,
+                        mailgunDomain: '',
+                        mailgunApiKey: '',
+                        mailgunRegion: 'US',
                         isActive: false,
                       })
                     }}

@@ -15,6 +15,8 @@ export async function GET() {
         imapPort: true,
         smtpHost: true,
         smtpPort: true,
+        mailgunDomain: true,
+        mailgunRegion: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -45,6 +47,9 @@ export async function POST(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
+      mailgunDomain,
+      mailgunApiKey,
+      mailgunRegion,
       isActive,
     } = await request.json()
 
@@ -78,6 +83,9 @@ export async function POST(request: NextRequest) {
         imapPort: type === 'IMAP' ? imapPort : null,
         smtpHost: type === 'IMAP' ? smtpHost : null,
         smtpPort: type === 'IMAP' ? smtpPort : null,
+        mailgunDomain: type === 'MAILGUN' ? (mailgunDomain || null) : null,
+        mailgunApiKey: type === 'MAILGUN' ? (mailgunApiKey || null) : null,
+        mailgunRegion: type === 'MAILGUN' ? (mailgunRegion || null) : null,
         isActive: isActive || false,
       },
     })
@@ -86,6 +94,7 @@ export async function POST(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
+      mailgunApiKey: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Erstellen der Email-Konfiguration:', error)
@@ -110,6 +119,9 @@ export async function PUT(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
+      mailgunDomain,
+      mailgunApiKey,
+      mailgunRegion,
       isActive,
     } = await request.json()
 
@@ -136,6 +148,8 @@ export async function PUT(request: NextRequest) {
       imapPort: type === 'IMAP' ? imapPort : null,
       smtpHost: type === 'IMAP' ? smtpHost : null,
       smtpPort: type === 'IMAP' ? smtpPort : null,
+      mailgunDomain: type === 'MAILGUN' ? (mailgunDomain || null) : null,
+      mailgunRegion: type === 'MAILGUN' ? (mailgunRegion || null) : null,
       isActive,
     }
 
@@ -145,6 +159,9 @@ export async function PUT(request: NextRequest) {
     }
     if (appPassword !== undefined) {
       updateData.appPassword = appPassword || null
+    }
+    if (mailgunApiKey !== undefined) {
+      updateData.mailgunApiKey = mailgunApiKey || null
     }
 
     const config = await prisma.emailConfig.update({
@@ -156,6 +173,7 @@ export async function PUT(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
+      mailgunApiKey: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Email-Konfiguration:', error)

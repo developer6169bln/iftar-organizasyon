@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
 
 export interface EmailConfigData {
-  type: 'GMAIL' | 'ICLOUD' | 'IMAP'
+  type: 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILGUN'
   email: string
   appPassword?: string
   password?: string
@@ -10,6 +10,9 @@ export interface EmailConfigData {
   smtpPort?: number
   imapHost?: string
   imapPort?: number
+  mailgunDomain?: string
+  mailgunApiKey?: string
+  mailgunRegion?: string
 }
 
 export async function getEmailTransporter() {
@@ -29,7 +32,15 @@ export async function getEmailTransporter() {
     hasPassword: !!config.password,
     smtpHost: config.smtpHost,
     smtpPort: config.smtpPort,
+    mailgunDomain: config.mailgunDomain,
+    mailgunRegion: config.mailgunRegion,
   })
+
+  // Mailgun verwendet HTTP API, kein SMTP-Transporter
+  if (config.type === 'MAILGUN') {
+    console.log('📧 Mailgun-Konfiguration erkannt - verwendet HTTP API (kein SMTP-Transporter)')
+    return null // Kein Transporter für Mailgun
+  }
 
   let transporter
 
@@ -127,6 +138,75 @@ export async function getEmailTransporter() {
   return transporter
 }
 
+// Mailgun HTTP API Versand
+async function sendViaMailgun(
+  config: any,
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody: string
+): Promise<{ success: true; messageId: string }> {
+  if (!config.mailgunDomain || !config.mailgunApiKey) {
+    throw new Error('Mailgun Domain oder API Key fehlt')
+  }
+
+  const region = config.mailgunRegion || 'US'
+  const apiBaseUrl = region === 'EU' ? 'https://api.eu.mailgun.net/v3' : 'https://api.mailgun.net/v3'
+  const apiUrl = `${apiBaseUrl}/${config.mailgunDomain}/messages`
+
+  // Basic Auth: Benutzer = "api", Passwort = API Key
+  const auth = Buffer.from(`api:${config.mailgunApiKey}`).toString('base64')
+
+  const formData = new URLSearchParams()
+  formData.append('from', `"Iftar Organizasyon" <${config.email}>`)
+  formData.append('to', to)
+  formData.append('subject', subject)
+  formData.append('html', htmlBody)
+  formData.append('text', textBody)
+
+  console.log('📧 Mailgun API Request:', {
+    url: apiUrl,
+    domain: config.mailgunDomain,
+    region,
+    from: config.email,
+    to,
+  })
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: formData.toString(),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('❌ Mailgun API Fehler:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText,
+    })
+
+    let errorMessage = `Mailgun API Fehler: ${response.status} ${response.statusText}`
+    try {
+      const errorJson = JSON.parse(errorText)
+      if (errorJson.message) {
+        errorMessage = `Mailgun: ${errorJson.message}`
+      }
+    } catch {
+      // Ignoriere Parse-Fehler
+    }
+
+    throw new Error(errorMessage)
+  }
+
+  const result = await response.json()
+  console.log('✅ Mailgun Email erfolgreich gesendet:', result.id || result.message)
+  return { success: true, messageId: result.id || result.message || 'mailgun-sent' }
+}
+
 export async function sendInvitationEmail(
   to: string,
   subject: string,
@@ -135,7 +215,6 @@ export async function sendInvitationEmail(
   declineLink: string,
   trackingPixelUrl: string
 ) {
-  const transporter = await getEmailTransporter()
   const config = await prisma.emailConfig.findFirst({
     where: { isActive: true },
   })
@@ -150,12 +229,41 @@ export async function sendInvitationEmail(
     .replace('{{DECLINE_LINK}}', declineLink)
     + `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`
 
+  const textBody = htmlBody.replace(/<[^>]*>/g, '') // Plain-Text-Version
+
+  // Mailgun verwendet HTTP API statt SMTP
+  if (config.type === 'MAILGUN') {
+    try {
+      console.log('📧 Versuche E-Mail via Mailgun API zu senden an:', to)
+      console.log('📧 Von:', config.email)
+      console.log('📧 Betreff:', subject)
+
+      const result = await sendViaMailgun(config, to, subject, emailBody, textBody)
+      return result
+    } catch (error) {
+      console.error('❌ Mailgun Email-Versand fehlgeschlagen:', error)
+
+      let errorMessage = 'Fehler beim Senden der E-Mail via Mailgun'
+      if (error instanceof Error) {
+        errorMessage = error.message
+      }
+
+      throw new Error(errorMessage)
+    }
+  }
+
+  // SMTP-basierte Versand (Gmail, iCloud, IMAP)
+  const transporter = await getEmailTransporter()
+  if (!transporter) {
+    throw new Error('Email-Transporter konnte nicht erstellt werden')
+  }
+
   const mailOptions = {
     from: `"Iftar Organizasyon" <${config.email}>`,
     to,
     subject,
     html: emailBody,
-    text: htmlBody.replace(/<[^>]*>/g, ''), // Plain-Text-Version
+    text: textBody,
   }
 
   try {

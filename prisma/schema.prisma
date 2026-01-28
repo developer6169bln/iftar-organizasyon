@@ -281,11 +281,11 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
-// Email-Konfiguration (Gmail oder IMAP)
+// Email-Konfiguration (Gmail, iCloud, SMTP/IMAP oder Mailgun)
 model EmailConfig {
   id          String   @id @default(cuid())
   name        String // Name der Konfiguration
-  type        String // GMAIL oder IMAP
+  type        String // GMAIL | ICLOUD | IMAP | MAILGUN
   email       String // Absender-E-Mail
   password    String? // Passwort (verschlüsselt)
   appPassword String? // Gmail App-Passwort
@@ -293,6 +293,9 @@ model EmailConfig {
   imapPort    Int? // IMAP Port (z.B. 993)
   smtpHost    String? // SMTP Host
   smtpPort    Int? // SMTP Port (z.B. 587)
+  mailgunDomain String? // z.B. mg.example.com
+  mailgunApiKey String? // Mailgun Private API Key
+  mailgunRegion String? // US | EU (optional, default: US)
   isActive    Boolean  @default(false) // Nur eine aktive Konfiguration
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
