@@ -86,33 +86,32 @@ export async function POST(request: NextRequest) {
         const password = config.appPassword || config.password || ''
         
         // Stelle sicher, dass die E-Mail-Adresse vollständig ist
-        let emailAddress = config.email.trim()
-        if (!emailAddress.includes('@')) {
+        const emailAddress = (config.email || '').trim()
+        if (!emailAddress || !emailAddress.includes('@')) {
           return NextResponse.json(
             { error: 'Ungültige iCloud-E-Mail-Adresse. Bitte verwenden Sie eine vollständige Adresse (z.B. name@icloud.com)' },
             { status: 400 }
           )
         }
         
+        // iCloud verlangt explizit SSL/TLS
         transporter = require('nodemailer').createTransport({
           host: 'smtp.mail.me.com',
           port: 587,
-          secure: false, // STARTTLS auf Port 587
-          requireTLS: true, // Erzwinge TLS
+          secure: true, // SSL/TLS aktiv (\"SSL erforderlich\" Hinweis)
           auth: {
             user: emailAddress,
             pass: password,
           },
           tls: {
             rejectUnauthorized: true,
-            ciphers: 'SSLv3',
           },
           connectionTimeout: 10000, // 10 Sekunden Timeout
           greetingTimeout: 10000,
           socketTimeout: 10000,
         } as any)
-        console.log('📧 iCloud-Transporter erstellt (SMTP) für:', emailAddress)
-        console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (STARTTLS)')
+        console.log('📧 iCloud-Transporter erstellt (SMTP mit SSL/TLS) für:', emailAddress)
+        console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (SSL/TLS)')
       } else {
         transporter = require('nodemailer').createTransport({
           host: config.smtpHost || 'smtp.gmail.com',
