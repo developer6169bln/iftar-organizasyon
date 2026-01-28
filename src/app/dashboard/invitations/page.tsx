@@ -33,7 +33,7 @@ export default function InvitationsPage() {
   })
   const [configForm, setConfigForm] = useState({
     name: '',
-    type: 'GMAIL' as 'GMAIL' | 'IMAP',
+    type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP',
     email: '',
     appPassword: '',
     password: '',
