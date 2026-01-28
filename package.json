@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "build:with-migration": "prisma generate && prisma migrate deploy && next build",
-    "start": "prisma migrate deploy && next start",
+    "start": "node scripts/start-with-migrate.js",
     "lint": "eslint",
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
