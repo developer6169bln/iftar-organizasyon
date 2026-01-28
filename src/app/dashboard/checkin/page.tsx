@@ -16,6 +16,7 @@ interface EingangGuestRow {
   anrede2: string
   anrede3: string
   notizen: string
+  anwesend: boolean
 }
 
 function parseAdditionalData(additionalData: any): Record<string, any> {
@@ -51,6 +52,7 @@ export default function EingangskontrollePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingNotes, setEditingNotes] = useState<string>('')
+  const [togglingAnwesendId, setTogglingAnwesendId] = useState<string | null>(null)
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -154,6 +156,7 @@ export default function EingangskontrollePage() {
         const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
         const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
         const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
+        const anwesend = add['Anwesend'] === true || add['Anwesend'] === 'true'
 
         return {
           id: g.id,
@@ -168,6 +171,7 @@ export default function EingangskontrollePage() {
           anrede2,
           anrede3,
           notizen: g.notes || '',
+          anwesend,
         }
       })
 
@@ -237,6 +241,36 @@ export default function EingangskontrollePage() {
     } catch (error) {
       console.error('Fehler beim Speichern der Notizen:', error)
       alert('Fehler beim Speichern der Notizen')
+    }
+  }
+
+  const handleAnwesendChange = async (row: EingangGuestRow) => {
+    const newValue = !row.anwesend
+    setTogglingAnwesendId(row.id)
+    try {
+      const response = await fetch('/api/checkin/anwesend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guestId: row.id, anwesend: newValue }),
+      })
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || 'Fehler beim Speichern')
+      }
+      setRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, anwesend: newValue } : r))
+      )
+      setFilteredRows((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, anwesend: newValue } : r))
+      )
+      if (newValue) {
+        // Push wurde serverseitig an alle User gesendet
+      }
+    } catch (error) {
+      console.error('Fehler beim Setzen Anwesend:', error)
+      alert(error instanceof Error ? error.message : 'Fehler beim Speichern')
+    } finally {
+      setTogglingAnwesendId(null)
     }
   }
 
@@ -338,6 +372,9 @@ export default function EingangskontrollePage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                       Anrede 3
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      Anwesend
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                       Notizen
                     </th>
@@ -380,6 +417,20 @@ export default function EingangskontrollePage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {row.anrede3 || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <label className="flex cursor-pointer items-center justify-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={row.anwesend}
+                            disabled={togglingAnwesendId === row.id}
+                            onChange={() => handleAnwesendChange(row)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          {togglingAnwesendId === row.id && (
+                            <span className="text-xs text-gray-400">…</span>
+                          )}
+                        </label>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
                         {editingId === row.id ? (
