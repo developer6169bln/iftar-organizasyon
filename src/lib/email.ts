@@ -71,11 +71,17 @@ export async function getEmailTransporter() {
       throw new Error('Ungültige iCloud-E-Mail-Adresse. Bitte verwenden Sie eine vollständige Adresse (z.B. name@icloud.com)')
     }
     
-    // iCloud SMTP-Konfiguration mit SSL/TLS
+    // iCloud SMTP-Konfiguration
+    // Port 587: STARTTLS (secure=false + requireTLS=true)
+    // Port 465: SSL/TLS (secure=true)
+    const smtpHost = config.smtpHost || 'smtp.mail.me.com'
+    const smtpPort = config.smtpPort || 587
+    const secure = smtpPort === 465
     transporter = nodemailer.createTransport({
-      host: 'smtp.mail.me.com',
-      port: 587,
-      secure: true, // SSL/TLS aktiv (\"SSL erforderlich\")
+      host: smtpHost,
+      port: smtpPort,
+      secure,
+      requireTLS: !secure, // erzwingt STARTTLS auf 587
       auth: {
         user: emailAddress,
         pass: password,
@@ -88,8 +94,13 @@ export async function getEmailTransporter() {
       socketTimeout: 10000,
     } as any)
     
-    console.log('📧 iCloud-Transporter erstellt (SMTP mit SSL/TLS) für:', emailAddress)
-    console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (SSL/TLS)')
+    console.log('📧 iCloud-Transporter erstellt (SMTP) für:', emailAddress)
+    console.log('📧 iCloud SMTP-Einstellungen:', {
+      host: smtpHost,
+      port: smtpPort,
+      secure,
+      mode: secure ? 'SSL/TLS (465)' : 'STARTTLS (587)',
+    })
   } else {
     // IMAP/SMTP Konfiguration
     transporter = nodemailer.createTransport({

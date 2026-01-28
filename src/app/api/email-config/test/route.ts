@@ -94,11 +94,17 @@ export async function POST(request: NextRequest) {
           )
         }
         
-        // iCloud verlangt explizit SSL/TLS
+        // iCloud SMTP
+        // Port 587: STARTTLS (secure=false + requireTLS=true)
+        // Port 465: SSL/TLS (secure=true)
+        const smtpHost = config.smtpHost || 'smtp.mail.me.com'
+        const smtpPort = config.smtpPort || 587
+        const secure = smtpPort === 465
         transporter = require('nodemailer').createTransport({
-          host: 'smtp.mail.me.com',
-          port: 587,
-          secure: true, // SSL/TLS aktiv (\"SSL erforderlich\" Hinweis)
+          host: smtpHost,
+          port: smtpPort,
+          secure,
+          requireTLS: !secure,
           auth: {
             user: emailAddress,
             pass: password,
@@ -110,8 +116,13 @@ export async function POST(request: NextRequest) {
           greetingTimeout: 10000,
           socketTimeout: 10000,
         } as any)
-        console.log('📧 iCloud-Transporter erstellt (SMTP mit SSL/TLS) für:', emailAddress)
-        console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (SSL/TLS)')
+        console.log('📧 iCloud-Transporter erstellt (SMTP) für:', emailAddress)
+        console.log('📧 iCloud SMTP-Einstellungen:', {
+          host: smtpHost,
+          port: smtpPort,
+          secure,
+          mode: secure ? 'SSL/TLS (465)' : 'STARTTLS (587)',
+        })
       } else {
         transporter = require('nodemailer').createTransport({
           host: config.smtpHost || 'smtp.gmail.com',
