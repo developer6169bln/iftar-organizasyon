@@ -84,19 +84,35 @@ export async function POST(request: NextRequest) {
         console.log('📧 Gmail-Transporter erstellt (SMTP) für:', config.email)
       } else if (config.type === 'ICLOUD') {
         const password = config.appPassword || config.password || ''
+        
+        // Stelle sicher, dass die E-Mail-Adresse vollständig ist
+        let emailAddress = config.email.trim()
+        if (!emailAddress.includes('@')) {
+          return NextResponse.json(
+            { error: 'Ungültige iCloud-E-Mail-Adresse. Bitte verwenden Sie eine vollständige Adresse (z.B. name@icloud.com)' },
+            { status: 400 }
+          )
+        }
+        
         transporter = require('nodemailer').createTransport({
           host: 'smtp.mail.me.com',
           port: 587,
-          secure: false, // TLS auf Port 587
+          secure: false, // STARTTLS auf Port 587
+          requireTLS: true, // Erzwinge TLS
           auth: {
-            user: config.email,
+            user: emailAddress,
             pass: password,
           },
           tls: {
             rejectUnauthorized: true,
+            ciphers: 'SSLv3',
           },
+          connectionTimeout: 10000, // 10 Sekunden Timeout
+          greetingTimeout: 10000,
+          socketTimeout: 10000,
         } as any)
-        console.log('📧 iCloud-Transporter erstellt (SMTP) für:', config.email)
+        console.log('📧 iCloud-Transporter erstellt (SMTP) für:', emailAddress)
+        console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (STARTTLS)')
       } else {
         transporter = require('nodemailer').createTransport({
           host: config.smtpHost || 'smtp.gmail.com',
@@ -145,10 +161,21 @@ export async function POST(request: NextRequest) {
           } else {
             errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
           }
-        } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection')) {
-          errorMessage = 'Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
+        } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection') || errorMsg.includes('timeout') || errorMsg.includes('econnrefused') || errorMsg.includes('enotfound')) {
+          if (config.type === 'ICLOUD') {
+            errorMessage = 'Verbindung zum iCloud-Server fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Internetverbindung\n2. Firewall-Einstellungen\n3. Port 587 ist nicht blockiert\n4. smtp.mail.me.com ist erreichbar'
+          } else {
+            errorMessage = 'Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
+          }
         } else {
-          errorMessage = verifyError.message
+          // Detaillierte Fehlermeldung für Debugging
+          const fullError = verifyError instanceof Error ? verifyError.message : String(verifyError)
+          const errorDetails = (verifyError as any).code ? ` (Code: ${(verifyError as any).code})` : ''
+          errorMessage = `${fullError}${errorDetails}`
+          
+          if (config.type === 'ICLOUD') {
+            errorMessage += '\n\niCloud-spezifische Hinweise:\n- Stellen Sie sicher, dass Zwei-Faktor-Authentifizierung aktiviert ist\n- Verwenden Sie ein app-spezifisches Passwort von appleid.apple.com\n- Die E-Mail-Adresse muss vollständig sein (z.B. name@icloud.com)'
+          }
         }
       }
       
@@ -188,10 +215,20 @@ export async function POST(request: NextRequest) {
         const errorCode = (sendError as any).code || ''
         const responseCode = (sendError as any).responseCode || ''
         
-        if (errorCode === 'EAUTH' || responseCode === '535' || errorMsg.includes('invalid login')) {
-          errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihr App-Passwort.'
-        } else if (errorCode === 'ECONNECTION') {
-          errorMessage = 'Verbindung zum Gmail-Server fehlgeschlagen.'
+        if (errorCode === 'EAUTH' || responseCode === '535' || errorMsg.includes('invalid login') || errorMsg.includes('authentication failed')) {
+          if (config.type === 'GMAIL') {
+            errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihr App-Passwort.'
+          } else if (config.type === 'ICLOUD') {
+            errorMessage = 'iCloud-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein app-spezifisches Passwort (nicht Ihr normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. iCloud-E-Mail-Adresse ist vollständig (z.B. name@icloud.com)'
+          } else {
+            errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
+          }
+        } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection') || errorMsg.includes('timeout')) {
+          if (config.type === 'ICLOUD') {
+            errorMessage = 'Verbindung zum iCloud-Server fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Internetverbindung\n2. Firewall-Einstellungen\n3. Port 587 ist nicht blockiert'
+          } else {
+            errorMessage = 'Verbindung zum Server fehlgeschlagen.'
+          }
         } else {
           errorMessage = sendError.message
         }

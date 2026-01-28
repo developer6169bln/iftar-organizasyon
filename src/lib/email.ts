@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
 
 export interface EmailConfigData {
-  type: 'GMAIL' | 'IMAP'
+  type: 'GMAIL' | 'ICLOUD' | 'IMAP'
   email: string
   appPassword?: string
   password?: string
@@ -57,6 +57,41 @@ export async function getEmailTransporter() {
     } as any)
     
     console.log('📧 Gmail-Transporter erstellt (SMTP) für:', config.email)
+  } else if (config.type === 'ICLOUD') {
+    // iCloud Mail mit App-spezifischem Passwort
+    const password = config.appPassword || config.password || ''
+    
+    if (!password) {
+      throw new Error('iCloud App-Passwort fehlt. Bitte erstellen Sie ein app-spezifisches Passwort in Ihren iCloud-Einstellungen.')
+    }
+    
+    // Stelle sicher, dass die E-Mail-Adresse vollständig ist
+    let emailAddress = config.email.trim()
+    if (!emailAddress.includes('@')) {
+      throw new Error('Ungültige iCloud-E-Mail-Adresse. Bitte verwenden Sie eine vollständige Adresse (z.B. name@icloud.com)')
+    }
+    
+    // iCloud SMTP-Konfiguration
+    transporter = nodemailer.createTransport({
+      host: 'smtp.mail.me.com',
+      port: 587,
+      secure: false, // STARTTLS auf Port 587
+      requireTLS: true, // Erzwinge TLS
+      auth: {
+        user: emailAddress,
+        pass: password,
+      },
+      tls: {
+        rejectUnauthorized: true,
+        ciphers: 'SSLv3',
+      },
+      connectionTimeout: 10000, // 10 Sekunden Timeout
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+    } as any)
+    
+    console.log('📧 iCloud-Transporter erstellt (SMTP) für:', emailAddress)
+    console.log('📧 iCloud SMTP-Einstellungen: smtp.mail.me.com:587 (STARTTLS)')
   } else {
     // IMAP/SMTP Konfiguration
     transporter = nodemailer.createTransport({
@@ -144,11 +179,23 @@ export async function sendInvitationEmail(
       const errorCode = (error as any).code || ''
       const responseCode = (error as any).responseCode || ''
       
-      // Gmail-spezifische Fehler
+      // Authentifizierungsfehler (Gmail/iCloud/IMAP)
       if (errorCode === 'EAUTH' || responseCode === '535' || errorMsg.includes('invalid login') || errorMsg.includes('authentication failed') || errorMsg.includes('invalid credentials') || errorMsg.includes('username and password not accepted')) {
-        errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein App-Passwort (nicht Ihr normales Gmail-Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. E-Mail-Adresse ist korrekt'
+        if (config.type === 'GMAIL') {
+          errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein App-Passwort (nicht Ihr normales Gmail-Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. E-Mail-Adresse ist korrekt'
+        } else if (config.type === 'ICLOUD') {
+          errorMessage = 'iCloud-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein app-spezifisches Passwort (nicht Ihr normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. iCloud-E-Mail-Adresse ist vollständig (z.B. name@icloud.com)'
+        } else {
+          errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
+        }
       } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection') || errorMsg.includes('timeout') || errorMsg.includes('econnrefused') || errorMsg.includes('enotfound')) {
-        errorMessage = 'Verbindung zum Gmail-Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
+        if (config.type === 'ICLOUD') {
+          errorMessage = 'Verbindung zum iCloud-Server fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Internetverbindung\n2. Firewall-Einstellungen\n3. Port 587 ist nicht blockiert\n4. smtp.mail.me.com ist erreichbar'
+        } else if (config.type === 'GMAIL') {
+          errorMessage = 'Verbindung zum Gmail-Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
+        } else {
+          errorMessage = 'Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
+        }
       } else if (errorMsg.includes('self signed certificate') || errorMsg.includes('certificate') || errorMsg.includes('unable to verify')) {
         errorMessage = 'SSL/TLS-Zertifikatsfehler. Bitte überprüfen Sie Ihre SMTP-Einstellungen.'
       } else if (errorMsg.includes('rate limit') || errorMsg.includes('quota') || responseCode === '550') {
