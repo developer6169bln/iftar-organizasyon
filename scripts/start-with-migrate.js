@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 const net = require('node:net')
 const { spawn } = require('node:child_process')
+const path = require('node:path')
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
@@ -42,10 +43,13 @@ function run(cmd, args, opts = {}) {
 }
 
 async function main() {
+  const binPrisma = path.resolve(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma')
+  const binNext = path.resolve(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'next.cmd' : 'next')
+
   const dbUrl = process.env.DATABASE_URL
   if (!dbUrl) {
     console.warn('⚠️ DATABASE_URL fehlt – starte App ohne Migration.')
-    await run('npx', ['next', 'start'])
+    await run(binNext, ['start'])
     return
   }
 
@@ -57,11 +61,11 @@ async function main() {
     port = u.port ? parseInt(u.port, 10) : 5432
   } catch (e) {
     console.warn('⚠️ Konnte DATABASE_URL nicht parsen – starte App ohne Migration.', e?.message || e)
-    await run('npx', ['next', 'start'])
+    await run(binNext, ['start'])
     return
   }
 
-  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '60000', 10) // 60s
+  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '180000', 10) // 180s
   const started = Date.now()
 
   console.log(`⏳ Warte auf DB TCP erreichbar: ${host}:${port} (max ${maxWaitMs}ms)`)
@@ -77,20 +81,24 @@ async function main() {
   }
 
   // Migration versuchen (mit kurzer Retry-Strategie)
-  const maxMigrateAttempts = parseInt(process.env.PRISMA_MIGRATE_ATTEMPTS || '5', 10)
+  const maxMigrateAttempts = parseInt(process.env.PRISMA_MIGRATE_ATTEMPTS || '10', 10)
+  const allowStartWithoutMigration = (process.env.ALLOW_START_WITHOUT_MIGRATION || 'true').toLowerCase() === 'true'
   for (let attempt = 1; attempt <= maxMigrateAttempts; attempt++) {
     try {
       console.log(`🔄 prisma migrate deploy (Versuch ${attempt}/${maxMigrateAttempts})`)
-      // prisma ist als dependency installiert → npx ist ok
       // eslint-disable-next-line no-await-in-loop
-      await run('npx', ['prisma', 'migrate', 'deploy'])
+      await run(binPrisma, ['migrate', 'deploy'])
       console.log('✅ Migration erfolgreich')
       break
     } catch (e) {
       console.error('❌ Migration fehlgeschlagen:', e?.message || e)
       if (attempt === maxMigrateAttempts) {
-        console.error('❌ Starte nicht, da Migration nicht durchläuft (DB Schema wäre inkonsistent).')
-        process.exit(1)
+        if (!allowStartWithoutMigration) {
+          console.error('❌ Starte nicht, da Migration nicht durchläuft (DB Schema wäre inkonsistent).')
+          process.exit(1)
+        }
+        console.warn('⚠️ Migration ist fehlgeschlagen, starte trotzdem (ALLOW_START_WITHOUT_MIGRATION=true).')
+        break
       }
       // eslint-disable-next-line no-await-in-loop
       await sleep(3000)
@@ -98,7 +106,7 @@ async function main() {
   }
 
   console.log('🚀 Starte Next.js…')
-  await run('npx', ['next', 'start'])
+  await run(binNext, ['start'])
 }
 
 main().catch((e) => {
