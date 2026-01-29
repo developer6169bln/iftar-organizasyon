@@ -27,8 +27,17 @@ export async function GET() {
     return NextResponse.json(configs)
   } catch (error) {
     console.error('Fehler beim Abrufen der Email-Konfigurationen:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    const hint =
+      message.includes('mailgun') || message.includes('column') || message.includes('does not exist')
+        ? ' Möglicherweise fehlt die DB-Migration (prisma migrate deploy).'
+        : ''
     return NextResponse.json(
-      { error: 'Fehler beim Abrufen der Konfigurationen' },
+      {
+        error: 'Fehler beim Abrufen der Konfigurationen',
+        details: process.env.NODE_ENV === 'development' ? message : undefined,
+        hint: hint || undefined,
+      },
       { status: 500 }
     )
   }
