@@ -60,6 +60,8 @@ export default function EingangskontrollePage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingNotes, setEditingNotes] = useState<string>('')
   const [togglingAnwesendId, setTogglingAnwesendId] = useState<string | null>(null)
+  const [publicLink, setPublicLink] = useState<string>('')
+  const [showPublicLink, setShowPublicLink] = useState(false)
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -89,6 +91,15 @@ export default function EingangskontrollePage() {
     if (eventId) {
       loadAcceptedGuests()
     }
+    // Lade öffentlichen Link von API
+    fetch('/api/checkin-public/link')
+      .then((res) => res.json())
+      .then((data) => setPublicLink(data.link))
+      .catch(() => {
+        // Fallback falls API nicht verfügbar
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        setPublicLink(`${baseUrl}/checkin-public/checkin2024`)
+      })
   }, [eventId])
 
   const loadAcceptedGuests = async () => {
@@ -298,6 +309,51 @@ export default function EingangskontrollePage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Öffentlicher Link Bereich */}
+        <div className="mb-6 rounded-xl bg-indigo-50 border border-indigo-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-indigo-900">Öffentlicher Zugang</h3>
+              <p className="mt-1 text-sm text-indigo-700">
+                Link für Mobilgeräte ohne Login
+              </p>
+            </div>
+            <button
+              onClick={() => setShowPublicLink(!showPublicLink)}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              {showPublicLink ? 'Verbergen' : 'Link anzeigen'}
+            </button>
+          </div>
+          {showPublicLink && (
+            <div className="mt-4 rounded-lg bg-white p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Öffentlicher Link (kopieren und teilen):
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={publicLink}
+                  readOnly
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(publicLink)
+                    alert('Link kopiert!')
+                  }}
+                  className="rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
+                >
+                  Kopieren
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Dieser Link kann ohne Login verwendet werden. Perfekt für Mobilgeräte.
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-semibold">Liste der Gäste mit Zusage</h2>
