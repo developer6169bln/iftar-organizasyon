@@ -160,8 +160,9 @@ export async function PUT(request: NextRequest) {
     if (appPassword !== undefined) {
       updateData.appPassword = appPassword || null
     }
-    if (mailgunApiKey !== undefined) {
-      updateData.mailgunApiKey = mailgunApiKey || null
+    // Mailgun API Key nur aktualisieren, wenn ein neuer (nicht leerer) Wert gesendet wurde
+    if (type === 'MAILGUN' && mailgunApiKey !== undefined && String(mailgunApiKey).trim() !== '') {
+      updateData.mailgunApiKey = mailgunApiKey
     }
 
     const config = await prisma.emailConfig.update({

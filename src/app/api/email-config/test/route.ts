@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getEmailTransporter } from '@/lib/email'
+import Mailgun from 'mailgun.js'
+import FormData from 'form-data'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -71,70 +73,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Mailgun verwendet HTTP API, kein SMTP-Transporter
+    // Mailgun mit mailgun.js
     if (config.type === 'MAILGUN') {
       try {
         const region = config.mailgunRegion || 'US'
-        const apiBaseUrl = region === 'EU' ? 'https://api.eu.mailgun.net/v3' : 'https://api.mailgun.net/v3'
-        const apiUrl = `${apiBaseUrl}/${config.mailgunDomain}/messages`
+        const mailgun = new Mailgun(FormData)
+        const mg = mailgun.client({
+          username: 'api',
+          key: config.mailgunApiKey!,
+          ...(region === 'EU' ? { url: 'https://api.eu.mailgun.net' } : {}),
+        })
 
-        const auth = Buffer.from(`api:${config.mailgunApiKey}`).toString('base64')
+        const fromStr = `"Iftar Organizasyon Test" <${config.email}>`
 
-        const formData = new URLSearchParams()
-        formData.append('from', `"Iftar Organizasyon Test" <${config.email}>`)
-        formData.append('to', testEmail)
-        formData.append('subject', 'Test-E-Mail von Iftar Organizasyon')
-        formData.append('html', '<p>Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.</p>')
-        formData.append('text', 'Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.')
-
-        console.log('📧 Teste Mailgun API...')
-        console.log('📧 API URL:', apiUrl)
+        console.log('📧 Teste Mailgun (mailgun.js)...')
         console.log('📧 Domain:', config.mailgunDomain)
         console.log('📧 Region:', region)
 
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: formData.toString(),
+        const data = await mg.messages.create(config.mailgunDomain!, {
+          from: fromStr,
+          to: [testEmail],
+          subject: 'Test-E-Mail von Iftar Organizasyon',
+          text: 'Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.',
+          html: '<p>Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailgun-Konfiguration korrekt.</p>',
         })
 
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error('❌ Mailgun API Fehler:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText,
-          })
-
-          let errorMessage = `Mailgun API Fehler: ${response.status} ${response.statusText}`
-          try {
-            const errorJson = JSON.parse(errorText)
-            if (errorJson.message) {
-              errorMessage = `Mailgun: ${errorJson.message}`
-            }
-          } catch {
-            // Ignoriere Parse-Fehler
-          }
-
-          return NextResponse.json(
-            {
-              error: 'Fehler beim Senden der Test-E-Mail via Mailgun',
-              details: errorMessage,
-            },
-            { status: 500 }
-          )
-        }
-
-        const result = await response.json()
-        console.log('✅ Mailgun Test-E-Mail erfolgreich gesendet:', result.id || result.message)
+        const messageId = (data as { id?: string; message?: string }).id ?? (data as { id?: string; message?: string }).message ?? 'mailgun-sent'
+        console.log('✅ Mailgun Test-E-Mail erfolgreich gesendet:', messageId)
 
         return NextResponse.json({
           success: true,
           message: 'Test-E-Mail erfolgreich gesendet',
-          messageId: result.id || result.message || 'mailgun-sent',
+          messageId,
         })
       } catch (error) {
         console.error('❌ Fehler beim Senden der Mailgun Test-E-Mail:', error)

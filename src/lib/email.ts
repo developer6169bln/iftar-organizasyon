@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer'
+import Mailgun from 'mailgun.js'
+import FormData from 'form-data'
 import { prisma } from './prisma'
 
 export interface EmailConfigData {
@@ -138,7 +140,7 @@ export async function getEmailTransporter() {
   return transporter
 }
 
-// Mailgun HTTP API Versand
+// Mailgun Versand mit offizieller mailgun.js Bibliothek
 async function sendViaMailgun(
   config: any,
   to: string,
@@ -151,60 +153,33 @@ async function sendViaMailgun(
   }
 
   const region = config.mailgunRegion || 'US'
-  const apiBaseUrl = region === 'EU' ? 'https://api.eu.mailgun.net/v3' : 'https://api.mailgun.net/v3'
-  const apiUrl = `${apiBaseUrl}/${config.mailgunDomain}/messages`
+  const mailgun = new Mailgun(FormData)
+  const mg = mailgun.client({
+    username: 'api',
+    key: config.mailgunApiKey,
+    ...(region === 'EU' ? { url: 'https://api.eu.mailgun.net' } : {}),
+  })
 
-  // Basic Auth: Benutzer = "api", Passwort = API Key
-  const auth = Buffer.from(`api:${config.mailgunApiKey}`).toString('base64')
+  const fromStr = `"Iftar Organizasyon" <${config.email}>`
 
-  const formData = new URLSearchParams()
-  formData.append('from', `"Iftar Organizasyon" <${config.email}>`)
-  formData.append('to', to)
-  formData.append('subject', subject)
-  formData.append('html', htmlBody)
-  formData.append('text', textBody)
-
-  console.log('📧 Mailgun API Request:', {
-    url: apiUrl,
+  console.log('📧 Mailgun (mailgun.js):', {
     domain: config.mailgunDomain,
     region,
     from: config.email,
     to,
   })
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: formData.toString(),
+  const data = await mg.messages.create(config.mailgunDomain, {
+    from: fromStr,
+    to: [to],
+    subject,
+    text: textBody,
+    html: htmlBody,
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('❌ Mailgun API Fehler:', {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorText,
-    })
-
-    let errorMessage = `Mailgun API Fehler: ${response.status} ${response.statusText}`
-    try {
-      const errorJson = JSON.parse(errorText)
-      if (errorJson.message) {
-        errorMessage = `Mailgun: ${errorJson.message}`
-      }
-    } catch {
-      // Ignoriere Parse-Fehler
-    }
-
-    throw new Error(errorMessage)
-  }
-
-  const result = await response.json()
-  console.log('✅ Mailgun Email erfolgreich gesendet:', result.id || result.message)
-  return { success: true, messageId: result.id || result.message || 'mailgun-sent' }
+  const messageId = data.id ?? data.message ?? 'mailgun-sent'
+  console.log('✅ Mailgun Email erfolgreich gesendet:', messageId)
+  return { success: true, messageId }
 }
 
 export async function sendInvitationEmail(
