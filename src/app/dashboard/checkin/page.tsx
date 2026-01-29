@@ -44,6 +44,13 @@ function getFromAdditional(add: Record<string, any>, keys: string[]): string {
   return ''
 }
 
+/** VIP aus additionalData (wie in Gästeliste): VIP, vip, true / 'true' */
+function isVipFromAdditional(add: Record<string, any>, guestIsVip: boolean): boolean {
+  if (guestIsVip) return true
+  const v = add['VIP'] ?? add['vip']
+  return v === true || v === 'true'
+}
+
 export default function EingangskontrollePage() {
   const [rows, setRows] = useState<EingangGuestRow[]>([])
   const [filteredRows, setFilteredRows] = useState<EingangGuestRow[]>([])
@@ -157,6 +164,7 @@ export default function EingangskontrollePage() {
         const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
         const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
         const anwesend = add['Anwesend'] === true || add['Anwesend'] === 'true'
+        const isVip = isVipFromAdditional(add, !!g.isVip)
 
         return {
           id: g.id,
@@ -165,7 +173,7 @@ export default function EingangskontrollePage() {
           nachname,
           tischNummer: tischNummer || '',
           kategorie: kategorie || '',
-          isVip: !!g.isVip,
+          isVip,
           staatInstitution: staatInstitution || '',
           anrede1,
           anrede2,
