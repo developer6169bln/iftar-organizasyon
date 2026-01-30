@@ -110,9 +110,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(invitation, { status: 201 })
   } catch (error) {
     console.error('Fehler beim Erstellen der Einladung:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler'
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const hint =
+      /does not exist|relation.*not found/i.test(errorMessage)
+        ? ' Tabellen fehlen evtl. – auf Railway: railway run npx prisma migrate deploy'
+        : ''
     return NextResponse.json(
-      { error: 'Fehler beim Erstellen der Einladung', details: errorMessage },
+      { error: 'Fehler beim Erstellen der Einladung', details: errorMessage + hint },
       { status: 500 }
     )
   }

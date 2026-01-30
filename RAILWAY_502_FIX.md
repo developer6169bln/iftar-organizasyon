@@ -34,7 +34,7 @@
   railway link
   railway run npx prisma migrate deploy
   ```
-  Danach ist die Tabelle `table_plans` (und alle anderen) vorhanden; Tischplanung und Grundriss-Upload funktionieren.
+  Danach sind alle Tabellen (u. a. `table_plans`, `invitations`, `email_templates`) vorhanden; Tischplanung, Grundriss-Upload und Einladungsliste funktionieren.
 
 - **Nur Tabelle `table_plans` manuell anlegen:** Falls du nur die Tischplanung-Tabelle brauchst (ohne `prisma migrate deploy`):
   ```bash
@@ -42,6 +42,8 @@
   railway run psql $DATABASE_URL -f manual_create_table_plans.sql
   ```
   Oder im Railway Dashboard: **Postgres** → **Data** / **Query** → SQL aus `manual_create_table_plans.sql` einfügen und ausführen.
+
+- **Einladungsliste 500:** Wenn beim Anklicken von „Einladungsliste“ in der Gästeliste ein 500-Fehler kommt, fehlen meist die Tabellen `invitations` bzw. `email_templates`. **Lösung:** Migration ausführen: `railway run npx prisma migrate deploy` (erstellt alle fehlenden Tabellen).
 
 ## Sofort-Start (falls wieder 502)
 

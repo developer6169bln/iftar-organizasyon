@@ -2083,7 +2083,8 @@ export default function GuestsPage() {
                                             }
                                           } else {
                                             const errorData = await createInvitationRes.json().catch(() => ({ error: 'Unbekannter Fehler' }))
-                                            throw new Error(errorData.error || 'Fehler beim Erstellen der Einladung')
+                                            const msg = [errorData.error, errorData.details].filter(Boolean).join(': ') || 'Fehler beim Erstellen der Einladung'
+                                            throw new Error(msg)
                                           }
                                         } else {
                                           // Einladung bleibt in DB, wird nur aus local state entfernt
@@ -2104,6 +2105,7 @@ export default function GuestsPage() {
                                           return newState
                                         })
                                         alert('Fehler beim Verarbeiten der Einladungsliste: ' + (error instanceof Error ? error.message : 'Unbekannter Fehler'))
+                                        console.error('Einladungsliste Fehlerdetails:', error)
                                         return
                                       }
                                     }
