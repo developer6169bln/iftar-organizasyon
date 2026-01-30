@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+function safeParsePlanData(raw: string | null): { tables: unknown[]; podiums: unknown[] } {
+  if (!raw || typeof raw !== 'string') return { tables: [], podiums: [] }
+  try {
+    const parsed = JSON.parse(raw) as { tables?: unknown[]; podiums?: unknown[] }
+    return {
+      tables: Array.isArray(parsed?.tables) ? parsed.tables : [],
+      podiums: Array.isArray(parsed?.podiums) ? parsed.podiums : [],
+    }
+  } catch {
+    return { tables: [], podiums: [] }
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const eventId = request.nextUrl.searchParams.get('eventId')
@@ -11,19 +24,20 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    let plan = await prisma.tablePlan.findUnique({
+    const plan = await prisma.tablePlan.findUnique({
       where: { eventId },
     })
 
     if (!plan) {
-      plan = await prisma.tablePlan.create({
-        data: { eventId, floorPlanUrl: null, planData: null },
+      return NextResponse.json({
+        floorPlanUrl: null,
+        planData: { tables: [], podiums: [] },
       })
     }
 
     return NextResponse.json({
-      floorPlanUrl: plan.floorPlanUrl,
-      planData: plan.planData ? JSON.parse(plan.planData) : { tables: [], podiums: [] },
+      floorPlanUrl: plan.floorPlanUrl ?? null,
+      planData: safeParsePlanData(plan.planData),
     })
   } catch (error) {
     console.error('Table plan GET error:', error)
@@ -46,9 +60,31 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    const eventExists = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    })
+    if (!eventExists) {
+      return NextResponse.json(
+        { error: 'Event nicht gefunden' },
+        { status: 404 }
+      )
+    }
+
     const data: { floorPlanUrl?: string | null; planData?: string | null } = {}
     if (floorPlanUrl !== undefined) data.floorPlanUrl = floorPlanUrl || null
-    if (planData !== undefined) data.planData = typeof planData === 'string' ? planData : JSON.stringify(planData || { tables: [], podiums: [] })
+    if (planData !== undefined) {
+      try {
+        data.planData =
+          typeof planData === 'string' ? planData : JSON.stringify(planData || { tables: [], podiums: [] })
+      } catch (e) {
+        console.error('Table plan PUT: planData stringify failed', e)
+        return NextResponse.json(
+          { error: 'Ungültige planData' },
+          { status: 400 }
+        )
+      }
+    }
 
     const plan = await prisma.tablePlan.upsert({
       where: { eventId },
@@ -57,8 +93,8 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json({
-      floorPlanUrl: plan.floorPlanUrl,
-      planData: plan.planData ? JSON.parse(plan.planData) : { tables: [], podiums: [] },
+      floorPlanUrl: plan.floorPlanUrl ?? null,
+      planData: safeParsePlanData(plan.planData),
     })
   } catch (error) {
     console.error('Table plan PUT error:', error)

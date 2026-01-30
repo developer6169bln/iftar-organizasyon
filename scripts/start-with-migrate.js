@@ -33,7 +33,9 @@ function canConnect(host, port, timeoutMs = 2000) {
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: 'inherit', ...opts })
+    const env = { ...process.env }
+    if (!env.NODE_ENV) env.NODE_ENV = 'production'
+    const child = spawn(cmd, args, { stdio: 'inherit', env, ...opts })
     child.on('exit', (code) => {
       if (code === 0) resolve()
       else reject(new Error(`${cmd} ${args.join(' ')} exited with code ${code}`))
@@ -65,7 +67,7 @@ async function main() {
     return
   }
 
-  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '180000', 10) // 180s
+  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '60000', 10) // 60s default (Railway deploy timeout)
   const started = Date.now()
 
   console.log(`⏳ Warte auf DB TCP erreichbar: ${host}:${port} (max ${maxWaitMs}ms)`)

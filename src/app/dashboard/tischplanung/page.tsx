@@ -567,7 +567,12 @@ export default function TischplanungPage() {
               style={{ pointerEvents: 'none' }}
             >
               {floorPlanLoadError ? (
-                <p className="text-gray-500">Grundriss konnte nicht geladen werden.</p>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center text-amber-800">
+                  <p className="font-medium">Grundriss konnte nicht geladen werden.</p>
+                  <p className="mt-1 text-sm">
+                    Auf Railway gehen hochgeladene Dateien nach einem Neustart verloren. Bitte laden Sie den Grundriss erneut hoch.
+                  </p>
+                </div>
               ) : isPdf ? (
                 <object
                   data={urlForDisplay || undefined}
@@ -616,8 +621,8 @@ export default function TischplanungPage() {
                       <div
                         style={{
                           position: 'absolute',
-                          left: TABLE_TOTAL_OFFSET - t.radius,
-                          top: TABLE_TOTAL_OFFSET - t.radius,
+                          left: totalR - t.radius,
+                          top: totalR - t.radius,
                           width: t.radius * 2,
                           height: t.radius * 2,
                           borderRadius: '50%',
