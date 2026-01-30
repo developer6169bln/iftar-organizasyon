@@ -29,9 +29,12 @@
 ## Start-Befehl (502 vermeiden)
 
 - **Aktuell:** Railway startet mit `npx next start` (ohne Migrations-Skript), damit die App zuverlässig hochkommt.
-- **Migration einmalig ausführen:** Nach dem ersten Deploy in Railway CLI:  
-  `railway link` → dann `railway run npx prisma migrate deploy`  
-  Oder im Dashboard: Service → **Settings** → **Deploy** → bei „Custom Start Command“ bleibt `npx next start`; Migration separat ausführen.
+- **Migration:** Die DB ist während des **Builds** nicht erreichbar (`postgres.railway.internal` nur zur Laufzeit). Daher **Migration nach dem Deploy einmalig ausführen** (lokal mit Railway CLI):
+  ```bash
+  railway link
+  railway run npx prisma migrate deploy
+  ```
+  Danach ist die Tabelle `table_plans` (und alle anderen) vorhanden; Tischplanung und Grundriss-Upload funktionieren.
 
 ## Sofort-Start (falls wieder 502)
 
