@@ -36,6 +36,13 @@
   ```
   Danach ist die Tabelle `table_plans` (und alle anderen) vorhanden; Tischplanung und Grundriss-Upload funktionieren.
 
+- **Nur Tabelle `table_plans` manuell anlegen:** Falls du nur die Tischplanung-Tabelle brauchst (ohne `prisma migrate deploy`):
+  ```bash
+  railway link
+  railway run psql $DATABASE_URL -f manual_create_table_plans.sql
+  ```
+  Oder im Railway Dashboard: **Postgres** → **Data** / **Query** → SQL aus `manual_create_table_plans.sql` einfügen und ausführen.
+
 ## Sofort-Start (falls wieder 502)
 
 - **Variable:** `SKIP_MIGRATION=true` (wenn du wieder `npm start` nutzt).

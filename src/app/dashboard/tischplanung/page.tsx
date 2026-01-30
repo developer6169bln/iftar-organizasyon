@@ -88,11 +88,9 @@ function normalizeTable(t: Record<string, unknown>): TableItem {
   }
 }
 
-const CHAIR_SIZE = 28
-const CHAIR_OFFSET = 16
-const TABLE_TOTAL_OFFSET = CHAIR_OFFSET + CHAIR_SIZE / 2 // 30
-
 export default function TischplanungPage() {
+  const [chairWidth, setChairWidth] = useState(28)
+  const [chairHeight, setChairHeight] = useState(28)
   const [eventId, setEventId] = useState<string | null>(null)
   const [floorPlanUrl, setFloorPlanUrl] = useState<string | null>(null)
   const [floorPlanDisplayUrl, setFloorPlanDisplayUrl] = useState<string | null>(null)
@@ -517,6 +515,28 @@ export default function TischplanungPage() {
           >
             + Podest (1:2)
           </button>
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-gray-700">Stuhl Breite</span>
+            <input
+              type="number"
+              min={12}
+              max={60}
+              value={chairWidth}
+              onChange={(e) => setChairWidth(Math.max(12, Math.min(60, parseInt(e.target.value, 10) || 28)))}
+              className="w-14 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-gray-700">Stuhl Länge</span>
+            <input
+              type="number"
+              min={12}
+              max={60}
+              value={chairHeight}
+              onChange={(e) => setChairHeight(Math.max(12, Math.min(60, parseInt(e.target.value, 10) || 28)))}
+              className="w-14 rounded border border-gray-300 px-2 py-1 text-sm"
+            />
+          </label>
           {selectedId && (
             <>
               {selectedTable && (
@@ -625,7 +645,8 @@ export default function TischplanungPage() {
             {floorPlanUrl && (
               <>
                 {planData.tables.map((t) => {
-                  const totalR = t.radius + TABLE_TOTAL_OFFSET
+                  const chairExtent = Math.max(chairWidth, chairHeight) / 2
+                  const totalR = t.radius + chairExtent
                   return (
                     <div
                       key={t.id}
@@ -664,7 +685,7 @@ export default function TischplanungPage() {
                       </div>
                       {Array.from({ length: t.seats }, (_, i) => {
                         const angle = (2 * Math.PI * i) / t.seats - Math.PI / 2
-                        const chairR = t.radius + CHAIR_OFFSET
+                        const chairR = t.radius
                         const cx = totalR + chairR * Math.cos(angle)
                         const cy = totalR + chairR * Math.sin(angle)
                         const guestId = t.seatAssignments?.[i] ?? null
@@ -675,17 +696,17 @@ export default function TischplanungPage() {
                             title={label}
                             style={{
                               position: 'absolute',
-                              left: cx - CHAIR_SIZE / 2,
-                              top: cy - CHAIR_SIZE / 2,
-                              width: CHAIR_SIZE,
-                              height: CHAIR_SIZE,
+                              left: cx - chairWidth / 2,
+                              top: cy - chairHeight / 2,
+                              width: chairWidth,
+                              height: chairHeight,
                               backgroundColor: guestId ? '#86efac' : '#e5e7eb',
                               border: '1px solid #6b7280',
                               borderRadius: 4,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: 9,
+                              fontSize: Math.max(8, Math.min(11, Math.min(chairWidth, chairHeight) - 4)),
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
