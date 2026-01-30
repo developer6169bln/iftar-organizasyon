@@ -491,6 +491,19 @@ export default function TischplanungPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl bg-white p-4 shadow">
+          <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-amber-50/80 px-3 py-2 text-sm">
+            <span className="font-medium text-amber-800">VIP-Plätze:</span>
+            <span className="font-semibold text-amber-900">
+              {planData.tables.filter((t) => t.isVip).reduce((sum, t) => sum + t.seats, 0)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-sky-50/80 px-3 py-2 text-sm">
+            <span className="font-medium text-sky-800">Übrige Plätze:</span>
+            <span className="font-semibold text-sky-900">
+              {planData.tables.filter((t) => !t.isVip).reduce((sum, t) => sum + t.seats, 0)}
+            </span>
+          </div>
+          <div className="mr-2 h-6 w-px bg-gray-300" aria-hidden />
           <div>
             <label className="block text-sm font-medium text-gray-700">Grundriss (PDF oder Bild)</label>
             <input
