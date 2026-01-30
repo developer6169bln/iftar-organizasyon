@@ -38,7 +38,15 @@
 - **Variable:** `SKIP_MIGRATION=true` (wenn du wieder `npm start` nutzt).
 - Oder **Start Command** im Railway-Dashboard auf `npx next start` stellen.
 
+## Grundriss (Tischplanung) dauerhaft speichern (Railway)
+
+- Ohne Volume gehen hochgeladene Grundrisse bei jedem Redeploy verloren.
+- **Lösung:** Railway **Volume** anlegen, an den Web-Service hängen, Mount-Pfad z.B. `/data/uploads`.
+- Beim Web-Service **Variable** setzen: `UPLOAD_DIR=/data/uploads`.
+- Dann werden Grundrisse im Volume gespeichert und bleiben nach Redeploy erhalten. Die App liefert sie über `/api/table-plan/floor-plan?eventId=...` aus.
+
 ## Änderungen im Code (bereits umgesetzt)
 
 - **railway.json + nixpacks.toml:** Start = `npx next start` (kein Skript, kein DB-Warten).
 - **Health:** `GET /api/health` gibt ohne `?db=1` sofort 200 zurück.
+- **Grundriss:** Wird über `GET /api/table-plan/floor-plan?eventId=...` ausgeliefert (vom Server gelesen, funktioniert mit `UPLOAD_DIR` / Volume).

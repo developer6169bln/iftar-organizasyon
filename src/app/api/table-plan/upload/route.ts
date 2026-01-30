@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
+import { getUploadsDir } from '@/lib/uploads'
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const ext = file.name.split('.').pop() || 'pdf'
     const fileName = `floorplan-${eventId}-${Date.now()}.${ext}`
-    const uploadsDir = join(process.cwd(), 'public', 'uploads')
+    const uploadsDir = getUploadsDir()
     const filePath = join(uploadsDir, fileName)
 
     await mkdir(uploadsDir, { recursive: true })

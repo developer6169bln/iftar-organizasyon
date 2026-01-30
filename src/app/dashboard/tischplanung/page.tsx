@@ -141,6 +141,7 @@ export default function TischplanungPage() {
       if (!res.ok) return
       const data = await res.json()
       setFloorPlanUrl(data.floorPlanUrl || null)
+      setFloorPlanLoadError(false)
       const rawTables = (data.planData?.tables || []) as Record<string, unknown>[]
       const rawPodiums = (data.planData?.podiums || []) as PodiumItem[]
       setPlanData({
@@ -431,7 +432,11 @@ export default function TischplanungPage() {
 
   const selectedTable = selectedId ? planData.tables.find((t) => t.id === selectedId) : null
   const isPdf = floorPlanUrl?.toLowerCase().endsWith('.pdf')
-  const urlForDisplay = floorPlanDisplayUrl ?? floorPlanUrl
+  // Grundriss immer über API laden (liest vom Server – funktioniert mit Railway Volume / public/uploads)
+  const urlForDisplay =
+    eventId && floorPlanUrl
+      ? `/api/table-plan/floor-plan?eventId=${eventId}`
+      : (floorPlanDisplayUrl ?? floorPlanUrl)
 
   if (loading) {
     return (
