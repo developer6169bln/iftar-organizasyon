@@ -52,8 +52,23 @@ model Event {
   checklistItems ChecklistItem[]
   programItems   ProgramItem[]
   invitations    Invitation[]
+  tablePlan      TablePlan?
 
   @@map("events")
+}
+
+// Tischplanung: Grundriss + Tische + Podeste pro Event
+model TablePlan {
+  id            String   @id @default(cuid())
+  eventId       String   @unique
+  floorPlanUrl  String?  // z.B. /uploads/floorplan-xxx.pdf
+  planData      String?  // JSON: { tables: [...], podiums: [...] }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("table_plans")
 }
 
 // Gäste / Davet Listesi
