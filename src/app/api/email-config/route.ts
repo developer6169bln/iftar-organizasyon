@@ -15,12 +15,9 @@ export async function GET() {
         imapPort: true,
         smtpHost: true,
         smtpPort: true,
-        mailgunDomain: true,
-        mailgunRegion: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
-        // Passwörter nicht zurückgeben
       },
     })
 
@@ -29,7 +26,7 @@ export async function GET() {
     console.error('Fehler beim Abrufen der Email-Konfigurationen:', error)
     const message = error instanceof Error ? error.message : String(error)
     const hint =
-      message.includes('mailgun') || message.includes('column') || message.includes('does not exist')
+      message.includes('column') || message.includes('does not exist')
         ? ' Möglicherweise fehlt die DB-Migration (prisma migrate deploy).'
         : ''
     return NextResponse.json(
@@ -56,9 +53,6 @@ export async function POST(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
-      mailgunDomain,
-      mailgunApiKey,
-      mailgunRegion,
       isActive,
     } = await request.json()
 
@@ -92,9 +86,6 @@ export async function POST(request: NextRequest) {
         imapPort: type === 'IMAP' ? imapPort : null,
         smtpHost: type === 'IMAP' ? smtpHost : null,
         smtpPort: type === 'IMAP' ? smtpPort : null,
-        mailgunDomain: type === 'MAILGUN' ? (mailgunDomain || null) : null,
-        mailgunApiKey: type === 'MAILGUN' ? (mailgunApiKey || null) : null,
-        mailgunRegion: type === 'MAILGUN' ? (mailgunRegion || null) : null,
         isActive: isActive || false,
       },
     })
@@ -103,7 +94,6 @@ export async function POST(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
-      mailgunApiKey: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Erstellen der Email-Konfiguration:', error)
@@ -128,9 +118,6 @@ export async function PUT(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
-      mailgunDomain,
-      mailgunApiKey,
-      mailgunRegion,
       isActive,
     } = await request.json()
 
@@ -157,8 +144,6 @@ export async function PUT(request: NextRequest) {
       imapPort: type === 'IMAP' ? imapPort : null,
       smtpHost: type === 'IMAP' ? smtpHost : null,
       smtpPort: type === 'IMAP' ? smtpPort : null,
-      mailgunDomain: type === 'MAILGUN' ? (mailgunDomain || null) : null,
-      mailgunRegion: type === 'MAILGUN' ? (mailgunRegion || null) : null,
       isActive,
     }
 
@@ -168,10 +153,6 @@ export async function PUT(request: NextRequest) {
     }
     if (appPassword !== undefined) {
       updateData.appPassword = appPassword || null
-    }
-    // Mailgun API Key nur aktualisieren, wenn ein neuer (nicht leerer) Wert gesendet wurde
-    if (type === 'MAILGUN' && mailgunApiKey !== undefined && String(mailgunApiKey).trim() !== '') {
-      updateData.mailgunApiKey = mailgunApiKey
     }
 
     const config = await prisma.emailConfig.update({
@@ -183,7 +164,6 @@ export async function PUT(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
-      mailgunApiKey: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Email-Konfiguration:', error)

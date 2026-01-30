@@ -45,8 +45,6 @@
 
 - **Einladungsliste 500:** Wenn beim Anklicken von „Einladungsliste“ in der Gästeliste ein 500-Fehler kommt, fehlen meist die Tabellen `invitations` bzw. `email_templates`. **Lösung:** Migration ausführen: `railway run npx prisma migrate deploy` (erstellt alle fehlenden Tabellen).
 
-- **„The column email_configs.mailgunDomain does not exist“:** Die Tabelle `email_configs` existiert, aber die Mailgun-Spalten fehlen (Migration `add_mailgun_to_email_configs` wurde nicht ausgeführt). **Lösung:** Entweder `railway run npx prisma migrate deploy` ausführen, oder nur die Spalten manuell anlegen: Im Railway Dashboard **Postgres** → **Data** / **Query** → SQL aus `manual_add_mailgun_columns.sql` einfügen und ausführen.
-
 ## Sofort-Start (falls wieder 502)
 
 - **Variable:** `SKIP_MIGRATION=true` (wenn du wieder `npm start` nutzt).

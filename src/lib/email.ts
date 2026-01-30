@@ -1,10 +1,8 @@
 import nodemailer from 'nodemailer'
-import Mailgun from 'mailgun.js'
-import FormData from 'form-data'
 import { prisma } from './prisma'
 
 export interface EmailConfigData {
-  type: 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILGUN'
+  type: 'GMAIL' | 'ICLOUD' | 'IMAP'
   email: string
   appPassword?: string
   password?: string
@@ -12,9 +10,6 @@ export interface EmailConfigData {
   smtpPort?: number
   imapHost?: string
   imapPort?: number
-  mailgunDomain?: string
-  mailgunApiKey?: string
-  mailgunRegion?: string
 }
 
 export async function getEmailTransporter() {
@@ -34,15 +29,7 @@ export async function getEmailTransporter() {
     hasPassword: !!config.password,
     smtpHost: config.smtpHost,
     smtpPort: config.smtpPort,
-    mailgunDomain: config.mailgunDomain,
-    mailgunRegion: config.mailgunRegion,
   })
-
-  // Mailgun verwendet HTTP API, kein SMTP-Transporter
-  if (config.type === 'MAILGUN') {
-    console.log('📧 Mailgun-Konfiguration erkannt - verwendet HTTP API (kein SMTP-Transporter)')
-    return null // Kein Transporter für Mailgun
-  }
 
   let transporter
 
@@ -140,48 +127,6 @@ export async function getEmailTransporter() {
   return transporter
 }
 
-// Mailgun Versand mit offizieller mailgun.js Bibliothek
-async function sendViaMailgun(
-  config: any,
-  to: string,
-  subject: string,
-  htmlBody: string,
-  textBody: string
-): Promise<{ success: true; messageId: string }> {
-  if (!config.mailgunDomain || !config.mailgunApiKey) {
-    throw new Error('Mailgun Domain oder API Key fehlt')
-  }
-
-  const region = config.mailgunRegion || 'US'
-  const mailgun = new Mailgun(FormData)
-  const mg = mailgun.client({
-    username: 'api',
-    key: config.mailgunApiKey,
-    ...(region === 'EU' ? { url: 'https://api.eu.mailgun.net' } : {}),
-  })
-
-  const fromStr = `"Iftar Organizasyon" <${config.email}>`
-
-  console.log('📧 Mailgun (mailgun.js):', {
-    domain: config.mailgunDomain,
-    region,
-    from: config.email,
-    to,
-  })
-
-  const data = await mg.messages.create(config.mailgunDomain, {
-    from: fromStr,
-    to: [to],
-    subject,
-    text: textBody,
-    html: htmlBody,
-  })
-
-  const messageId = data.id ?? data.message ?? 'mailgun-sent'
-  console.log('✅ Mailgun Email erfolgreich gesendet:', messageId)
-  return { success: true, messageId }
-}
-
 export async function sendInvitationEmail(
   to: string,
   subject: string,
@@ -206,28 +151,7 @@ export async function sendInvitationEmail(
 
   const textBody = htmlBody.replace(/<[^>]*>/g, '') // Plain-Text-Version
 
-  // Mailgun verwendet HTTP API statt SMTP
-  if (config.type === 'MAILGUN') {
-    try {
-      console.log('📧 Versuche E-Mail via Mailgun API zu senden an:', to)
-      console.log('📧 Von:', config.email)
-      console.log('📧 Betreff:', subject)
-
-      const result = await sendViaMailgun(config, to, subject, emailBody, textBody)
-      return result
-    } catch (error) {
-      console.error('❌ Mailgun Email-Versand fehlgeschlagen:', error)
-
-      let errorMessage = 'Fehler beim Senden der E-Mail via Mailgun'
-      if (error instanceof Error) {
-        errorMessage = error.message
-      }
-
-      throw new Error(errorMessage)
-    }
-  }
-
-  // SMTP-basierte Versand (Gmail, iCloud, IMAP)
+  // SMTP-basierter Versand (Gmail, iCloud, IMAP)
   const transporter = await getEmailTransporter()
   if (!transporter) {
     throw new Error('Email-Transporter konnte nicht erstellt werden')
