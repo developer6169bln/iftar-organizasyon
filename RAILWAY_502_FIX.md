@@ -26,13 +26,19 @@
 5. **Redeploy**
    - Nach Änderung der Variables: **Redeploy** auslösen (Deployments → ⋮ → Redeploy).
 
-## Sofort-Start (wenn App trotzdem nicht hochkommt)
+## Start-Befehl (502 vermeiden)
 
-- **Variable setzen:** `SKIP_MIGRATION=true`
-- Dann startet die App sofort ohne DB-Warte und ohne Migration. Danach im Railway-Dashboard oder per CLI Migration manuell ausführen: `railway run npx prisma migrate deploy`.
+- **Aktuell:** Railway startet mit `npx next start` (ohne Migrations-Skript), damit die App zuverlässig hochkommt.
+- **Migration einmalig ausführen:** Nach dem ersten Deploy in Railway CLI:  
+  `railway link` → dann `railway run npx prisma migrate deploy`  
+  Oder im Dashboard: Service → **Settings** → **Deploy** → bei „Custom Start Command“ bleibt `npx next start`; Migration separat ausführen.
+
+## Sofort-Start (falls wieder 502)
+
+- **Variable:** `SKIP_MIGRATION=true` (wenn du wieder `npm start` nutzt).
+- Oder **Start Command** im Railway-Dashboard auf `npx next start` stellen.
 
 ## Änderungen im Code (bereits umgesetzt)
 
-- **Health:** `GET /api/health` gibt ohne `?db=1` sofort 200 zurück → Railway sieht „Service läuft“.
-- **Start:** DB-Warte nur 15 s, Migration max. 3 Versuche – danach startet die App **immer** (kein `process.exit(1)` mehr).
-- **Option:** `SKIP_MIGRATION=true` → sofort `next start`, keine DB/Migration.
+- **railway.json + nixpacks.toml:** Start = `npx next start` (kein Skript, kein DB-Warten).
+- **Health:** `GET /api/health` gibt ohne `?db=1` sofort 200 zurück.
