@@ -194,15 +194,21 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Email-Konfiguration löschen
+// DELETE: Eine Email-Konfiguration löschen (id=...) oder alle (?all=true)
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
+    const deleteAll = searchParams.get('all') === 'true'
+
+    if (deleteAll) {
+      const result = await prisma.emailConfig.deleteMany({})
+      return NextResponse.json({ success: true, deleted: result.count })
+    }
 
     if (!id) {
       return NextResponse.json(
-        { error: 'ID ist erforderlich' },
+        { error: 'ID ist erforderlich (oder ?all=true um alle zu löschen)' },
         { status: 400 }
       )
     }

@@ -371,6 +371,26 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleDeleteAllConfigs = async () => {
+    if (!confirm('Möchten Sie wirklich alle E-Mail-Konfigurationen löschen?')) {
+      return
+    }
+    try {
+      const response = await fetch('/api/email-config?all=true', { method: 'DELETE' })
+      if (response.ok) {
+        const data = await response.json()
+        await loadEmailConfigs()
+        alert(`Alle E-Mail-Konfigurationen gelöscht (${data.deleted ?? 0} Einträge)`)
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen aller Konfigurationen:', error)
+      alert('Fehler beim Löschen')
+    }
+  }
+
   // Template-Funktionen
   const handleSaveTemplate = async () => {
     try {
@@ -2176,7 +2196,18 @@ export default function InvitationsPage() {
 
             {/* Liste der vorhandenen Konfigurationen */}
             <div>
-              <h3 className="mb-4 text-lg font-medium">Vorhandene Konfigurationen</h3>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-medium">Vorhandene Konfigurationen</h3>
+                {emailConfigs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteAllConfigs}
+                    className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100"
+                  >
+                    Alle löschen
+                  </button>
+                )}
+              </div>
               {emailConfigs.length === 0 ? (
                 <p className="text-sm text-gray-500">Keine Konfigurationen vorhanden</p>
               ) : (
