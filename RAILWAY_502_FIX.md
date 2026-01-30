@@ -26,7 +26,13 @@
 5. **Redeploy**
    - Nach Änderung der Variables: **Redeploy** auslösen (Deployments → ⋮ → Redeploy).
 
+## Sofort-Start (wenn App trotzdem nicht hochkommt)
+
+- **Variable setzen:** `SKIP_MIGRATION=true`
+- Dann startet die App sofort ohne DB-Warte und ohne Migration. Danach im Railway-Dashboard oder per CLI Migration manuell ausführen: `railway run npx prisma migrate deploy`.
+
 ## Änderungen im Code (bereits umgesetzt)
 
 - **Health:** `GET /api/health` gibt ohne `?db=1` sofort 200 zurück → Railway sieht „Service läuft“.
-- **Start:** DB-Wartezeit auf 60 s reduziert, `NODE_ENV=production` gesetzt.
+- **Start:** DB-Warte nur 15 s, Migration max. 3 Versuche – danach startet die App **immer** (kein `process.exit(1)` mehr).
+- **Option:** `SKIP_MIGRATION=true` → sofort `next start`, keine DB/Migration.
