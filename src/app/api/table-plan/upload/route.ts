@@ -61,8 +61,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, url })
   } catch (error) {
     console.error('Table plan upload error:', error)
+    const msg = error instanceof Error ? error.message : 'Unbekannter Fehler'
     return NextResponse.json(
-      { error: 'Fehler beim Hochladen des Grundrisses' },
+      { error: 'Fehler beim Hochladen des Grundrisses', details: msg },
       { status: 500 }
     )
   }

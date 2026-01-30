@@ -207,8 +207,9 @@ export default function TischplanungPage() {
       form.append('eventId', eventId)
       const res = await fetch('/api/table-plan/upload', { method: 'POST', body: form })
       if (!res.ok) {
-        const err = await res.json()
-        alert(err.error || 'Upload fehlgeschlagen')
+        const err = await res.json().catch(() => ({}))
+        const msg = [err.error, err.details].filter(Boolean).join(': ') || 'Upload fehlgeschlagen'
+        alert(msg)
         return
       }
       const { url } = await res.json()
