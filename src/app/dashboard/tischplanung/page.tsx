@@ -8,11 +8,13 @@ type TableItem = {
   type: 'table'
   x: number
   y: number
-  width: number
-  height: number
+  /** Radius des runden Tischs (Mittelpunkt = x, y) */
+  radius: number
   tableNumber: number
   isVip: boolean
   seats: number
+  /** Gast-ID pro Stuhl (Index = Sitzplatz 0..seats-1), null = frei */
+  seatAssignments?: (string | null)[]
 }
 
 type PodiumItem = {
@@ -44,9 +46,57 @@ function isVipGuest(guest: any): boolean {
   return v === true || v === 'true'
 }
 
+/** Alte Tische (width/height) in runde Tische (radius, Mittelpunkt) umwandeln */
+function normalizeTable(t: Record<string, unknown>): TableItem {
+  const id = String(t.id)
+  const type = 'table' as const
+  const tableNumber = Number(t.tableNumber) || 1
+  const isVip = Boolean(t.isVip)
+  const seats = Math.max(1, Number(t.seats) || 4)
+  const seatAssignments = Array.isArray(t.seatAssignments)
+    ? (t.seatAssignments as (string | null)[])
+    : Array(seats).fill(null)
+
+  if (typeof (t as TableItem).radius === 'number') {
+    return {
+      id,
+      type,
+      x: Number(t.x) || 0,
+      y: Number(t.y) || 0,
+      radius: (t as TableItem).radius,
+      tableNumber,
+      isVip,
+      seats,
+      seatAssignments: seatAssignments.slice(0, seats),
+    }
+  }
+  const w = Number(t.width) || 80
+  const h = Number(t.height) || 60
+  const radius = Math.min(w, h) / 2
+  const x = (Number(t.x) || 0) + w / 2
+  const y = (Number(t.y) || 0) + h / 2
+  return {
+    id,
+    type,
+    x,
+    y,
+    radius,
+    tableNumber,
+    isVip,
+    seats,
+    seatAssignments: seatAssignments.slice(0, seats),
+  }
+}
+
+const CHAIR_SIZE = 28
+const CHAIR_OFFSET = 16
+const TABLE_TOTAL_OFFSET = CHAIR_OFFSET + CHAIR_SIZE / 2 // 30
+
 export default function TischplanungPage() {
   const [eventId, setEventId] = useState<string | null>(null)
   const [floorPlanUrl, setFloorPlanUrl] = useState<string | null>(null)
+  const [floorPlanDisplayUrl, setFloorPlanDisplayUrl] = useState<string | null>(null)
+  const [floorPlanLoadError, setFloorPlanLoadError] = useState(false)
   const [planData, setPlanData] = useState<{ tables: TableItem[]; podiums: PodiumItem[] }>({
     tables: [],
     podiums: [],
@@ -58,7 +108,8 @@ export default function TischplanungPage() {
   const [nextTableNumber, setNextTableNumber] = useState(1)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [guests, setGuests] = useState<any[]>([])
-  const [assigningGuestIds, setAssigningGuestIds] = useState<string[]>([])
+  const [guestNameMap, setGuestNameMap] = useState<Record<string, string>>({})
+  const [assigningSeats, setAssigningSeats] = useState<(string | null)[]>([])
   const [assigning, setAssigning] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
@@ -90,14 +141,12 @@ export default function TischplanungPage() {
       if (!res.ok) return
       const data = await res.json()
       setFloorPlanUrl(data.floorPlanUrl || null)
-      setPlanData(
-        data.planData && (data.planData.tables || data.planData.podiums)
-          ? {
-              tables: data.planData.tables || [],
-              podiums: data.planData.podiums || [],
-            }
-          : { tables: [], podiums: [] }
-      )
+      const rawTables = (data.planData?.tables || []) as Record<string, unknown>[]
+      const rawPodiums = (data.planData?.podiums || []) as PodiumItem[]
+      setPlanData({
+        tables: rawTables.map(normalizeTable),
+        podiums: rawPodiums,
+      })
       const maxNum =
         (data.planData?.tables?.length &&
           Math.max(0, ...(data.planData.tables as TableItem[]).map((t) => t.tableNumber))) ||
@@ -117,6 +166,35 @@ export default function TischplanungPage() {
   useEffect(() => {
     if (eventId) loadPlan()
   }, [eventId, loadPlan])
+
+  useEffect(() => {
+    if (!floorPlanUrl) {
+      setFloorPlanDisplayUrl(null)
+      setFloorPlanLoadError(false)
+      return
+    }
+    setFloorPlanLoadError(false)
+    if (typeof window !== 'undefined' && !floorPlanUrl.startsWith('http')) {
+      setFloorPlanDisplayUrl(window.location.origin + floorPlanUrl)
+    } else {
+      setFloorPlanDisplayUrl(floorPlanUrl)
+    }
+  }, [floorPlanUrl])
+
+  useEffect(() => {
+    if (!eventId || planData.tables.length === 0) return
+    let cancelled = false
+    fetch(`/api/guests?eventId=${eventId}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((list: any[]) => {
+        if (cancelled) return
+        const map: Record<string, string> = {}
+        list.forEach((g) => { map[g.id] = g.name || '' })
+        setGuestNameMap(map)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [eventId, planData.tables.length])
 
   const handleUploadFloorPlan = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -168,16 +246,17 @@ export default function TischplanungPage() {
 
   const addTable = () => {
     const id = `table-${Date.now()}`
+    const seats = 6
     const newTable: TableItem = {
       id,
       type: 'table',
-      x: 100 + planData.tables.length * 30,
-      y: 100 + planData.tables.length * 30,
-      width: 80,
-      height: 60,
+      x: 120 + planData.tables.length * 100,
+      y: 120 + planData.tables.length * 100,
+      radius: 40,
       tableNumber: nextTableNumber,
       isVip: false,
-      seats: 4,
+      seats,
+      seatAssignments: Array(seats).fill(null),
     }
     setPlanData((prev) => ({
       ...prev,
@@ -305,6 +384,8 @@ export default function TischplanungPage() {
     if (!selectedId || !eventId) return
     const table = planData.tables.find((t) => t.id === selectedId)
     if (!table) return
+    const seats = Array(table.seats).fill(null).map((_, i) => table.seatAssignments?.[i] ?? null)
+    setAssigningSeats(seats)
     setShowAssignModal(true)
     try {
       const res = await fetch(`/api/guests?eventId=${eventId}`)
@@ -318,12 +399,14 @@ export default function TischplanungPage() {
     } catch (e) {
       console.error(e)
     }
-    setAssigningGuestIds([])
   }
 
   const handleAssign = async () => {
     const table = planData.tables.find((t) => t.id === selectedId)
-    if (!table || !eventId || assigningGuestIds.length === 0) return
+    if (!table || !eventId) return
+    const assignments = assigningSeats
+      .map((guestId, seatIndex) => ({ seatIndex, guestId }))
+      .filter((a) => a.guestId != null && a.guestId !== '')
     setAssigning(true)
     try {
       const res = await fetch('/api/table-plan/assign', {
@@ -332,10 +415,11 @@ export default function TischplanungPage() {
         body: JSON.stringify({
           eventId,
           tableNumber: table.tableNumber,
-          guestIds: assigningGuestIds,
+          assignments: assignments.map((a) => ({ seatIndex: a.seatIndex, guestId: a.guestId })),
         }),
       })
       if (!res.ok) throw new Error('Zuweisung fehlgeschlagen')
+      updateTable(table.id, { seatAssignments: assigningSeats })
       setShowAssignModal(false)
     } catch (e) {
       console.error(e)
@@ -347,6 +431,7 @@ export default function TischplanungPage() {
 
   const selectedTable = selectedId ? planData.tables.find((t) => t.id === selectedId) : null
   const isPdf = floorPlanUrl?.toLowerCase().endsWith('.pdf')
+  const urlForDisplay = floorPlanDisplayUrl ?? floorPlanUrl
 
   if (loading) {
     return (
@@ -420,14 +505,34 @@ export default function TischplanungPage() {
                     <span className="text-sm">VIP-Tisch</span>
                   </label>
                   <label className="flex items-center gap-2">
+                    <span className="text-sm">Radius</span>
+                    <input
+                      type="number"
+                      min={20}
+                      max={80}
+                      value={selectedTable.radius}
+                      onChange={(e) =>
+                        updateTable(selectedId, {
+                          radius: Math.max(20, Math.min(80, parseInt(e.target.value, 10) || 40)),
+                        })
+                      }
+                      className="w-14 rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
                     <span className="text-sm">Sitzplätze</span>
                     <input
                       type="number"
                       min={1}
+                      max={24}
                       value={selectedTable.seats}
-                      onChange={(e) =>
-                        updateTable(selectedId, { seats: parseInt(e.target.value, 10) || 1 })
-                      }
+                      onChange={(e) => {
+                        const newSeats = Math.max(1, Math.min(24, parseInt(e.target.value, 10) || 1))
+                        const cur = selectedTable.seatAssignments ?? []
+                        const next = [...cur.slice(0, newSeats)]
+                        while (next.length < newSeats) next.push(null)
+                        updateTable(selectedId, { seats: newSeats, seatAssignments: next })
+                      }}
                       className="w-16 rounded border border-gray-300 px-2 py-1 text-sm"
                     />
                   </label>
@@ -461,18 +566,21 @@ export default function TischplanungPage() {
               className="absolute inset-0 flex items-center justify-center bg-gray-200"
               style={{ pointerEvents: 'none' }}
             >
-              {isPdf ? (
+              {floorPlanLoadError ? (
+                <p className="text-gray-500">Grundriss konnte nicht geladen werden.</p>
+              ) : isPdf ? (
                 <object
-                  data={floorPlanUrl}
+                  data={urlForDisplay || undefined}
                   type="application/pdf"
-                  className="h-full w-full"
+                  className="h-full w-full min-h-[600px]"
                   style={{ minHeight: 600 }}
                 />
               ) : (
                 <img
-                  src={floorPlanUrl}
+                  src={urlForDisplay || undefined}
                   alt="Grundriss"
                   className="max-h-full max-w-full object-contain"
+                  onError={() => setFloorPlanLoadError(true)}
                 />
               )}
             </div>
@@ -486,37 +594,81 @@ export default function TischplanungPage() {
           <div className="absolute left-0 top-0 h-full w-full" style={{ pointerEvents: 'auto' }}>
             {floorPlanUrl && (
               <>
-                {planData.tables.map((t) => (
-                  <div
-                    key={t.id}
-                    onMouseDown={(e) => {
-                      e.stopPropagation()
-                      handleMouseDown(e, t)
-                    }}
-                    style={{
-                      position: 'absolute',
-                      left: t.x,
-                      top: t.y,
-                      width: t.width,
-                      height: t.height,
-                      pointerEvents: 'auto',
-                      cursor: 'move',
-                      backgroundColor: t.isVip ? '#fef08a' : '#bae6fd',
-                      border: selectedId === t.id ? '3px solid #4f46e5' : '2px solid #0ea5e9',
-                      borderRadius: 8,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    <span>Tisch {t.tableNumber}</span>
-                    {t.isVip && <span className="text-amber-800">VIP</span>}
-                    <span className="text-gray-600">{t.seats} Plätze</span>
-                  </div>
-                ))}
+                {planData.tables.map((t) => {
+                  const totalR = t.radius + TABLE_TOTAL_OFFSET
+                  return (
+                    <div
+                      key={t.id}
+                      onMouseDown={(e) => {
+                        e.stopPropagation()
+                        handleMouseDown(e, t)
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: t.x - totalR,
+                        top: t.y - totalR,
+                        width: totalR * 2,
+                        height: totalR * 2,
+                        pointerEvents: 'auto',
+                        cursor: 'move',
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: TABLE_TOTAL_OFFSET - t.radius,
+                          top: TABLE_TOTAL_OFFSET - t.radius,
+                          width: t.radius * 2,
+                          height: t.radius * 2,
+                          borderRadius: '50%',
+                          backgroundColor: t.isVip ? '#fef08a' : '#bae6fd',
+                          border: selectedId === t.id ? '3px solid #4f46e5' : '2px solid #0ea5e9',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        Tisch {t.tableNumber}
+                      </div>
+                      {Array.from({ length: t.seats }, (_, i) => {
+                        const angle = (2 * Math.PI * i) / t.seats - Math.PI / 2
+                        const chairR = t.radius + CHAIR_OFFSET
+                        const cx = totalR + chairR * Math.cos(angle)
+                        const cy = totalR + chairR * Math.sin(angle)
+                        const guestId = t.seatAssignments?.[i] ?? null
+                        const label = guestId ? (guestNameMap[guestId] || `Platz ${i + 1}`) : `Platz ${i + 1}`
+                        return (
+                          <div
+                            key={i}
+                            title={label}
+                            style={{
+                              position: 'absolute',
+                              left: cx - CHAIR_SIZE / 2,
+                              top: cy - CHAIR_SIZE / 2,
+                              width: CHAIR_SIZE,
+                              height: CHAIR_SIZE,
+                              backgroundColor: guestId ? '#86efac' : '#e5e7eb',
+                              border: '1px solid #6b7280',
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 9,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              padding: 2,
+                            }}
+                          >
+                            {guestId ? (guestNameMap[guestId] ? guestNameMap[guestId].slice(0, 6) : i + 1) : i + 1}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
                 {planData.podiums.map((p) => (
                   <div
                     key={p.id}
@@ -552,7 +704,7 @@ export default function TischplanungPage() {
           <div className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-xl">
             <div className="border-b p-4">
               <h2 className="text-lg font-semibold">
-                Gäste Tisch {selectedTable.tableNumber} zuweisen
+                Stühle Tisch {selectedTable.tableNumber} zuweisen
                 {selectedTable.isVip && ' (nur VIP-Gäste)'}
               </h2>
             </div>
@@ -560,27 +712,43 @@ export default function TischplanungPage() {
               {guests.length === 0 ? (
                 <p className="text-gray-500">Keine passenden Gäste.</p>
               ) : (
-                <ul className="space-y-2">
-                  {guests.map((g) => (
-                    <li key={g.id} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={assigningGuestIds.includes(g.id)}
+                <div className="space-y-3">
+                  {Array.from({ length: selectedTable.seats }, (_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <label className="w-16 shrink-0 text-sm font-medium text-gray-700">
+                        Platz {i + 1}
+                      </label>
+                      <select
+                        value={assigningSeats[i] ?? ''}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setAssigningGuestIds((prev) => [...prev, g.id])
-                          } else {
-                            setAssigningGuestIds((prev) => prev.filter((id) => id !== g.id))
-                          }
+                          const v = e.target.value || null
+                          setAssigningSeats((prev) => {
+                            const next = [...prev]
+                            next[i] = v
+                            return next
+                          })
                         }}
-                      />
-                      <span>{g.name}</span>
-                      {g.tableNumber && (
-                        <span className="text-xs text-gray-500">(Tisch {g.tableNumber})</span>
-                      )}
-                    </li>
+                        className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      >
+                        <option value="">— Kein Gast —</option>
+                        {guests
+                          .filter(
+                            (g) =>
+                              g.id === (assigningSeats[i] ?? '') ||
+                              !assigningSeats.some((id, j) => j !== i && id === g.id)
+                          )
+                          .map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                              {g.tableNumber && g.tableNumber !== selectedTable.tableNumber
+                                ? ` (Tisch ${g.tableNumber})`
+                                : ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
             <div className="flex justify-end gap-2 border-t p-4">
@@ -594,10 +762,10 @@ export default function TischplanungPage() {
               <button
                 type="button"
                 onClick={handleAssign}
-                disabled={assigning || assigningGuestIds.length === 0}
+                disabled={assigning}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {assigning ? 'Wird zugewiesen…' : `Zuweisen (${assigningGuestIds.length})`}
+                {assigning ? 'Wird zugewiesen…' : 'Zuweisen'}
               </button>
             </div>
           </div>
