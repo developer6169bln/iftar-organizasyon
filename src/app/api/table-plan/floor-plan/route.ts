@@ -51,8 +51,9 @@ export async function GET(request: NextRequest) {
       return new NextResponse(null, { status: 404 })
     }
     console.error('Floor plan serve error:', err)
+    const msg = err instanceof Error ? err.message : String(err)
     return NextResponse.json(
-      { error: 'Grundriss konnte nicht geladen werden' },
+      { error: 'Grundriss konnte nicht geladen werden', details: msg },
       { status: 500 }
     )
   }

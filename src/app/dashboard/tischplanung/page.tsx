@@ -102,6 +102,7 @@ export default function TischplanungPage() {
     podiums: [],
   })
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -136,9 +137,14 @@ export default function TischplanungPage() {
 
   const loadPlan = useCallback(async () => {
     if (!eventId) return
+    setLoadError(null)
     try {
       const res = await fetch(`/api/table-plan?eventId=${eventId}`)
-      if (!res.ok) return
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setLoadError(err.details || err.error || `Fehler ${res.status}`)
+        return
+      }
       const data = await res.json()
       setFloorPlanUrl(data.floorPlanUrl || null)
       setFloorPlanLoadError(false)
@@ -155,6 +161,7 @@ export default function TischplanungPage() {
       setNextTableNumber(maxNum + 1)
     } catch (e) {
       console.error(e)
+      setLoadError(e instanceof Error ? e.message : 'Laden fehlgeschlagen')
     } finally {
       setLoading(false)
     }
@@ -471,6 +478,18 @@ export default function TischplanungPage() {
           </div>
         </div>
       </header>
+
+      {loadError && (
+        <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <strong>Tischplanung konnte nicht geladen werden:</strong> {loadError}
+            <br />
+            <span className="text-red-600">
+              Falls „relation &quot;table_plans&quot; does not exist&quot;: Auf Railway Migration ausführen (railway run npx prisma migrate deploy).
+            </span>
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl bg-white p-4 shadow">

@@ -41,8 +41,9 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Table plan GET error:', error)
+    const msg = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Fehler beim Abrufen der Tischplanung' },
+      { error: 'Fehler beim Abrufen der Tischplanung', details: msg },
       { status: 500 }
     )
   }
@@ -98,8 +99,9 @@ export async function PUT(request: NextRequest) {
     })
   } catch (error) {
     console.error('Table plan PUT error:', error)
+    const msg = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Fehler beim Speichern der Tischplanung' },
+      { error: 'Fehler beim Speichern der Tischplanung', details: msg },
       { status: 500 }
     )
   }
