@@ -296,19 +296,21 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
-// Email-Konfiguration (Gmail, iCloud, SMTP/IMAP)
+// Email-Konfiguration (Gmail, iCloud, SMTP/IMAP oder Mailjet API)
 model EmailConfig {
-  id          String   @id @default(cuid())
-  name        String // Name der Konfiguration
-  type        String // GMAIL | ICLOUD | IMAP
-  email       String // Absender-E-Mail
-  password    String? // Passwort (verschlüsselt)
-  appPassword String? // Gmail App-Passwort
-  imapHost    String? // IMAP Host (z.B. imap.gmail.com)
-  imapPort    Int? // IMAP Port (z.B. 993)
-  smtpHost    String? // SMTP Host
-  smtpPort    Int? // SMTP Port (z.B. 587)
-  isActive    Boolean  @default(false) // Nur eine aktive Konfiguration
+  id               String   @id @default(cuid())
+  name             String // Name der Konfiguration
+  type             String // GMAIL | ICLOUD | IMAP | MAILJET
+  email            String // Absender-E-Mail
+  password         String? // Passwort (verschlüsselt)
+  appPassword      String? // Gmail App-Passwort
+  imapHost         String? // IMAP Host (z.B. imap.gmail.com)
+  imapPort         Int? // IMAP Port (z.B. 993)
+  smtpHost         String? // SMTP Host
+  smtpPort         Int? // SMTP Port (z.B. 587)
+  mailjetApiKey    String? // Mailjet API Key (public)
+  mailjetApiSecret String? // Mailjet API Secret (private)
+  isActive         Boolean  @default(false) // Nur eine aktive Konfiguration
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

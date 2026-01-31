@@ -15,6 +15,7 @@ export async function GET() {
         imapPort: true,
         smtpHost: true,
         smtpPort: true,
+        mailjetApiKey: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -53,6 +54,8 @@ export async function POST(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
+      mailjetApiKey,
+      mailjetApiSecret,
       isActive,
     } = await request.json()
 
@@ -86,6 +89,8 @@ export async function POST(request: NextRequest) {
         imapPort: type === 'IMAP' ? imapPort : null,
         smtpHost: type === 'IMAP' ? smtpHost : null,
         smtpPort: type === 'IMAP' ? smtpPort : null,
+        mailjetApiKey: type === 'MAILJET' ? (mailjetApiKey || null) : null,
+        mailjetApiSecret: type === 'MAILJET' ? (mailjetApiSecret || null) : null,
         isActive: isActive || false,
       },
     })
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
+      mailjetApiSecret: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Erstellen der Email-Konfiguration:', error)
@@ -118,6 +124,8 @@ export async function PUT(request: NextRequest) {
       imapPort,
       smtpHost,
       smtpPort,
+      mailjetApiKey,
+      mailjetApiSecret,
       isActive,
     } = await request.json()
 
@@ -144,15 +152,19 @@ export async function PUT(request: NextRequest) {
       imapPort: type === 'IMAP' ? imapPort : null,
       smtpHost: type === 'IMAP' ? smtpHost : null,
       smtpPort: type === 'IMAP' ? smtpPort : null,
+      mailjetApiKey: type === 'MAILJET' ? (mailjetApiKey ?? null) : null,
       isActive,
     }
 
-    // Nur Passwörter aktualisieren wenn angegeben
+    // Nur Passwörter/Secrets aktualisieren wenn angegeben
     if (password !== undefined) {
       updateData.password = password || null
     }
     if (appPassword !== undefined) {
       updateData.appPassword = appPassword || null
+    }
+    if (type === 'MAILJET' && mailjetApiSecret !== undefined && String(mailjetApiSecret).trim() !== '') {
+      updateData.mailjetApiSecret = mailjetApiSecret
     }
 
     const config = await prisma.emailConfig.update({
@@ -164,6 +176,7 @@ export async function PUT(request: NextRequest) {
       ...config,
       password: undefined,
       appPassword: undefined,
+      mailjetApiSecret: undefined,
     })
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Email-Konfiguration:', error)

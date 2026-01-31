@@ -1,8 +1,9 @@
 import nodemailer from 'nodemailer'
+import Mailjet from 'node-mailjet'
 import { prisma } from './prisma'
 
 export interface EmailConfigData {
-  type: 'GMAIL' | 'ICLOUD' | 'IMAP'
+  type: 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILJET'
   email: string
   appPassword?: string
   password?: string
@@ -10,6 +11,8 @@ export interface EmailConfigData {
   smtpPort?: number
   imapHost?: string
   imapPort?: number
+  mailjetApiKey?: string
+  mailjetApiSecret?: string
 }
 
 export async function getEmailTransporter() {
@@ -29,7 +32,14 @@ export async function getEmailTransporter() {
     hasPassword: !!config.password,
     smtpHost: config.smtpHost,
     smtpPort: config.smtpPort,
+    hasMailjetKey: config.type === 'MAILJET' ? !!config.mailjetApiKey : undefined,
   })
+
+  // Mailjet verwendet HTTP API, kein SMTP-Transporter
+  if (config.type === 'MAILJET') {
+    console.log('📧 Mailjet-Konfiguration – verwendet HTTP API (kein SMTP-Transporter)')
+    return null
+  }
 
   let transporter
 
@@ -127,6 +137,39 @@ export async function getEmailTransporter() {
   return transporter
 }
 
+// Mailjet-Versand per Send API v3.1
+async function sendViaMailjet(
+  config: { email: string; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody: string
+): Promise<{ success: true; messageId: string }> {
+  if (!config.mailjetApiKey || !config.mailjetApiSecret) {
+    throw new Error('Mailjet API Key und API Secret sind erforderlich')
+  }
+
+  const mailjet = Mailjet.apiConnect(config.mailjetApiKey, config.mailjetApiSecret)
+
+  const request = mailjet.post('send', { version: 'v3.1' }).request({
+    Messages: [
+      {
+        From: { Email: config.email, Name: 'Iftar Organizasyon' },
+        To: [{ Email: to, Name: to }],
+        Subject: subject,
+        TextPart: textBody,
+        HTMLPart: htmlBody,
+      },
+    ],
+  })
+
+  const result = await request
+  const messageId = (result.body as { Messages?: { To?: { MessageID?: number }[] }[] })?.Messages?.[0]?.To?.[0]?.MessageID
+  const idStr = messageId != null ? String(messageId) : 'mailjet-sent'
+  console.log('✅ Mailjet E-Mail gesendet:', idStr)
+  return { success: true, messageId: idStr }
+}
+
 export async function sendInvitationEmail(
   to: string,
   subject: string,
@@ -150,6 +193,19 @@ export async function sendInvitationEmail(
     + `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`
 
   const textBody = htmlBody.replace(/<[^>]*>/g, '') // Plain-Text-Version
+
+  // Mailjet: HTTP API statt SMTP
+  if (config.type === 'MAILJET') {
+    try {
+      console.log('📧 Versuche E-Mail via Mailjet API an:', to)
+      const result = await sendViaMailjet(config, to, subject, emailBody, textBody)
+      return result
+    } catch (error) {
+      console.error('❌ Mailjet E-Mail-Versand fehlgeschlagen:', error)
+      const msg = error instanceof Error ? error.message : 'Fehler beim Senden der E-Mail via Mailjet'
+      throw new Error(msg)
+    }
+  }
 
   // SMTP-basierter Versand (Gmail, iCloud, IMAP)
   const transporter = await getEmailTransporter()

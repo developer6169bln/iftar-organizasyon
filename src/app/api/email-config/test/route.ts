@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import Mailjet from 'node-mailjet'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -61,6 +62,46 @@ export async function POST(request: NextRequest) {
         { error: 'SMTP-Host oder Passwort fehlt' },
         { status: 400 }
       )
+    }
+
+    if (config.type === 'MAILJET' && (!config.mailjetApiKey || !config.mailjetApiSecret)) {
+      return NextResponse.json(
+        { error: 'Mailjet API Key und API Secret sind erforderlich' },
+        { status: 400 }
+      )
+    }
+
+    // Mailjet: Versand per Send API v3.1
+    if (config.type === 'MAILJET') {
+      try {
+        const mailjet = Mailjet.apiConnect(config.mailjetApiKey!, config.mailjetApiSecret!)
+        const request = mailjet.post('send', { version: 'v3.1' }).request({
+          Messages: [
+            {
+              From: { Email: config.email, Name: 'Iftar Organizasyon Test' },
+              To: [{ Email: testEmail, Name: testEmail }],
+              Subject: 'Test-E-Mail von Iftar Organizasyon',
+              TextPart: 'Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailjet-Konfiguration korrekt.',
+              HTMLPart: '<p>Dies ist eine Test-E-Mail. Wenn Sie diese Nachricht erhalten, funktioniert Ihre Mailjet-Konfiguration korrekt.</p>',
+            },
+          ],
+        })
+        const result = await request
+        const messageId = (result.body as { Messages?: { To?: { MessageID?: number }[] }[] })?.Messages?.[0]?.To?.[0]?.MessageID
+        console.log('✅ Mailjet Test-E-Mail gesendet:', messageId)
+        return NextResponse.json({
+          success: true,
+          message: 'Test-E-Mail erfolgreich gesendet',
+          messageId: messageId != null ? String(messageId) : 'mailjet-sent',
+        })
+      } catch (error) {
+        console.error('❌ Fehler beim Senden der Mailjet Test-E-Mail:', error)
+        const details = error instanceof Error ? error.message : 'Unbekannter Fehler'
+        return NextResponse.json(
+          { error: 'Fehler beim Senden der Test-E-Mail', details },
+          { status: 500 }
+        )
+      }
     }
 
     // Erstelle Transporter (für SMTP-basierte Provider)

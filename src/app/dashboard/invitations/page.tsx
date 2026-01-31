@@ -33,7 +33,7 @@ export default function InvitationsPage() {
   })
   const [configForm, setConfigForm] = useState({
     name: '',
-    type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP',
+    type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILJET',
     email: '',
     appPassword: '',
     password: '',
@@ -41,6 +41,8 @@ export default function InvitationsPage() {
     smtpPort: 587,
     imapHost: '',
     imapPort: 993,
+    mailjetApiKey: '',
+    mailjetApiSecret: '',
     isActive: false,
   })
   const [editingConfig, setEditingConfig] = useState<any>(null)
@@ -248,6 +250,11 @@ export default function InvitationsPage() {
         return
       }
 
+      if (configForm.type === 'MAILJET' && (!configForm.mailjetApiKey || !configForm.mailjetApiSecret)) {
+        alert('Mailjet API Key und API Secret sind erforderlich')
+        return
+      }
+
       const url = editingConfig ? '/api/email-config' : '/api/email-config'
       const method = editingConfig ? 'PUT' : 'POST'
 
@@ -269,6 +276,8 @@ export default function InvitationsPage() {
           smtpPort: 587,
           imapHost: '',
           imapPort: 993,
+          mailjetApiKey: '',
+          mailjetApiSecret: '',
           isActive: false,
         })
         setEditingConfig(null)
@@ -295,6 +304,8 @@ export default function InvitationsPage() {
       smtpPort: config.smtpPort || 587,
       imapHost: config.imapHost || '',
       imapPort: config.imapPort || 993,
+      mailjetApiKey: config.mailjetApiKey || '',
+      mailjetApiSecret: '',
       isActive: config.isActive || false,
     })
   }
@@ -1905,12 +1916,13 @@ export default function InvitationsPage() {
                   </label>
                   <select
                     value={configForm.type}
-                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'ICLOUD' | 'IMAP' })}
+                    onChange={(e) => setConfigForm({ ...configForm, type: e.target.value as 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILJET' })}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
                   >
                     <option value="GMAIL">Gmail</option>
                     <option value="ICLOUD">iCloud Mail</option>
                     <option value="IMAP">Eigener Mail-Server (SMTP/IMAP)</option>
+                    <option value="MAILJET">Mailjet (API)</option>
                   </select>
                 </div>
 
@@ -1988,6 +2000,48 @@ export default function InvitationsPage() {
                       </p>
                       <p className="mt-1 text-xs text-gray-400">
                         💡 <strong>Hinweis:</strong> Sie benötigen Zwei-Faktor-Authentifizierung für Ihr Apple-ID-Konto aktiviert.
+                      </p>
+                    </div>
+                  </>
+                ) : configForm.type === 'MAILJET' ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mailjet API Key *
+                      </label>
+                      <input
+                        type="text"
+                        value={configForm.mailjetApiKey}
+                        onChange={(e) => setConfigForm({ ...configForm, mailjetApiKey: e.target.value })}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        placeholder="Ihr API Key (public)"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        API Key aus dem Mailjet-Dashboard (Account → API Keys).
+                      </p>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Mailjet API Secret *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          value={configForm.mailjetApiSecret}
+                          onChange={(e) => setConfigForm({ ...configForm, mailjetApiSecret: e.target.value })}
+                          className="flex-1 rounded-lg border border-gray-300 px-3 py-2"
+                          placeholder="Ihr API Secret (private)"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        >
+                          {showPassword ? '👁️' : '👁️‍🗨️'}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        API Secret aus dem Mailjet-Dashboard. Absender-E-Mail sollte in Mailjet verifiziert sein.
                       </p>
                     </div>
                   </>
@@ -2105,6 +2159,8 @@ export default function InvitationsPage() {
                         smtpPort: 587,
                         imapHost: '',
                         imapPort: 993,
+                        mailjetApiKey: '',
+                        mailjetApiSecret: '',
                         isActive: false,
                       })
                     }}
