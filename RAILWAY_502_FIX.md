@@ -45,6 +45,8 @@
 
 - **Einladungsliste 500:** Wenn beim Anklicken von „Einladungsliste“ in der Gästeliste ein 500-Fehler kommt, fehlen meist die Tabellen `invitations` bzw. `email_templates`. **Lösung:** Migration ausführen: `railway run npx prisma migrate deploy` (erstellt alle fehlenden Tabellen).
 
+- **Mailjet-Konfiguration schlägt fehl:** Fehlermeldung wie „column mailjetApiKey does not exist“ – die Mailjet-Spalten fehlen in `email_configs`. **Lösung:** Entweder `railway run npx prisma migrate deploy` ausführen, oder nur die Spalten anlegen: Im Railway Dashboard **Postgres** → **Data** / **Query** → SQL aus `manual_add_mailjet_columns.sql` einfügen und ausführen.
+
 ## Sofort-Start (falls wieder 502)
 
 - **Variable:** `SKIP_MIGRATION=true` (wenn du wieder `npm start` nutzt).

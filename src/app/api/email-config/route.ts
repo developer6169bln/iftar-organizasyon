@@ -103,8 +103,17 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Fehler beim Erstellen der Email-Konfiguration:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    const hint =
+      /mailjetApiKey|mailjetApiSecret|column.*does not exist|relation.*not found/i.test(message)
+        ? ' Mailjet-Spalten fehlen evtl. – auf Railway: railway run npx prisma migrate deploy'
+        : ''
     return NextResponse.json(
-      { error: 'Fehler beim Erstellen der Konfiguration' },
+      {
+        error: 'Fehler beim Erstellen der Konfiguration',
+        details: message,
+        hint: hint || undefined,
+      },
       { status: 500 }
     )
   }
@@ -180,8 +189,17 @@ export async function PUT(request: NextRequest) {
     })
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Email-Konfiguration:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    const hint =
+      /mailjetApiKey|mailjetApiSecret|column.*does not exist/i.test(message)
+        ? ' Mailjet-Spalten fehlen evtl. – auf Railway: railway run npx prisma migrate deploy'
+        : ''
     return NextResponse.json(
-      { error: 'Fehler beim Aktualisieren der Konfiguration' },
+      {
+        error: 'Fehler beim Aktualisieren der Konfiguration',
+        details: message,
+        hint: hint || undefined,
+      },
       { status: 500 }
     )
   }

@@ -284,7 +284,8 @@ export default function InvitationsPage() {
         alert('Email-Konfiguration gespeichert')
       } else {
         const error = await response.json()
-        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+        const msg = [error.error || 'Unbekannter Fehler', error.details, error.hint].filter(Boolean).join('\n\n')
+        alert('Fehler: ' + msg)
       }
     } catch (error) {
       console.error('Fehler beim Speichern:', error)
