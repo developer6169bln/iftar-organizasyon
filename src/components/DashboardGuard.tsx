@@ -1,0 +1,119 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
+
+/** Pfad zu Page-ID (feste Dashboard-Seiten). */
+const PATH_TO_PAGE: Record<string, string> = {
+  '/dashboard/guests': 'guests',
+  '/dashboard/invitations': 'invitations',
+  '/dashboard/checkin': 'checkin',
+  '/dashboard/reports': 'reports',
+  '/dashboard/audit-logs': 'audit-logs',
+  '/dashboard/push-notifications': 'push-notifications',
+  '/dashboard/vip-namensschilder': 'vip-namensschilder',
+  '/dashboard/tischplanung': 'tischplanung',
+  '/dashboard/program_flow': 'program_flow',
+}
+
+export default function DashboardGuard({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const [allowed, setAllowed] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!pathname?.startsWith('/dashboard')) {
+      setAllowed(true)
+      return
+    }
+
+    const check = async () => {
+      const token =
+        typeof document !== 'undefined' &&
+        (document.cookie.match(/auth-token=([^;]+)/)?.[1] || localStorage.getItem('auth-token'))
+      if (!token) {
+        router.replace('/login')
+        setAllowed(false)
+        return
+      }
+
+      try {
+        const res = await fetch('/api/me', { credentials: 'include' })
+        if (!res.ok) {
+          router.replace('/login')
+          setAllowed(false)
+          return
+        }
+        const data = await res.json()
+        const allowedPageIds: string[] = data.allowedPageIds || []
+        const allowedCategoryIds: string[] = data.allowedCategoryIds || []
+        const isAdmin = !!data.isAdmin
+
+        // Dashboard-Hauptseite: immer erlauben
+        if (pathname === '/dashboard' || pathname === '/dashboard/') {
+          setAllowed(true)
+          return
+        }
+
+        // Admin-Seite: nur für Admin
+        if (pathname === '/dashboard/admin') {
+          if (!isAdmin) {
+            router.replace('/dashboard?access=denied')
+            setAllowed(false)
+            return
+          }
+          setAllowed(true)
+          return
+        }
+
+        // Feste Seite (z. B. /dashboard/guests)
+        const pageId = PATH_TO_PAGE[pathname]
+        if (pageId) {
+          if (isAdmin || allowedPageIds.length === 0 || allowedPageIds.includes(pageId)) {
+            setAllowed(true)
+            return
+          }
+          router.replace('/dashboard?access=denied')
+          setAllowed(false)
+          return
+        }
+
+        // Kategorie-Seite: /dashboard/[category] (z. B. /dashboard/protocol, /dashboard/guest_list)
+        const match = pathname.match(/^\/dashboard\/([^/]+)$/)
+        if (match) {
+          const segment = match[1]
+          const categoryId = segment.toUpperCase().replace(/-/g, '_')
+          if (isAdmin || allowedCategoryIds.length === 0 || allowedCategoryIds.includes(categoryId)) {
+            setAllowed(true)
+            return
+          }
+          router.replace('/dashboard?access=denied')
+          setAllowed(false)
+          return
+        }
+
+        setAllowed(true)
+      } catch {
+        router.replace('/login')
+        setAllowed(false)
+      }
+    }
+
+    check()
+  }, [pathname, router])
+
+  // Während Prüfung: nichts anzeigen oder kurzer Ladezustand
+  if (allowed === null) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-gray-500">Zugriff wird geprüft…</p>
+      </div>
+    )
+  }
+
+  if (!allowed) {
+    return null
+  }
+
+  return <>{children}</>
+}

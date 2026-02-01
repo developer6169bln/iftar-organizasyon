@@ -1,4 +1,6 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from './prisma'
+import { getUserIdFromRequest } from './auditLog'
 
 export const ALL_PAGE_IDS = [
   'invitations',
@@ -121,4 +123,41 @@ export function canAccessPage(allowedPageIds: string[], pageId: string): boolean
 
 export function canAccessCategory(allowedCategoryIds: string[], categoryId: string): boolean {
   return allowedCategoryIds.includes(categoryId)
+}
+
+/**
+ * Prüft in API-Routen: User angemeldet und hat Zugriff auf die Seite.
+ * Bei Fehler: 401/403 NextResponse, sonst { userId }.
+ */
+export async function requirePageAccess(
+  request: NextRequest,
+  pageId: string
+): Promise<{ userId: string } | NextResponse> {
+  const { userId } = await getUserIdFromRequest(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+  }
+  const { allowedPageIds, isAdmin } = await getAllowListForUser(userId)
+  if (isAdmin || allowedPageIds.length === 0 || allowedPageIds.includes(pageId)) {
+    return { userId }
+  }
+  return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })
+}
+
+/**
+ * Prüft in API-Routen: User angemeldet und hat Zugriff auf die Kategorie.
+ */
+export async function requireCategoryAccess(
+  request: NextRequest,
+  categoryId: string
+): Promise<{ userId: string } | NextResponse> {
+  const { userId } = await getUserIdFromRequest(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+  }
+  const { allowedCategoryIds, isAdmin } = await getAllowListForUser(userId)
+  if (isAdmin || allowedCategoryIds.length === 0 || allowedCategoryIds.includes(categoryId)) {
+    return { userId }
+  }
+  return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })
 }

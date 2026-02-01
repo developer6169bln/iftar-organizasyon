@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { requirePageAccess } from '@/lib/permissions'
 
 // Prisma + PDF generation require Node.js runtime (not Edge).
 export const runtime = 'nodejs'
@@ -317,6 +318,8 @@ function pdfDownloadResponse(bytes: Uint8Array, filename: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const access = await requirePageAccess(request, 'reports')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'all_by_user'

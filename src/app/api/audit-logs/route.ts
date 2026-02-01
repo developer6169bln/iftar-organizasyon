@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest, createAuditLog } from '@/lib/auditLog'
+import { requirePageAccess } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
+  const access = await requirePageAccess(request, 'audit-logs')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
@@ -64,6 +67,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const access = await requirePageAccess(request, 'audit-logs')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const olderThan = searchParams.get('olderThan') // Anzahl Tage
@@ -110,6 +115,8 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await requirePageAccess(request, 'audit-logs')
+  if (access instanceof NextResponse) return access
   try {
     const body = await request.json()
     const { action, description, entityType, entityId, eventId, category, url, metadata } = body

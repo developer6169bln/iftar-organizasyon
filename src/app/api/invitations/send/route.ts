@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
 import { getUserIdFromRequest } from '@/lib/auditLog'
+import { requirePageAccess } from '@/lib/permissions'
 import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
+  const access = await requirePageAccess(request, 'invitations')
+  if (access instanceof NextResponse) return access
   try {
     const { guestIds, templateId, language, eventId, includeLinks: includeLinksParam = true } = await request.json()
     const includeLinks = includeLinksParam !== false // Standard: true

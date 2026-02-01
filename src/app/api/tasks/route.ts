@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
+import { requireCategoryAccess } from '@/lib/permissions'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -49,6 +50,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
+
+    if (category) {
+      const access = await requireCategoryAccess(request, category)
+      if (access instanceof NextResponse) return access
+    }
 
     const { userId } = await getUserIdFromRequest(request)
     let isAdmin = false
@@ -172,6 +178,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = taskSchema.parse(body)
+    const access = await requireCategoryAccess(request, validatedData.category)
+    if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('tasks')
     const hasAssignedToColumn = cols.has('assignedTo') || cols.has('assignedto')
@@ -283,10 +291,13 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Hole alten Task für Logging
     const oldTask = await prisma.task.findUnique({
       where: { id },
     })
+    if (oldTask) {
+      const access = await requireCategoryAccess(request, oldTask.category)
+      if (access instanceof NextResponse) return access
+    }
 
     if (!oldTask) {
       return NextResponse.json(
@@ -397,7 +408,6 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Prüfe ob Task existiert
     const task = await prisma.task.findUnique({
       where: { id },
     })
@@ -408,6 +418,9 @@ export async function DELETE(request: NextRequest) {
         { status: 404 }
       )
     }
+
+    const access = await requireCategoryAccess(request, task.category)
+    if (access instanceof NextResponse) return access
 
     await prisma.task.delete({
       where: { id },

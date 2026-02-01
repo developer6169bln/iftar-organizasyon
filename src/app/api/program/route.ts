@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { requirePageAccess } from '@/lib/permissions'
 
 const programItemSchema = z.object({
   eventId: z.string(),
@@ -16,6 +17,8 @@ const programItemSchema = z.object({
 })
 
 export async function GET(request: NextRequest) {
+  const access = await requirePageAccess(request, 'program_flow')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')
@@ -46,6 +49,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await requirePageAccess(request, 'program_flow')
+  if (access instanceof NextResponse) return access
   try {
     const body = await request.json()
     const validatedData = programItemSchema.parse(body)
@@ -98,6 +103,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const access = await requirePageAccess(request, 'program_flow')
+  if (access instanceof NextResponse) return access
   try {
     const body = await request.json()
     const { id, ...updateData } = body
@@ -146,6 +153,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const access = await requirePageAccess(request, 'program_flow')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')

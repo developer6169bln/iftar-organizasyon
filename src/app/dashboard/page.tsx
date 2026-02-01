@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
@@ -17,6 +17,8 @@ const checkImageExists = (url: string): Promise<boolean> => {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const accessDenied = searchParams.get('access') === 'denied'
   const [user, setUser] = useState<any>(null)
   const [stats, setStats] = useState({
     totalGuests: 0,
@@ -447,6 +449,11 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {accessDenied && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+            Sie haben keinen Zugriff auf diesen Bereich. Die Berechtigungen werden vom Administrator festgelegt.
+          </div>
+        )}
         {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
           {(allowedPageIds.length === 0 || allowedPageIds.includes('invitations')) && (

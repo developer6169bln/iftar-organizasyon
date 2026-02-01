@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requirePageAccess } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
+  const access = await requirePageAccess(request, 'invitations')
+  if (access instanceof NextResponse) return access
   try {
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')

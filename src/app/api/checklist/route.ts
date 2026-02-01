@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { requireCategoryAccess } from '@/lib/permissions'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -48,6 +49,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
+
+    if (category) {
+      const access = await requireCategoryAccess(request, category)
+      if (access instanceof NextResponse) return access
+    }
 
     const where: any = {}
     if (category) {
@@ -123,6 +129,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = checklistSchema.parse(body)
+    const access = await requireCategoryAccess(request, validatedData.category)
+    if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('checklist_items')
     const hasDescription = cols.has('description')
@@ -217,6 +225,15 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
+    const existing = await prisma.checklistItem.findUnique({
+      where: { id },
+      select: { category: true },
+    })
+    if (existing) {
+      const access = await requireCategoryAccess(request, existing.category)
+      if (access instanceof NextResponse) return access
+    }
+
     const cols = await getTableColumns('checklist_items')
     const hasDescription = cols.has('description')
     const hasStatus = cols.has('status')
@@ -298,6 +315,15 @@ export async function DELETE(request: NextRequest) {
         { error: 'ID gereklidir' },
         { status: 400 }
       )
+    }
+
+    const existing = await prisma.checklistItem.findUnique({
+      where: { id },
+      select: { category: true },
+    })
+    if (existing) {
+      const access = await requireCategoryAccess(request, existing.category)
+      if (access instanceof NextResponse) return access
     }
 
     await prisma.checklistItem.delete({
