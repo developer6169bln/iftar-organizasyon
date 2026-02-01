@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { getProjectsForUser } from '@/lib/permissions'
 
-/** Events des Nutzers (aus seinen Projekten). Optional: projectId filtert auf ein Projekt. */
+/** Events des Nutzers (aus seinen Projekten). Optional: projectId filtert auf ein Projekt. Vorhandene/Legacy-Events (projectId null) = nur APP-Admin. */
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await getUserIdFromRequest(request)
@@ -11,16 +11,24 @@ export async function GET(request: NextRequest) {
 
     const projects = userId ? await getProjectsForUser(userId) : []
     const projectIds = projects.map((p) => p.id)
+    const isAdmin = userId
+      ? (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role === 'ADMIN'
+      : false
 
     // Ohne Login: nur Events aus Projekten mit Zugriff (leer wenn nicht eingeloggt)
-    const where: { projectId?: string | { in: string[] } | null } = {}
+    const where: { projectId?: string | { in: string[] } | { in: string[] } | null; OR?: { projectId: string | null }[] } = {}
     if (projectId) {
       if (projectIds.length && !projectIds.includes(projectId)) {
         return NextResponse.json({ error: 'Kein Zugriff auf dieses Projekt' }, { status: 403 })
       }
       where.projectId = projectId
     } else if (projectIds.length) {
-      where.projectId = { in: projectIds }
+      // Admin: auch Legacy-Events (projectId null) anzeigen – zählen als APP-Admin-Projekt
+      if (isAdmin) {
+        where.OR = [{ projectId: { in: projectIds } }, { projectId: null }]
+      } else {
+        where.projectId = { in: projectIds }
+      }
     } else if (userId) {
       where.projectId = { in: [] }
     }

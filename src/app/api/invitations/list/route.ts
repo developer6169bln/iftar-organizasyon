@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requirePageAccess } from '@/lib/permissions'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')
     const response = searchParams.get('response') // ACCEPTED, DECLINED, PENDING
+    if (eventId) {
+      const eventAccess = await requireEventAccess(request, eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
 
     const where: any = {}
     if (eventId) {

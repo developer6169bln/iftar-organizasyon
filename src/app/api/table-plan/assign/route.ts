@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireEventAccess } from '@/lib/permissions'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +13,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     const num = typeof tableNumber === 'string' ? parseInt(tableNumber, 10) : tableNumber
     if (Number.isNaN(num)) {

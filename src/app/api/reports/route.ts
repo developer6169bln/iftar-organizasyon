@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
-import { requirePageAccess } from '@/lib/permissions'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 // Prisma + PDF generation require Node.js runtime (not Edge).
 export const runtime = 'nodejs'
@@ -331,6 +331,8 @@ export async function GET(request: NextRequest) {
     if (!eventId) {
       return NextResponse.json({ error: 'eventId fehlt' }, { status: 400 })
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Load event (best effort)
     const event = await prisma.event.findUnique({ where: { id: eventId } }).catch(() => null)

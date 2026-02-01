@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireEventAccess } from '@/lib/permissions'
 
 function safeParsePlanData(raw: string | null): { tables: unknown[]; podiums: unknown[] } {
   if (!raw || typeof raw !== 'string') return { tables: [], podiums: [] }
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     const plan = await prisma.tablePlan.findUnique({
       where: { eventId },
@@ -60,6 +63,8 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     const eventExists = await prisma.event.findUnique({
       where: { id: eventId },

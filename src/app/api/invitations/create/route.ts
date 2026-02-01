@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
+  const access = await requirePageAccess(request, 'invitations')
+  if (access instanceof NextResponse) return access
   try {
     const { guestId, eventId, skipEmail } = await request.json()
 
@@ -14,6 +17,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Prüfe ob Gast existiert
     const guest = await prisma.guest.findUnique({

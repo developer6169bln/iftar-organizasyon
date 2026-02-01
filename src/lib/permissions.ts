@@ -224,7 +224,7 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
   }
 }
 
-/** Projekte, die der User besitzt oder in denen er Mitglied ist. Admin sieht alle Projekte. */
+/** Projekte, die der User besitzt oder in denen er Mitglied ist. Admin sieht alle Projekte; eigene (ownerId = userId) als isOwner. */
 export async function getProjectsForUser(userId: string): Promise<{ id: string; name: string; ownerId: string; isOwner: boolean }[]> {
   try {
     const user = await prisma.user.findUnique({
@@ -236,7 +236,7 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
         select: { id: true, name: true, ownerId: true },
         orderBy: { createdAt: 'asc' },
       })
-      return all.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: false }))
+      return all.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: p.ownerId === userId }))
     }
     const owned = await prisma.project.findMany({
       where: { ownerId: userId },
@@ -261,6 +261,50 @@ export function canAccessPage(allowedPageIds: string[], pageId: string): boolean
 
 export function canAccessCategory(allowedCategoryIds: string[], categoryId: string): boolean {
   return allowedCategoryIds.includes(categoryId)
+}
+
+/**
+ * Prüft, ob der User auf ein Event zugreifen darf (Event gehört zu einem seiner Projekte).
+ * Events mit projectId = null gelten als APP-Admin-Projekt (Legacy) – nur Admin hat Zugriff.
+ */
+export async function canAccessEvent(userId: string, eventId: string): Promise<boolean> {
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { projectId: true },
+    })
+    if (!event) return false
+    if (event.projectId == null) {
+      const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+      return u?.role === 'ADMIN'
+    }
+    const projects = await getProjectsForUser(userId)
+    return projects.some((p) => p.id === event.projectId)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Prüft in API-Routen: User angemeldet und hat Zugriff auf dieses Event (Projekt-Zugehörigkeit).
+ * Gibt 403 wenn eventId zu einem anderen Projekt gehört oder Legacy-Event und User kein Admin.
+ */
+export async function requireEventAccess(
+  request: NextRequest,
+  eventId: string | null | undefined
+): Promise<{ userId: string } | NextResponse> {
+  const { userId } = await getUserIdFromRequest(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+  }
+  if (!eventId) {
+    return NextResponse.json({ error: 'eventId fehlt' }, { status: 400 })
+  }
+  const allowed = await canAccessEvent(userId, eventId)
+  if (!allowed) {
+    return NextResponse.json({ error: 'Kein Zugriff auf dieses Event (fremdes Projekt oder nur für APP-Admin)' }, { status: 403 })
+  }
+  return { userId }
 }
 
 /**

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { requirePageAccess } from '@/lib/permissions'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 const programItemSchema = z.object({
   eventId: z.string(),
@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     const items = await prisma.programItem.findMany({
       where: { eventId },
@@ -54,6 +56,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = programItemSchema.parse(body)
+    const eventAccess = await requireEventAccess(request, validatedData.eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Validierung für startTime
     const startTime = validatedData.startTime ? new Date(validatedData.startTime) : null
@@ -115,6 +119,12 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       )
     }
+    const existing = await prisma.programItem.findUnique({ where: { id }, select: { eventId: true } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Programmpunkt nicht gefunden' }, { status: 404 })
+    }
+    const eventAccess = await requireEventAccess(request, existing.eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     const dataToUpdate: any = {}
     
@@ -165,6 +175,12 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       )
     }
+    const existing = await prisma.programItem.findUnique({ where: { id }, select: { eventId: true } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Programmpunkt nicht gefunden' }, { status: 404 })
+    }
+    const eventAccess = await requireEventAccess(request, existing.eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     await prisma.programItem.delete({
       where: { id },

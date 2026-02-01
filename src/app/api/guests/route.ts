@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
 import { sendPushNotificationFromServer } from '@/lib/sendPushNotification'
-import { requirePageAccess } from '@/lib/permissions'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 const guestSchema = z.object({
   eventId: z.string(),
@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const eventId = searchParams.get('eventId')
     const status = searchParams.get('status')
-
+    if (eventId) {
+      const eventAccess = await requireEventAccess(request, eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
     const where: any = {}
     if (eventId) {
       where.eventId = eventId
@@ -78,6 +81,11 @@ export async function POST(request: NextRequest) {
   if (access instanceof NextResponse) return access
   try {
     const body = await request.json()
+    const eventIdFromBody = body?.eventId
+    if (eventIdFromBody) {
+      const eventAccess = await requireEventAccess(request, eventIdFromBody)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
     const validatedData = guestSchema.parse(body)
 
     // Verarbeite additionalData: Parse JSON und konvertiere Boolean-Strings zu echten Booleans
@@ -187,6 +195,12 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       )
     }
+    const existingGuest = await prisma.guest.findUnique({ where: { id }, select: { eventId: true } })
+    if (!existingGuest) {
+      return NextResponse.json({ error: 'Gast nicht gefunden' }, { status: 404 })
+    }
+    const eventAccess = await requireEventAccess(request, existingGuest.eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Daten für Update vorbereiten
     const dataToUpdate: any = {}
@@ -276,6 +290,9 @@ export async function PATCH(request: NextRequest) {
     const oldGuest = await prisma.guest.findUnique({
       where: { id },
     })
+    if (!oldGuest) {
+      return NextResponse.json({ error: 'Gast nicht gefunden' }, { status: 404 })
+    }
 
     const guest = await prisma.guest.update({
       where: { id },
@@ -311,6 +328,11 @@ export async function DELETE(request: NextRequest) {
     const eventId = searchParams.get('eventId')
     const deleteAll = searchParams.get('deleteAll') === 'true'
     const columnName = searchParams.get('columnName')
+
+    if (eventId) {
+      const eventAccess = await requireEventAccess(request, eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
 
     // Wenn columnName vorhanden, lösche die Spalte aus allen Gästen
     if (columnName && eventId) {
@@ -399,7 +421,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Prüfe ob Gast existiert
+    // Prüfe ob Gast existiert und User Zugriff auf das Event hat
     const guest = await prisma.guest.findUnique({
       where: { id },
     })
@@ -410,6 +432,8 @@ export async function DELETE(request: NextRequest) {
         { status: 404 }
       )
     }
+    const eventAccess = await requireEventAccess(request, guest.eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Lösche Gast
     await prisma.guest.delete({

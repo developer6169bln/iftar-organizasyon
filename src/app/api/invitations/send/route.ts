@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
 import { getUserIdFromRequest } from '@/lib/auditLog'
-import { requirePageAccess } from '@/lib/permissions'
+import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    const eventAccess = await requireEventAccess(request, eventId)
+    if (eventAccess instanceof NextResponse) return eventAccess
 
     // Hole Event
     const event = await prisma.event.findUnique({

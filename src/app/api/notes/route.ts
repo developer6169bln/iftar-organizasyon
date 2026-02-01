@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { jwtVerify } from 'jose'
+import { requireEventAccess } from '@/lib/permissions'
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key-change-in-production')
 
@@ -111,6 +112,10 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category')
     const taskId = searchParams.get('taskId')
     const scope = searchParams.get('scope') // "category" => taskId NULL
+    if (eventId) {
+      const eventAccess = await requireEventAccess(request, eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
 
     const where: any = {}
     if (eventId) where.eventId = eventId

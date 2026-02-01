@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { requireCategoryAccess } from '@/lib/permissions'
+import { requireCategoryAccess, requireEventAccess } from '@/lib/permissions'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
-
+    if (eventId) {
+      const eventAccess = await requireEventAccess(request, eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
     if (category) {
       const access = await requireCategoryAccess(request, category)
       if (access instanceof NextResponse) return access
@@ -129,6 +132,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = checklistSchema.parse(body)
+    if (validatedData.eventId) {
+      const eventAccess = await requireEventAccess(request, validatedData.eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
+    if (validatedData.taskId) {
+      const task = await prisma.task.findUnique({ where: { id: validatedData.taskId }, select: { eventId: true } })
+      if (task) {
+        const eventAccess = await requireEventAccess(request, task.eventId)
+        if (eventAccess instanceof NextResponse) return eventAccess
+      }
+    }
     const access = await requireCategoryAccess(request, validatedData.category)
     if (access instanceof NextResponse) return access
 
@@ -227,12 +241,24 @@ export async function PATCH(request: NextRequest) {
 
     const existing = await prisma.checklistItem.findUnique({
       where: { id },
-      select: { category: true },
+      select: { category: true, eventId: true, taskId: true },
     })
-    if (existing) {
-      const access = await requireCategoryAccess(request, existing.category)
-      if (access instanceof NextResponse) return access
+    if (!existing) {
+      return NextResponse.json({ error: 'Checklist-Eintrag nicht gefunden' }, { status: 404 })
     }
+    if (existing.eventId) {
+      const eventAccess = await requireEventAccess(request, existing.eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
+    if (existing.taskId) {
+      const task = await prisma.task.findUnique({ where: { id: existing.taskId }, select: { eventId: true } })
+      if (task) {
+        const eventAccess = await requireEventAccess(request, task.eventId)
+        if (eventAccess instanceof NextResponse) return eventAccess
+      }
+    }
+    const access = await requireCategoryAccess(request, existing.category)
+    if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('checklist_items')
     const hasDescription = cols.has('description')
@@ -319,12 +345,24 @@ export async function DELETE(request: NextRequest) {
 
     const existing = await prisma.checklistItem.findUnique({
       where: { id },
-      select: { category: true },
+      select: { category: true, eventId: true, taskId: true },
     })
-    if (existing) {
-      const access = await requireCategoryAccess(request, existing.category)
-      if (access instanceof NextResponse) return access
+    if (!existing) {
+      return NextResponse.json({ error: 'Checklist-Eintrag nicht gefunden' }, { status: 404 })
     }
+    if (existing.eventId) {
+      const eventAccess = await requireEventAccess(request, existing.eventId)
+      if (eventAccess instanceof NextResponse) return eventAccess
+    }
+    if (existing.taskId) {
+      const task = await prisma.task.findUnique({ where: { id: existing.taskId }, select: { eventId: true } })
+      if (task) {
+        const eventAccess = await requireEventAccess(request, task.eventId)
+        if (eventAccess instanceof NextResponse) return eventAccess
+      }
+    }
+    const access = await requireCategoryAccess(request, existing.category)
+    if (access instanceof NextResponse) return access
 
     await prisma.checklistItem.delete({
       where: { id },
