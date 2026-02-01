@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'asc' },
     })
 
-    // Rückwärtskompatibilität: kein projectId, kein Event → erstes Projekt nutzen oder Default-Event (27.02.2026)
+    // Fallback: Projekt hat noch kein Event → leeres Event anlegen (keine Verbindung zu alten Listen/Projekten)
     if (!event && userId && projects.length) {
       const firstProjectId = projects[0].id
       event = await prisma.event.findFirst({
@@ -41,10 +41,10 @@ export async function GET(request: NextRequest) {
         event = await prisma.event.create({
           data: {
             projectId: firstProjectId,
-            title: 'Iftar Yemeği - Titanic Hotel',
-            date: new Date('2026-02-27'),
-            location: 'Titanic Hotel',
-            description: '27 Şubat 2026 tarihinde Titanic Otel\'de verilecek iftar yemeği organizasyonu',
+            title: 'Mein Event',
+            date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            location: '',
+            description: null,
             status: 'PLANNING',
           },
         })

@@ -175,8 +175,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Neuer Hauptbenutzer: komplett leerer Projektbereich (nur mit diesem Benutzer verbunden)
-    // Projekt + leeres Event (leere Gästeliste, keine Aufgaben, Bereiche nutzen globale Kategorien)
+    // Neuer Hauptbenutzer: ausschließlich neue Listen / neue Gästeliste – keine Verbindung zu alten Projekten oder anderen Benutzern
+    // Eigenes Projekt + eigenes leeres Event (leere Gästeliste, keine Aufgaben)
     if (editionId && user.id) {
       try {
         const project = await prisma.project.create({
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
           data: {
             projectId: project.id,
             title: 'Mein Event',
-            date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // in 30 Tagen
+            date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             location: '',
             description: null,
             status: 'PLANNING',
