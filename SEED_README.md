@@ -36,4 +36,18 @@ railway run env SEED_ADMIN_PASSWORD=14612023 node scripts/seed-admin-editions.js
 - **E-Mail:** yasko1461@gmail.com  
 - **Passwort:** 14612023 (oder das, was Sie bei `SEED_ADMIN_PASSWORD` gesetzt haben)
 
-Der Admin sieht alle Seiten und Arbeitsbereiche und hat Zugriff auf **Admin & Statistik** (Top-User-Statistik, künftig Benutzer- und Editionsverwaltung).
+Der Admin sieht alle Seiten und Arbeitsbereiche und hat Zugriff auf **Admin & Statistik** (Top-User-Statistik, Benutzer- und Editionsverwaltung).
+
+---
+
+## Anderen Benutzer zum Admin machen
+
+```bash
+# Standard: developer6169@gmail.com → ADMIN
+node scripts/set-admin.js
+
+# Andere E-Mail:
+SET_ADMIN_EMAIL=andere@email.com node scripts/set-admin.js
+```
+
+**Railway:** `railway run node scripts/set-admin.js` (oder mit `SET_ADMIN_EMAIL=...`).
