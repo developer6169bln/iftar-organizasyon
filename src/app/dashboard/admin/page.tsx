@@ -560,7 +560,7 @@ export default function AdminPage() {
               <div className="mt-6 flex gap-2">
                 <button
                   type="button"
-                  onClick={saveUser}
+                  onClick={() => saveUser()}
                   disabled={savingUser}
                   className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                 >
