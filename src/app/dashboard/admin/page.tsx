@@ -458,7 +458,7 @@ export default function AdminPage() {
             <div className="my-8 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
               <h3 className="mb-4 text-lg font-semibold">Neuer Hauptbenutzer anlegen</h3>
               <p className="mb-4 text-sm text-gray-500">
-                Hauptbenutzer erhalten eine Edition und einen eigenen Projektbereich: Es wird automatisch ein erstes Projekt angelegt. Struktur: Hauptbenutzer → Projekte → je Projekt: Projektmitarbeiter, Aufgaben und Bereiche. Jeder Hauptbenutzer sieht nur seine eigenen Projekte und Benutzer.
+                Hauptbenutzer erhalten eine Edition und einen komplett leeren Projektbereich (nur mit diesem Benutzer verbunden): Es wird automatisch ein erstes Projekt sowie ein leeres Event angelegt (leere Gästeliste, keine Aufgaben). Struktur: Hauptbenutzer → Projekte → je Projekt: Projektmitarbeiter, Aufgaben, Bereiche, Gästelisten. Nur Sie (Admin) können alles sehen; jeder Hauptbenutzer sieht ausschließlich seine eigenen Daten.
               </p>
               <div className="space-y-3">
                 <div>

@@ -224,9 +224,20 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
   }
 }
 
-/** Projekte, die der User besitzt oder in denen er Mitglied ist. Gibt [] zurück wenn Projekt-Tabellen fehlen. */
+/** Projekte, die der User besitzt oder in denen er Mitglied ist. Admin sieht alle Projekte. */
 export async function getProjectsForUser(userId: string): Promise<{ id: string; name: string; ownerId: string; isOwner: boolean }[]> {
   try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    if (user?.role === 'ADMIN') {
+      const all = await prisma.project.findMany({
+        select: { id: true, name: true, ownerId: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      return all.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: false }))
+    }
     const owned = await prisma.project.findMany({
       where: { ownerId: userId },
       select: { id: true, name: true, ownerId: true },

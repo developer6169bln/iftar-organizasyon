@@ -175,17 +175,28 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Neuer Hauptbenutzer: Standard-Projekt anlegen (eigener Projektbereich: Projekte → Projektmitarbeiter, Aufgaben, Bereiche)
+    // Neuer Hauptbenutzer: komplett leerer Projektbereich (nur mit diesem Benutzer verbunden)
+    // Projekt + leeres Event (leere Gästeliste, keine Aufgaben, Bereiche nutzen globale Kategorien)
     if (editionId && user.id) {
       try {
-        await prisma.project.create({
+        const project = await prisma.project.create({
           data: {
             ownerId: user.id,
             name: `Projekt ${validatedData.name}`,
           },
         })
+        await prisma.event.create({
+          data: {
+            projectId: project.id,
+            title: 'Mein Event',
+            date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // in 30 Tagen
+            location: '',
+            description: null,
+            status: 'PLANNING',
+          },
+        })
       } catch (e) {
-        console.error('Default project for new main user could not be created:', e)
+        console.error('Default project/event for new main user could not be created:', e)
       }
     }
 
