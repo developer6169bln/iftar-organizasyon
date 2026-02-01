@@ -38,7 +38,7 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
       }
 
       try {
-        const res = await fetch('/api/me', { credentials: 'include' })
+        const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
         if (!res.ok) {
           router.replace('/login')
           setAllowed(false)
@@ -67,9 +67,14 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
         }
 
         // Feste Seite (z. B. /dashboard/guests)
+        // Einige Kategorien verlinken auf feste Seiten: GUEST_LIST → guests, PROGRAM_FLOW → program_flow
         const pageId = PATH_TO_PAGE[pathname]
         if (pageId) {
-          if (isAdmin || allowedPageIds.length === 0 || allowedPageIds.includes(pageId)) {
+          const hasPage = allowedPageIds.includes(pageId)
+          const hasCategoryForPage =
+            (pathname === '/dashboard/guests' && allowedCategoryIds.includes('GUEST_LIST')) ||
+            (pathname === '/dashboard/program_flow' && allowedCategoryIds.includes('PROGRAM_FLOW'))
+          if (isAdmin || hasPage || hasCategoryForPage) {
             setAllowed(true)
             return
           }
@@ -83,7 +88,7 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
         if (match) {
           const segment = match[1]
           const categoryId = segment.toUpperCase().replace(/-/g, '_')
-          if (isAdmin || allowedCategoryIds.length === 0 || allowedCategoryIds.includes(categoryId)) {
+          if (isAdmin || allowedCategoryIds.includes(categoryId)) {
             setAllowed(true)
             return
           }

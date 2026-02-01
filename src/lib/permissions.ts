@@ -137,8 +137,12 @@ export async function requirePageAccess(
   if (!userId) {
     return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
   }
-  const { allowedPageIds, isAdmin } = await getAllowListForUser(userId)
-  if (isAdmin || allowedPageIds.length === 0 || allowedPageIds.includes(pageId)) {
+  const { allowedPageIds, allowedCategoryIds, isAdmin } = await getAllowListForUser(userId)
+  const hasPage = allowedPageIds.includes(pageId)
+  const hasCategoryForPage =
+    (pageId === 'guests' && allowedCategoryIds.includes('GUEST_LIST')) ||
+    (pageId === 'program_flow' && allowedCategoryIds.includes('PROGRAM_FLOW'))
+  if (isAdmin || hasPage || hasCategoryForPage) {
     return { userId }
   }
   return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })
@@ -156,7 +160,7 @@ export async function requireCategoryAccess(
     return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
   }
   const { allowedCategoryIds, isAdmin } = await getAllowListForUser(userId)
-  if (isAdmin || allowedCategoryIds.length === 0 || allowedCategoryIds.includes(categoryId)) {
+  if (isAdmin || allowedCategoryIds.includes(categoryId)) {
     return { userId }
   }
   return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })

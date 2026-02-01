@@ -456,7 +456,7 @@ export default function DashboardPage() {
         )}
         {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('invitations')) && (
+          {(isAdmin || allowedPageIds.includes('invitations')) && (
           <Link
             href="/dashboard/invitations"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -475,7 +475,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('checkin')) && (
+          {(isAdmin || allowedPageIds.includes('checkin')) && (
           <Link
             href="/dashboard/checkin"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -494,7 +494,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('reports')) && (
+          {(isAdmin || allowedPageIds.includes('reports')) && (
           <Link
             href="/dashboard/reports"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -513,7 +513,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('audit-logs')) && (
+          {(isAdmin || allowedPageIds.includes('audit-logs')) && (
           <Link
             href="/dashboard/audit-logs"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -532,7 +532,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('push-notifications')) && (
+          {(isAdmin || allowedPageIds.includes('push-notifications')) && (
           <Link
             href="/dashboard/push-notifications"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -551,7 +551,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('vip-namensschilder')) && (
+          {(isAdmin || allowedPageIds.includes('vip-namensschilder')) && (
           <Link
             href="/dashboard/vip-namensschilder"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -570,7 +570,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(allowedPageIds.length === 0 || allowedPageIds.includes('tischplanung')) && (
+          {(isAdmin || allowedPageIds.includes('tischplanung')) && (
           <Link
             href="/dashboard/tischplanung"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -643,7 +643,7 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
               {categories
                 .filter(cat => cat.isActive)
-                .filter(cat => allowedCategoryIds.length === 0 || allowedCategoryIds.includes(cat.categoryId))
+                .filter(cat => isAdmin || allowedCategoryIds.includes(cat.categoryId))
                 .map((category) => {
                 // Özel links
                 let href = `/dashboard/${category.categoryId.toLowerCase()}`
