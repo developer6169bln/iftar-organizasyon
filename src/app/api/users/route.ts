@@ -73,20 +73,28 @@ export async function POST(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    })
-    if (currentUser?.role !== 'ADMIN') {
+    let currentUser: { role: string; editionId: string | null; _count?: { ownedProjects: number } } | null = null
+    try {
+      currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, editionId: true, _count: { select: { ownedProjects: true } } },
+      })
+    } catch {
+      return NextResponse.json({ error: 'Benutzer konnte nicht geprüft werden' }, { status: 500 })
+    }
+    const isAdmin = currentUser?.role === 'ADMIN'
+    const isMainUser = isAdmin || !!currentUser?.editionId || (currentUser?._count?.ownedProjects ?? 0) > 0
+    if (!isMainUser) {
       return NextResponse.json(
-        { error: 'Nur der Administrator (Hauptbenutzer) kann neue Benutzer anlegen.' },
+        { error: 'Nur Administrator oder Hauptbenutzer können neue Benutzer anlegen.' },
         { status: 403 }
       )
     }
 
     const body = await request.json()
     const validatedData = userSchema.parse(body)
-    const editionId = (body.editionId as string) || null
+    // Nur Admin darf Hauptbenutzer ernennen (editionId setzen). Hauptbenutzer legen nur Projektmitarbeiter an (ohne Edition).
+    const editionId = isAdmin ? ((body.editionId as string) || null) : null
 
     // Prüfe ob E-Mail bereits existiert
     const existingUser = await prisma.user.findUnique({
@@ -100,14 +108,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Erstelle neuen Benutzer (Hauptbenutzer wenn editionId gesetzt, sonst Projektmitarbeiter)
+    // Erstelle neuen Benutzer: Admin kann Hauptbenutzer (mit editionId) oder Projektmitarbeiter anlegen; Hauptbenutzer nur Projektmitarbeiter
     const hashedPassword = await hashPassword(validatedData.password)
     const user = await prisma.user.create({
       data: {
         name: validatedData.name,
         email: validatedData.email,
         password: hashedPassword,
-        role: (validatedData.role as 'ADMIN' | 'COORDINATOR') || 'COORDINATOR',
+        role: isAdmin ? ((validatedData.role as 'ADMIN' | 'COORDINATOR') || 'COORDINATOR') : 'COORDINATOR',
         editionId: editionId || undefined,
       },
       select: {

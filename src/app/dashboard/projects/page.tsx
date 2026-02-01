@@ -27,6 +27,8 @@ export default function DashboardProjectsPage() {
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [allUsers, setAllUsers] = useState<{ id: string; email: string; name: string }[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [registerUser, setRegisterUser] = useState({ name: '', email: '', password: '' })
+  const [registering, setRegistering] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -132,6 +134,51 @@ export default function DashboardProjectsPage() {
     }
   }
 
+  const handleRegisterAndAddMember = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProject?.id || !registerUser.name.trim() || !registerUser.email.trim() || registerUser.password.length < 6) return
+    setRegistering(true)
+    try {
+      const createRes = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: registerUser.name.trim(),
+          email: registerUser.email.trim(),
+          password: registerUser.password,
+          role: 'COORDINATOR',
+        }),
+      })
+      if (!createRes.ok) {
+        const err = await createRes.json()
+        alert(err.error || 'Benutzer konnte nicht angelegt werden')
+        setRegistering(false)
+        return
+      }
+      const newUser = await createRes.json()
+      const addRes = await fetch(`/api/projects/${selectedProject.id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId: newUser.id, role: 'MEMBER' }),
+      })
+      if (addRes.ok) {
+        const member = await addRes.json()
+        setMembers((prev) => [...prev, member])
+        setAllUsers((prev) => [...prev, { id: newUser.id, name: newUser.name, email: newUser.email }])
+        setRegisterUser({ name: '', email: '', password: '' })
+      } else {
+        const err = await addRes.json()
+        alert(err.error || 'Benutzer wurde angelegt, konnte aber nicht zum Projekt hinzugefügt werden.')
+      }
+    } catch {
+      alert('Registrierung fehlgeschlagen')
+    } finally {
+      setRegistering(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -215,7 +262,40 @@ export default function DashboardProjectsPage() {
 
                 {(selectedProject.isOwner || isAdmin) && (
                   <>
-                    <h3 className="mb-2 text-sm font-medium text-gray-700">Projektmitarbeiter hinzufügen</h3>
+                    <h3 className="mb-2 text-sm font-medium text-gray-700">Neuen Benutzer registrieren und zum Projekt hinzufügen</h3>
+                    <form onSubmit={handleRegisterAndAddMember} className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-4">
+                        <input
+                          type="text"
+                          value={registerUser.name}
+                          onChange={(e) => setRegisterUser((u) => ({ ...u, name: e.target.value }))}
+                          placeholder="Name"
+                          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                        <input
+                          type="email"
+                          value={registerUser.email}
+                          onChange={(e) => setRegisterUser((u) => ({ ...u, email: e.target.value }))}
+                          placeholder="E-Mail"
+                          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                        <input
+                          type="password"
+                          value={registerUser.password}
+                          onChange={(e) => setRegisterUser((u) => ({ ...u, password: e.target.value }))}
+                          placeholder="Passwort (min. 6 Zeichen)"
+                          className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                        />
+                        <button
+                          type="submit"
+                          disabled={registering || !registerUser.name.trim() || !registerUser.email.trim() || registerUser.password.length < 6}
+                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {registering ? '…' : 'Registrieren & hinzufügen'}
+                        </button>
+                      </div>
+                    </form>
+                    <h3 className="mb-2 text-sm font-medium text-gray-700">Bestehenden Benutzer hinzufügen</h3>
                     <form onSubmit={handleAddMember} className="mb-6 flex gap-2">
                       <select
                         value={addMemberUserId}

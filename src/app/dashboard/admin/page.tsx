@@ -402,7 +402,7 @@ export default function AdminPage() {
             </button>
           </div>
           <p className="mb-4 text-sm text-gray-600">
-            Hauptbenutzer haben eigene Projekte und eigene Projektmitarbeiter-Listen. Nur Sie (Administrator) können neue Hauptbenutzer anlegen. Die vorhandenen User sind Ihre Projektmitarbeiter.
+            Sie sehen und verwalten hier alle User und Hauptbenutzer. Nur Sie können neue Hauptbenutzer anlegen (Edition zuweisen). Wenn Sie jemanden zum Hauptbenutzer ernennen, kann dieser in seiner eigenen Liste selbst Benutzer (Projektmitarbeiter) registrieren und in seinen Projekten verwalten.
           </p>
           {loadingUsers ? (
             <p className="text-gray-500">Benutzer werden geladen...</p>
