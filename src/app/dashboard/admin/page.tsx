@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -66,6 +66,7 @@ export default function AdminPage() {
   })
   const [savingUser, setSavingUser] = useState(false)
   const [userModalTab, setUserModalTab] = useState<'basic' | 'permissions'>('basic')
+  const autoSaveUserTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [editEdition, setEditEdition] = useState<EditionRow | null>(null)
   const [editEditionForm, setEditEditionForm] = useState({
@@ -177,14 +178,32 @@ export default function AdminPage() {
     setUserModalTab('basic')
   }
 
+  useEffect(() => {
+    if (!editUser && autoSaveUserTimeoutRef.current) {
+      clearTimeout(autoSaveUserTimeoutRef.current)
+      autoSaveUserTimeoutRef.current = null
+    }
+  }, [editUser])
+
   const setUserCategoryOverride = (categoryId: string, value: 'edition' | 'allow' | 'deny') => {
     setEditUserForm((f) => ({ ...f, categoryOverrides: { ...f.categoryOverrides, [categoryId]: value } }))
+    scheduleAutoSaveUser()
   }
   const setUserPageOverride = (pageId: string, value: 'edition' | 'allow' | 'deny') => {
     setEditUserForm((f) => ({ ...f, pageOverrides: { ...f.pageOverrides, [pageId]: value } }))
+    scheduleAutoSaveUser()
   }
 
-  const saveUser = async () => {
+  const scheduleAutoSaveUser = () => {
+    if (!editUser) return
+    if (autoSaveUserTimeoutRef.current) clearTimeout(autoSaveUserTimeoutRef.current)
+    autoSaveUserTimeoutRef.current = setTimeout(() => {
+      autoSaveUserTimeoutRef.current = null
+      saveUser(false)
+    }, 600)
+  }
+
+  const saveUser = async (closeAfterSave = true) => {
     if (!editUser) return
     setSavingUser(true)
     try {
@@ -211,7 +230,7 @@ export default function AdminPage() {
       if (res.ok) {
         const updated = await res.json()
         setUsers((prev) => prev.map((u) => (u.id === editUser.id ? updated : u)))
-        setEditUser(null)
+        if (closeAfterSave) setEditUser(null)
       } else {
         const err = await res.json()
         alert(err.error || 'Speichern fehlgeschlagen')
@@ -443,7 +462,10 @@ export default function AdminPage() {
                     <label className="block text-sm font-medium text-gray-700">Rolle</label>
                     <select
                       value={editUserForm.role}
-                      onChange={(e) => setEditUserForm((f) => ({ ...f, role: e.target.value }))}
+                      onChange={(e) => {
+                        setEditUserForm((f) => ({ ...f, role: e.target.value }))
+                        scheduleAutoSaveUser()
+                      }}
                       className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                     >
                       <option value="COORDINATOR">COORDINATOR</option>
@@ -454,12 +476,13 @@ export default function AdminPage() {
                     <label className="block text-sm font-medium text-gray-700">Edition</label>
                     <select
                       value={editUserForm.editionId ?? ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setEditUserForm((f) => ({
                           ...f,
                           editionId: e.target.value || null,
                         }))
-                      }
+                        scheduleAutoSaveUser()
+                      }}
                       className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                     >
                       <option value="">– Keine –</option>
@@ -475,7 +498,10 @@ export default function AdminPage() {
                     <input
                       type="date"
                       value={editUserForm.editionExpiresAt}
-                      onChange={(e) => setEditUserForm((f) => ({ ...f, editionExpiresAt: e.target.value }))}
+                      onChange={(e) => {
+                        setEditUserForm((f) => ({ ...f, editionExpiresAt: e.target.value }))
+                        scheduleAutoSaveUser()
+                      }}
                       className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
                     />
                     <p className="mt-1 text-xs text-gray-500">Leer = unbegrenzt</p>
