@@ -238,18 +238,32 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
       })
       return all.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: p.ownerId === userId }))
     }
+    // Eigene Projekte (nur projects-Tabelle nötig)
     const owned = await prisma.project.findMany({
       where: { ownerId: userId },
       select: { id: true, name: true, ownerId: true },
     })
-    const asMember = await prisma.projectMember.findMany({
-      where: { userId },
-      select: { projectId: true, project: { select: { id: true, name: true, ownerId: true } } },
-    })
-    return [
-      ...owned.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: true })),
-      ...asMember.map((m) => ({ id: m.project.id, name: m.project.name, ownerId: m.project.ownerId, isOwner: false })),
-    ]
+    const result: { id: string; name: string; ownerId: string; isOwner: boolean }[] = owned.map((p) => ({
+      id: p.id,
+      name: p.name,
+      ownerId: p.ownerId,
+      isOwner: true,
+    }))
+    // Projekte, in denen User Mitglied ist (project_members muss existieren)
+    try {
+      const asMember = await prisma.projectMember.findMany({
+        where: { userId },
+        select: { projectId: true, project: { select: { id: true, name: true, ownerId: true } } },
+      })
+      for (const m of asMember) {
+        if (!result.some((r) => r.id === m.project.id)) {
+          result.push({ id: m.project.id, name: m.project.name, ownerId: m.project.ownerId, isOwner: false })
+        }
+      }
+    } catch {
+      // Tabelle project_members fehlt evtl. → nur eigene Projekte anzeigen
+    }
+    return result
   } catch {
     return []
   }

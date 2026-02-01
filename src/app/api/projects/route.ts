@@ -89,13 +89,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Immer Raw-SQL-INSERT (unabhängig von Prisma-Client/Schema, gleiche Struktur wie manual_create_projects_and_members.sql)
+    // Raw-SQL: INSERT mit RETURNING (ein Befehl, Zeile wird sofort zurückgegeben)
     const id = randomUUID()
+    let project: { id: string; ownerId: string; name: string; createdAt: Date; updatedAt: Date }
     try {
-      await prisma.$executeRaw`
+      const rows = await prisma.$queryRaw<{ id: string; ownerId: string; name: string; createdAt: Date; updatedAt: Date }[]>`
         INSERT INTO "projects" ("id", "ownerId", "name", "createdAt", "updatedAt")
         VALUES (${id}, ${userId}, ${name}, NOW(), NOW())
+        RETURNING "id", "ownerId", "name", "createdAt", "updatedAt"
       `
+      const row = rows[0]
+      if (!row) {
+        return NextResponse.json(
+          { error: 'Projekt wurde nicht gespeichert.', details: 'INSERT RETURNING lieferte keine Zeile.' },
+          { status: 500 }
+        )
+      }
+      project = row
     } catch (insertErr) {
       const insertMsg = insertErr instanceof Error ? insertErr.message : String(insertErr)
       console.error('POST /api/projects INSERT error:', insertErr)
@@ -104,20 +114,9 @@ export async function POST(request: NextRequest) {
           error: 'Projekt konnte nicht erstellt werden.',
           details: insertMsg,
           hint: insertMsg.toLowerCase().includes('exist') || insertMsg.toLowerCase().includes('relation')
-            ? 'Tabelle "projects" fehlt. Bitte auf Railway (Postgres → Query) die Datei manual_create_projects_and_members.sql ausführen.'
+            ? 'Tabelle "projects" fehlt. Bitte auf Railway (Postgres → Query) RAILWAY_PROJEKTE_EINMAL.sql ausführen.'
             : undefined,
         },
-        { status: 500 }
-      )
-    }
-
-    const rows = await prisma.$queryRaw<{ id: string; ownerId: string; name: string; createdAt: Date; updatedAt: Date }[]>`
-      SELECT "id", "ownerId", "name", "createdAt", "updatedAt" FROM "projects" WHERE "id" = ${id}
-    `
-    const project = rows[0]
-    if (!project) {
-      return NextResponse.json(
-        { error: 'Projekt wurde angelegt, konnte aber nicht gelesen werden.', details: 'SELECT nach INSERT lieferte keine Zeile.' },
         { status: 500 }
       )
     }
