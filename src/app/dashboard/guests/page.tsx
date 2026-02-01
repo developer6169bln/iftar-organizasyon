@@ -170,6 +170,11 @@ export default function GuestsPage() {
 
   useEffect(() => {
     loadEventAndGuests()
+    const onProjectChange = () => loadEventAndGuests()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
   }, [])
 
   // Wende gespeicherte Reihenfolge an, wenn allColumns sich ändert
@@ -372,17 +377,31 @@ export default function GuestsPage() {
     }
   }
 
+  const getEventsUrl = () => {
+    const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+    return projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+  }
+
   const loadEventAndGuests = async () => {
     try {
-      const eventResponse = await fetch('/api/events')
+      const eventResponse = await fetch(getEventsUrl())
       if (eventResponse.ok) {
         const event = await eventResponse.json()
-        setEventId(event.id)
+        const id = event?.id ?? null
+        setEventId(id)
+        await loadGuests(id)
+      } else {
+        setEventId(null)
+        setGuests([])
+        setFilteredGuests([])
       }
-      await loadGuests()
     } catch (error) {
       console.error('Event yükleme hatası:', error)
-      await loadGuests()
+      setEventId(null)
+      setGuests([])
+      setFilteredGuests([])
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -765,16 +784,21 @@ export default function GuestsPage() {
     }
   }, [])
 
-  const loadGuests = async () => {
+  const loadGuests = async (overrideEventId?: string | null) => {
+    const id = overrideEventId ?? eventId
+    if (!id) {
+      setGuests([])
+      setFilteredGuests([])
+      setLoading(false)
+      return
+    }
     try {
-      const response = await fetch('/api/guests')
+      const response = await fetch(`/api/guests?eventId=${encodeURIComponent(id)}`)
       if (response.ok) {
         const data = await response.json()
         setGuests(data)
         setFilteredGuests(data)
-        
-        // Lade auch Invitations für alle Gäste
-        await loadInvitations(data.map((g: any) => g.id))
+        await loadInvitations(data.map((g: any) => g.id), id)
       }
     } catch (error) {
       console.error('Misafirler yüklenirken hata:', error)
@@ -783,16 +807,18 @@ export default function GuestsPage() {
     }
   }
 
-  const loadInvitations = async (guestIds: string[]) => {
+  const loadInvitations = async (guestIds: string[], eventIdForInvitations?: string | null) => {
+    const eid = eventIdForInvitations ?? eventId
+    if (!eid) return
     try {
-      const eventsRes = await fetch('/api/events')
+      const eventsRes = await fetch(getEventsUrl())
       if (eventsRes.ok) {
-        const events = await eventsRes.json()
-        if (events.length > 0) {
-          const invitationsRes = await fetch(`/api/invitations/list?eventId=${events[0].id}`)
+        const event = await eventsRes.json()
+        const id = event?.id
+        if (id) {
+          const invitationsRes = await fetch(`/api/invitations/list?eventId=${encodeURIComponent(id)}`)
           if (invitationsRes.ok) {
             const invitationsData = await invitationsRes.json()
-            // Erstelle Map: guestId -> invitation
             const invitationsMap: Record<string, any> = {}
             invitationsData.forEach((inv: any) => {
               invitationsMap[inv.guestId] = inv
@@ -995,20 +1021,13 @@ export default function GuestsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const eventResponse = await fetch('/api/events')
+      const eventResponse = await fetch(getEventsUrl())
       if (!eventResponse.ok) {
         alert('Event yüklenirken hata oluştu')
         return
       }
       const event = await eventResponse.json()
-      
-      // Handle both single event object and array
-      let eventObj = null
-      if (Array.isArray(event)) {
-        eventObj = event.length > 0 ? event[0] : null
-      } else {
-        eventObj = event
-      }
+      const eventObj = event?.id ? event : null
 
       // Sammle alle Felder aus formData für additionalData
       const additionalData: Record<string, any> = {}
@@ -2044,19 +2063,15 @@ export default function GuestsPage() {
                                         let currentEventId = eventId
                                         
                                         if (!currentEventId) {
-                                          // Lade eventId falls nicht vorhanden
-                                          const eventsRes = await fetch('/api/events')
+                                          const eventsRes = await fetch(getEventsUrl())
                                           if (!eventsRes.ok) {
                                             throw new Error('Fehler beim Laden der Events')
                                           }
-                                          const events = await eventsRes.json()
-                                          if (!events || events.length === 0) {
-                                            throw new Error('Kein Event gefunden')
-                                          }
-                                          currentEventId = events[0]?.id
+                                          const eventObj = await eventsRes.json()
+                                          currentEventId = eventObj?.id ?? null
                                           
                                           if (!currentEventId) {
-                                            throw new Error('Event-ID nicht gefunden')
+                                            throw new Error('Kein Event im gewählten Projekt. Bitte Projekt wechseln.')
                                           }
                                         }
                                         

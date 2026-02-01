@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [projects, setProjects] = useState<{ id: string; name: string; ownerId: string; isOwner: boolean }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [hasEdition, setHasEdition] = useState(false) // Hauptnutzer können Projekte anlegen
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -67,8 +68,8 @@ export default function DashboardPage() {
       }
       setUser({ name: 'Kullanıcı', email: '' })
       try {
-        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
-        const url = projectId ? `/api/me?projectId=${encodeURIComponent(projectId)}` : '/api/me'
+        const storedProjectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const url = storedProjectId ? `/api/me?projectId=${encodeURIComponent(storedProjectId)}` : '/api/me'
         const res = await fetch(url, { credentials: 'include' })
         if (res.ok) {
           const data = await res.json()
@@ -76,8 +77,16 @@ export default function DashboardPage() {
           setAllowedPageIds(data.allowedPageIds || [])
           setAllowedCategoryIds(data.allowedCategoryIds || [])
           setIsAdmin(!!data.isAdmin)
-          setProjects(data.projects || [])
-          setSelectedProjectId(projectId || (data.projects?.[0]?.id ?? null))
+          setHasEdition(!!data.user?.editionId)
+          const list = data.projects || []
+          setProjects(list)
+          // Standard: erst eigenes Projekt (Inhaber), sonst erstes Projekt – damit Hauptnutzer nicht yaskos Daten sehen
+          const defaultProjectId = list.find((p: { isOwner: boolean }) => p.isOwner)?.id ?? list[0]?.id ?? null
+          const projectId = storedProjectId && list.some((p: { id: string }) => p.id === storedProjectId) ? storedProjectId : defaultProjectId
+          setSelectedProjectId(projectId)
+          if (typeof window !== 'undefined' && projectId) {
+            localStorage.setItem('dashboard-project-id', projectId)
+          }
         }
       } catch {
         setAllowedPageIds([])
@@ -86,11 +95,62 @@ export default function DashboardPage() {
     }
 
     checkAuth()
-    loadStatistics()
     loadCategories()
     loadUsers()
     checkImageExists('/uid-berlin-logo.png').then(setLogoExists)
   }, [router])
+
+  // Statistiken nur für das gewählte Projekt laden (damit Hauptnutzer nicht yaskos Gästeliste sehen)
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setStats({ totalGuests: 0, completedTasks: 0, inProgressTasks: 0, checklistItems: 0 })
+      setLoadingStats(false)
+      return
+    }
+    let cancelled = false
+    const run = async () => {
+      setLoadingStats(true)
+      try {
+        const eventResponse = await fetch(`/api/events?projectId=${encodeURIComponent(selectedProjectId)}`)
+        if (!eventResponse.ok || cancelled) return
+        const event = await eventResponse.json()
+        if (!event?.id || cancelled) return
+        const eventId = event.id
+        const [guestsRes, tasksRes, checklistRes] = await Promise.all([
+          fetch(`/api/guests?eventId=${eventId}`),
+          fetch(`/api/tasks?eventId=${eventId}`),
+          fetch(`/api/checklist?eventId=${eventId}`),
+        ])
+        if (cancelled) return
+        let totalGuests = 0
+        if (guestsRes.ok) {
+          const guests = await guestsRes.json()
+          totalGuests = guests.length
+        }
+        let completedTasks = 0
+        let inProgressTasks = 0
+        if (tasksRes.ok) {
+          const tasks = await tasksRes.json()
+          completedTasks = tasks.filter((t: any) => t.status === 'COMPLETED').length
+          inProgressTasks = tasks.filter((t: any) => t.status === 'IN_PROGRESS').length
+        }
+        let checklistItems = 0
+        if (checklistRes.ok) {
+          const checklist = await checklistRes.json()
+          checklistItems = checklist.length
+        }
+        if (!cancelled) {
+          setStats({ totalGuests, completedTasks, inProgressTasks, checklistItems })
+        }
+      } catch (e) {
+        if (!cancelled) console.error('Statistik yükleme hatası:', e)
+      } finally {
+        if (!cancelled) setLoadingStats(false)
+      }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [selectedProjectId])
 
   const loadUsers = async () => {
     try {
@@ -157,53 +217,6 @@ export default function DashboardPage() {
     }
   }
 
-  const loadStatistics = async () => {
-    try {
-      // Event holen
-      const eventResponse = await fetch('/api/events')
-      if (!eventResponse.ok) return
-      const event = await eventResponse.json()
-      const eventId = event.id
-
-      // Parallel alle Statistiken laden
-      const [guestsRes, tasksRes, checklistRes] = await Promise.all([
-        fetch(`/api/guests?eventId=${eventId}`),
-        fetch(`/api/tasks?eventId=${eventId}`),
-        fetch(`/api/checklist?eventId=${eventId}`),
-      ])
-
-      let totalGuests = 0
-      if (guestsRes.ok) {
-        const guests = await guestsRes.json()
-        totalGuests = guests.length
-      }
-
-      let completedTasks = 0
-      let inProgressTasks = 0
-      if (tasksRes.ok) {
-        const tasks = await tasksRes.json()
-        completedTasks = tasks.filter((t: any) => t.status === 'COMPLETED').length
-        inProgressTasks = tasks.filter((t: any) => t.status === 'IN_PROGRESS').length
-      }
-
-      let checklistItems = 0
-      if (checklistRes.ok) {
-        const checklist = await checklistRes.json()
-        checklistItems = checklist.length
-      }
-
-      setStats({
-        totalGuests,
-        completedTasks,
-        inProgressTasks,
-        checklistItems,
-      })
-    } catch (error) {
-      console.error('Statistik yükleme hatası:', error)
-    } finally {
-      setLoadingStats(false)
-    }
-  }
 
   const handleLogout = () => {
     // Cookie'yi sil
@@ -219,16 +232,23 @@ export default function DashboardPage() {
       alert('Bitte geben Sie einen Namen ein')
       return
     }
+    if (!selectedProjectId) {
+      alert('Bitte wählen Sie zuerst ein Projekt aus.')
+      return
+    }
 
     try {
-      // Event holen für Standard-Inhalte
-      const eventResponse = await fetch('/api/events')
+      const eventResponse = await fetch(`/api/events?projectId=${encodeURIComponent(selectedProjectId)}`)
       if (!eventResponse.ok) {
         alert('Event konnte nicht geladen werden')
         return
       }
       const event = await eventResponse.json()
-      const eventId = event.id
+      const eventId = event?.id
+      if (!eventId) {
+        alert('Kein Event im gewählten Projekt.')
+        return
+      }
 
       const categoryId = `CUSTOM_${Date.now()}`
       const response = await fetch('/api/categories', {
@@ -620,7 +640,7 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {projects.length > 0 && (
+          {(projects.length > 0 || hasEdition) && (
           <Link
             href="/dashboard/projects"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -632,7 +652,7 @@ export default function DashboardPage() {
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900">Projekte</h3>
                 <p className="text-sm text-gray-600">
-                  Projekte verwalten und Projektmitarbeiter einladen
+                  {projects.length > 0 ? 'Projekte verwalten und Projektmitarbeiter einladen' : 'Neues Projekt anlegen und Mitarbeiter einladen'}
                 </p>
               </div>
               <div className="text-indigo-600">→</div>
