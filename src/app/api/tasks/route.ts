@@ -50,12 +50,29 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
 
+    const { userId } = await getUserIdFromRequest(request)
+    let isAdmin = false
+    if (userId) {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      })
+      isAdmin = u?.role === 'ADMIN'
+    }
+
     const where: any = {}
     if (category) {
       where.category = category
     }
     if (eventId) {
       where.eventId = eventId
+    }
+    // Nicht-Admin: nur Aufgaben anzeigen, die dem User zugewiesen sind (assignedTo oder TaskAssignment)
+    if (userId && !isAdmin) {
+      where.OR = [
+        { assignedTo: userId },
+        { assignments: { some: { userId } } },
+      ]
     }
 
     const cols = await getTableColumns('tasks')
@@ -65,6 +82,7 @@ export async function GET(request: NextRequest) {
     const hasPriority = cols.has('priority')
     const hasDueDate = cols.has('dueDate') || cols.has('duedate')
     const hasCompletedAt = cols.has('completedAt') || cols.has('completedat')
+    const hasCompletedBy = cols.has('completedBy') || cols.has('completedby')
     const hasCreatedAt = cols.has('createdAt') || cols.has('createdat')
     const hasUpdatedAt = cols.has('updatedAt') || cols.has('updatedat')
 
@@ -83,6 +101,7 @@ export async function GET(request: NextRequest) {
       ...(hasPriority ? { priority: true } : {}),
       ...(hasDueDate ? { dueDate: true } : {}),
       ...(hasCompletedAt ? { completedAt: true } : {}),
+      ...(hasCompletedBy ? { completedBy: true } : {}),
       ...(hasCreatedAt ? { createdAt: true } : {}),
       ...(hasUpdatedAt ? { updatedAt: true } : {}),
     }
@@ -99,6 +118,9 @@ export async function GET(request: NextRequest) {
           user: { select: { id: true, name: true, email: true } },
         },
       }
+    }
+    if (hasCompletedBy) {
+      baseSelect.completedByUser = { select: { id: true, name: true, email: true } }
     }
 
     if (includeAttachments) {
@@ -123,6 +145,8 @@ export async function GET(request: NextRequest) {
       priority: task.priority ?? 'MEDIUM',
       dueDate: task.dueDate ?? null,
       completedAt: task.completedAt ?? null,
+      completedBy: task.completedBy ?? null,
+      completedByUser: task.completedByUser ?? null,
       createdAt: task.createdAt ?? null,
       updatedAt: task.updatedAt ?? null,
       assignedTo: task.assignedTo ?? null,
@@ -278,6 +302,7 @@ export async function PATCH(request: NextRequest) {
     const hasPriority = cols.has('priority')
     const hasDueDate = cols.has('dueDate') || cols.has('duedate')
     const hasCompletedAt = cols.has('completedAt') || cols.has('completedat')
+    const hasCompletedBy = cols.has('completedBy') || cols.has('completedby')
     const hasCreatedAt = cols.has('createdAt') || cols.has('createdat')
     const hasUpdatedAt = cols.has('updatedAt') || cols.has('updatedat')
 
@@ -289,8 +314,10 @@ export async function PATCH(request: NextRequest) {
     }
     if (hasStatus && updateData.status !== undefined) {
       dataToUpdate.status = updateData.status
-      if (updateData.status === 'COMPLETED' && hasCompletedAt) {
-        dataToUpdate.completedAt = new Date()
+      if (updateData.status === 'COMPLETED') {
+        if (hasCompletedAt) dataToUpdate.completedAt = new Date()
+        const { userId: currentUserId } = await getUserIdFromRequest(request)
+        if (currentUserId && hasCompletedBy) dataToUpdate.completedBy = currentUserId
       }
     }
     if (hasPriority && updateData.priority !== undefined) dataToUpdate.priority = updateData.priority
@@ -320,6 +347,7 @@ export async function PATCH(request: NextRequest) {
         ...(hasPriority ? { priority: true } : {}),
         ...(hasDueDate ? { dueDate: true } : {}),
         ...(hasCompletedAt ? { completedAt: true } : {}),
+        ...(hasCompletedBy ? { completedBy: true, completedByUser: { select: { id: true, name: true, email: true } } } : {}),
         ...(hasCreatedAt ? { createdAt: true } : {}),
         ...(hasUpdatedAt ? { updatedAt: true } : {}),
         ...(hasAssignedToColumn
@@ -338,6 +366,8 @@ export async function PATCH(request: NextRequest) {
       priority: (task as any).priority ?? 'MEDIUM',
       dueDate: (task as any).dueDate ?? null,
       completedAt: (task as any).completedAt ?? null,
+      completedBy: (task as any).completedBy ?? null,
+      completedByUser: (task as any).completedByUser ?? null,
       createdAt: (task as any).createdAt ?? null,
       updatedAt: (task as any).updatedAt ?? null,
       assignedTo: (task as any).assignedTo ?? null,

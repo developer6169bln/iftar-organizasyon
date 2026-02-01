@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createUser, getUserByEmail } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 const registerSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi giriniz'),
@@ -37,6 +38,15 @@ export async function POST(request: NextRequest) {
       validatedData.name,
       validatedData.password
     )
+
+    // Free-Edition zuweisen (falls vorhanden)
+    const freeEdition = await prisma.edition.findUnique({ where: { code: 'FREE' } })
+    if (freeEdition) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { editionId: freeEdition.id },
+      })
+    }
 
     // Şifreyi response'dan çıkar
     const { password, ...userWithoutPassword } = user

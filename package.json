@@ -2,6 +2,9 @@
   "name": "iftar-organizasyon",
   "version": "1.0.0",
   "private": true,
+  "prisma": {
+    "seed": "node scripts/seed-admin-editions.js"
+  },
   "engines": {
     "node": ">=20.9.0",
     "npm": ">=10.0.0"
@@ -15,6 +18,7 @@
     "postinstall": "prisma generate",
     "migrate": "prisma migrate deploy",
     "migrate:dev": "prisma migrate dev",
+    "seed": "node scripts/seed-admin-editions.js",
     "generate-vapid-keys": "node scripts/generate-vapid-keys.js"
   },
   "dependencies": {

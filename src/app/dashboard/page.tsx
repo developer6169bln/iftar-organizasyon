@@ -39,9 +39,11 @@ export default function DashboardPage() {
     responsibleUserId: '',
   })
   const [logoExists, setLogoExists] = useState<boolean | null>(null)
+  const [allowedPageIds, setAllowedPageIds] = useState<string[]>([])
+  const [allowedCategoryIds, setAllowedCategoryIds] = useState<string[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    // Token kontrolü - Cookie veya localStorage'dan oku
     const getCookie = (name: string) => {
       if (typeof document === 'undefined') return null
       const value = `; ${document.cookie}`
@@ -53,30 +55,32 @@ export default function DashboardPage() {
       return null
     }
 
-    const checkAuth = () => {
-      // Önce Cookie'den kontrol et
-      let token = getCookie('auth-token')
-      
-      // Cookie yoksa localStorage'dan kontrol et
-      if (!token) {
-        token = localStorage.getItem('auth-token')
-      }
-
+    const checkAuth = async () => {
+      const token = getCookie('auth-token') || localStorage.getItem('auth-token')
       if (!token || token.trim() === '') {
         router.push('/login')
         return
       }
-      
-      // Token var, kullanıcı bilgilerini set et
       setUser({ name: 'Kullanıcı', email: '' })
+      try {
+        const res = await fetch('/api/me', { credentials: 'include' })
+        if (res.ok) {
+          const data = await res.json()
+          setUser(data.user)
+          setAllowedPageIds(data.allowedPageIds || [])
+          setAllowedCategoryIds(data.allowedCategoryIds || [])
+          setIsAdmin(!!data.isAdmin)
+        }
+      } catch {
+        setAllowedPageIds([])
+        setAllowedCategoryIds([])
+      }
     }
 
     checkAuth()
     loadStatistics()
     loadCategories()
     loadUsers()
-    
-    // Prüfe ob Logo existiert
     checkImageExists('/uid-berlin-logo.png').then(setLogoExists)
   }, [router])
 
@@ -443,8 +447,9 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Quick Links */}
+        {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('invitations')) && (
           <Link
             href="/dashboard/invitations"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -462,6 +467,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('checkin')) && (
           <Link
             href="/dashboard/checkin"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -479,6 +486,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('reports')) && (
           <Link
             href="/dashboard/reports"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -496,6 +505,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('audit-logs')) && (
           <Link
             href="/dashboard/audit-logs"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -513,6 +524,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('push-notifications')) && (
           <Link
             href="/dashboard/push-notifications"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -530,6 +543,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('vip-namensschilder')) && (
           <Link
             href="/dashboard/vip-namensschilder"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -547,6 +562,8 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {(allowedPageIds.length === 0 || allowedPageIds.includes('tischplanung')) && (
           <Link
             href="/dashboard/tischplanung"
             className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
@@ -564,6 +581,26 @@ export default function DashboardPage() {
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
+          )}
+          {isAdmin && (
+          <Link
+            href="/dashboard/admin"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg border-2 border-amber-400"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-600 text-2xl text-white">
+                ⚙️
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Admin & Statistik</h3>
+                <p className="text-sm text-gray-600">
+                  Benutzer verwalten, Berechtigungen, Editionen, Top-User-Statistik
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
         </div>
 
         {/* Push Notifications Setup */}
@@ -597,7 +634,10 @@ export default function DashboardPage() {
             <p className="text-gray-500">Kategorien werden geladen...</p>
           ) : (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {categories.filter(cat => cat.isActive).map((category) => {
+              {categories
+                .filter(cat => cat.isActive)
+                .filter(cat => allowedCategoryIds.length === 0 || allowedCategoryIds.includes(cat.categoryId))
+                .map((category) => {
                 // Özel links
                 let href = `/dashboard/${category.categoryId.toLowerCase()}`
                 if (category.categoryId === 'GUEST_LIST') {
@@ -608,6 +648,7 @@ export default function DashboardPage() {
                 
                 return (
                 <div key={category.id} className="group relative rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg">
+                  {isAdmin && (
                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       onClick={() => handleEditCategory(category)}
@@ -624,6 +665,7 @@ export default function DashboardPage() {
                       🗑
                     </button>
                   </div>
+                  )}
                   <Link href={href} className="block">
                     <div className="mb-4 flex items-center gap-4">
                       <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${category.color} text-2xl text-white`}>
@@ -648,7 +690,8 @@ export default function DashboardPage() {
                 )
               })}
               
-              {/* Plus-Zeichen zum Hinzufügen */}
+              {/* Plus-Zeichen zum Hinzufügen – nur für Admin */}
+              {isAdmin && (
               <button
               onClick={() => setShowAddCategoryModal(true)}
               className="group flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white p-6 transition-all hover:border-indigo-500 hover:bg-indigo-50"
@@ -660,6 +703,7 @@ export default function DashboardPage() {
                 Yeni Alan Ekle
               </p>
               </button>
+              )}
             </div>
           )}
         </div>
