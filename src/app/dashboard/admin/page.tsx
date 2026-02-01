@@ -75,6 +75,15 @@ export default function AdminPage() {
     pageIds: [] as string[],
   })
   const [savingEdition, setSavingEdition] = useState(false)
+  const [showAddEdition, setShowAddEdition] = useState(false)
+  const [addEditionForm, setAddEditionForm] = useState({
+    code: '',
+    name: '',
+    annualPriceCents: 0,
+    categoryIds: [] as string[],
+    pageIds: [] as string[],
+  })
+  const [savingAddEdition, setSavingAddEdition] = useState(false)
 
   useEffect(() => {
     const token =
@@ -240,6 +249,59 @@ export default function AdminPage() {
         ? f.pageIds.filter((id) => id !== pageId)
         : [...f.pageIds, pageId],
     }))
+  }
+
+  const toggleAddCategory = (categoryId: string) => {
+    setAddEditionForm((f) => ({
+      ...f,
+      categoryIds: f.categoryIds.includes(categoryId)
+        ? f.categoryIds.filter((id) => id !== categoryId)
+        : [...f.categoryIds, categoryId],
+    }))
+  }
+  const toggleAddPage = (pageId: string) => {
+    setAddEditionForm((f) => ({
+      ...f,
+      pageIds: f.pageIds.includes(pageId)
+        ? f.pageIds.filter((id) => id !== pageId)
+        : [...f.pageIds, pageId],
+    }))
+  }
+
+  const saveNewEdition = async () => {
+    const code = addEditionForm.code.trim().toUpperCase()
+    if (!code || !addEditionForm.name.trim()) {
+      alert('Code und Name sind erforderlich.')
+      return
+    }
+    setSavingAddEdition(true)
+    try {
+      const res = await fetch('/api/editions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code,
+          name: addEditionForm.name.trim(),
+          annualPriceCents: addEditionForm.annualPriceCents,
+          categoryIds: addEditionForm.categoryIds,
+          pageIds: addEditionForm.pageIds,
+        }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setEditions((prev) => [...prev, created])
+        setShowAddEdition(false)
+        setAddEditionForm({ code: '', name: '', annualPriceCents: 0, categoryIds: [], pageIds: [] })
+      } else {
+        const err = await res.json()
+        alert(err.error || 'Anlegen fehlgeschlagen')
+      }
+    } catch {
+      alert('Anlegen fehlgeschlagen')
+    } finally {
+      setSavingAddEdition(false)
+    }
   }
 
   const saveEdition = async () => {
@@ -504,42 +566,154 @@ export default function AdminPage() {
           {loadingEditions ? (
             <p className="text-gray-500">Editionen werden geladen...</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="py-2 font-medium text-gray-700">Code</th>
-                    <th className="py-2 font-medium text-gray-700">Name</th>
-                    <th className="py-2 font-medium text-gray-700">Jahrespreis (Cent)</th>
-                    <th className="py-2 font-medium text-gray-700">Kategorien</th>
-                    <th className="py-2 font-medium text-gray-700">Seiten</th>
-                    <th className="py-2 font-medium text-gray-700"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {editions.map((e) => (
-                    <tr key={e.id} className="border-b border-gray-100">
-                      <td className="py-2 font-mono">{e.code}</td>
-                      <td className="py-2">{e.name}</td>
-                      <td className="py-2">{e.annualPriceCents}</td>
-                      <td className="py-2">{e.categoryIds?.length ?? 0}</td>
-                      <td className="py-2">{e.pageIds?.length ?? 0}</td>
-                      <td className="py-2">
-                        <button
-                          type="button"
-                          onClick={() => openEditEdition(e)}
-                          className="rounded bg-indigo-100 px-2 py-1 text-indigo-700 hover:bg-indigo-200"
-                        >
-                          Bearbeiten
-                        </button>
-                      </td>
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  {editions.length === 0
+                    ? 'Keine Editionen vorhanden. Klicken Sie auf „Neue Edition hinzufügen“, um die erste anzulegen (z. B. FREE, SILVER, GOLD).'
+                    : `${editions.length} Edition(en)`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAddEdition(true)}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  + Neue Edition hinzufügen
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="py-2 font-medium text-gray-700">Code</th>
+                      <th className="py-2 font-medium text-gray-700">Name</th>
+                      <th className="py-2 font-medium text-gray-700">Jahrespreis (Cent)</th>
+                      <th className="py-2 font-medium text-gray-700">Kategorien</th>
+                      <th className="py-2 font-medium text-gray-700">Seiten</th>
+                      <th className="py-2 font-medium text-gray-700"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {editions.map((e) => (
+                      <tr key={e.id} className="border-b border-gray-100">
+                        <td className="py-2 font-mono">{e.code}</td>
+                        <td className="py-2">{e.name}</td>
+                        <td className="py-2">{e.annualPriceCents}</td>
+                        <td className="py-2">{e.categoryIds?.length ?? 0}</td>
+                        <td className="py-2">{e.pageIds?.length ?? 0}</td>
+                        <td className="py-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditEdition(e)}
+                            className="rounded bg-indigo-100 px-2 py-1 text-indigo-700 hover:bg-indigo-200"
+                          >
+                            Bearbeiten
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
+
+        {/* Modal: Neue Edition hinzufügen */}
+        {showAddEdition && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+            <div className="my-8 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-4 text-lg font-semibold">Neue Edition hinzufügen</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Code (eindeutig, z. B. FREE, SILVER, GOLD)</label>
+                  <input
+                    type="text"
+                    value={addEditionForm.code}
+                    onChange={(e) => setAddEditionForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
+                    placeholder="z. B. BRONZE"
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    value={addEditionForm.name}
+                    onChange={(e) => setAddEditionForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="z. B. Bronze Edition"
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Jahrespreis (Cent)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={addEditionForm.annualPriceCents}
+                    onChange={(e) =>
+                      setAddEditionForm((f) => ({
+                        ...f,
+                        annualPriceCents: parseInt(e.target.value, 10) || 0,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">0 = kostenlos</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Arbeitsbereiche (Kategorien)</label>
+                  <div className="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 p-2">
+                    {categories.map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={addEditionForm.categoryIds.includes(c.categoryId)}
+                          onChange={() => toggleAddCategory(c.categoryId)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{c.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Seiten (feste Bereiche)</label>
+                  <div className="mt-2 max-h-48 overflow-y-auto rounded border border-gray-200 p-2">
+                    {allPageIds.map((pageId) => (
+                      <label key={pageId} className="flex items-center gap-2 py-1">
+                        <input
+                          type="checkbox"
+                          checked={addEditionForm.pageIds.includes(pageId)}
+                          onChange={() => toggleAddPage(pageId)}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">{PAGE_LABELS[pageId] ?? pageId}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-2">
+                <button
+                  type="button"
+                  onClick={saveNewEdition}
+                  disabled={savingAddEdition}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingAddEdition ? 'Wird angelegt…' : 'Anlegen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddEdition(false)}
+                  className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal: Edition bearbeiten */}
         {editEdition && (

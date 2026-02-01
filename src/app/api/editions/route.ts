@@ -11,6 +11,15 @@ const patchEditionSchema = z.object({
   pageIds: z.array(z.string()).optional(),
 })
 
+const postEditionSchema = z.object({
+  code: z.string().min(1, 'Code erforderlich (z. B. FREE, SILVER, GOLD)'),
+  name: z.string().min(1, 'Name erforderlich'),
+  annualPriceCents: z.number().int().min(0).optional(),
+  order: z.number().int().min(0).optional(),
+  categoryIds: z.array(z.string()).optional(),
+  pageIds: z.array(z.string()).optional(),
+})
+
 /** GET /api/editions – alle Editionen mit Kategorien und Seiten. */
 export async function GET(_request: NextRequest) {
   try {
@@ -42,21 +51,80 @@ export async function GET(_request: NextRequest) {
   }
 }
 
+async function requireAdmin(request: NextRequest) {
+  const { userId } = await getUserIdFromRequest(request)
+  if (!userId) return { ok: false as const, res: NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 }) }
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role !== 'ADMIN') return { ok: false as const, res: NextResponse.json({ error: 'Nur für Admin' }, { status: 403 }) }
+  return { ok: true as const }
+}
+
+/** POST /api/editions – neue Edition anlegen (nur Admin). */
+export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (!auth.ok) return auth.res
+  try {
+    const body = await request.json()
+    const data = postEditionSchema.parse(body)
+    const code = data.code.trim().toUpperCase()
+    const existing = await prisma.edition.findUnique({ where: { code } })
+    if (existing) {
+      return NextResponse.json({ error: `Eine Edition mit Code „${code}" existiert bereits.` }, { status: 400 })
+    }
+    const maxOrder = await prisma.edition.aggregate({ _max: { order: true } })
+    const order = data.order ?? (maxOrder._max.order ?? 0) + 1
+    const edition = await prisma.edition.create({
+      data: {
+        code,
+        name: data.name.trim(),
+        annualPriceCents: data.annualPriceCents ?? 0,
+        order,
+      },
+    })
+    const uniqueCategoryIds = [...new Set((data.categoryIds ?? []).filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    const uniquePageIds = [...new Set((data.pageIds ?? []).filter((id): id is string => typeof id === 'string' && id.length > 0))]
+    for (const categoryId of uniqueCategoryIds) {
+      await prisma.editionCategory.create({ data: { editionId: edition.id, categoryId } })
+    }
+    for (const pageId of uniquePageIds) {
+      await prisma.editionPage.create({ data: { editionId: edition.id, pageId } })
+    }
+    const created = await prisma.edition.findUnique({
+      where: { id: edition.id },
+      include: {
+        categories: { select: { categoryId: true } },
+        pages: { select: { pageId: true } },
+      },
+    })
+    return NextResponse.json({
+      id: created!.id,
+      code: created!.code,
+      name: created!.name,
+      annualPriceCents: created!.annualPriceCents,
+      order: created!.order,
+      categoryIds: (created!.categories ?? []).map((c) => c.categoryId),
+      pageIds: (created!.pages ?? []).map((p) => p.pageId),
+    }, { status: 201 })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: error.issues[0]?.message || 'Validierungsfehler' },
+        { status: 400 }
+      )
+    }
+    console.error('Edition POST error:', error)
+    return NextResponse.json(
+      { error: 'Edition konnte nicht angelegt werden' },
+      { status: 500 }
+    )
+  }
+}
+
 /** PATCH /api/editions – Edition bearbeiten (nur Admin): Name, Preis, Kategorien, Seiten. */
 export async function PATCH(request: NextRequest) {
+  const auth = await requireAdmin(request)
+  if (!auth.ok) return auth.res
   try {
-    const { userId } = await getUserIdFromRequest(request)
-    if (!userId) {
-      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
-    }
-    const admin = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true },
-    })
-    if (admin?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Nur für Admin' }, { status: 403 })
-    }
-
     const body = await request.json()
     const data = patchEditionSchema.parse(body)
 
