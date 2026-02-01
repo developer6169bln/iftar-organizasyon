@@ -361,8 +361,7 @@ export default function DashboardProjectsPage() {
         </div>
 
         <p className="mt-8 text-sm text-gray-500">
-          Als Hauptaccount (Inhaber) können Sie je nach Edition mehrere Projekte anlegen und pro Projekt
-          Projektmitarbeiter einladen. Deren Berechtigungen (Seiten und Kategorien) legen Sie pro Projekt fest.
+          Ihr Projektbereich: Hauptbenutzer → Projekte → je Projekt bestimmte Projektmitarbeiter, Aufgaben und Bereiche. Sie sehen nur Ihre eigenen Projekte und die Benutzer, die Sie in Ihren Projekten angelegt haben. Neue Benutzer registrieren Sie oben und fügen sie dem Projekt hinzu.
         </p>
       </main>
     </div>

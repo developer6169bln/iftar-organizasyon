@@ -62,18 +62,37 @@ export async function GET(request: NextRequest) {
       pagePermissions: { select: { pageId: true, allowed: true } },
     }
     let users: unknown[]
-    try {
-      users = await prisma.user.findMany({
-        select: isAdmin ? { ...baseSelect, _count: { select: { ownedProjects: true } } } : { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-      })
-    } catch {
-      users = await prisma.user.findMany({
-        select: isAdmin ? baseSelect : { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-      })
-      if (isAdmin && Array.isArray(users)) {
-        users = users.map((u: any) => ({ ...u, _count: { ownedProjects: 0 } }))
+    if (isAdmin) {
+      try {
+        users = await prisma.user.findMany({
+          select: { ...baseSelect, _count: { select: { ownedProjects: true } } },
+          orderBy: { name: 'asc' },
+        })
+      } catch {
+        users = await prisma.user.findMany({
+          select: baseSelect,
+          orderBy: { name: 'asc' },
+        })
+        users = (users as any[]).map((u) => ({ ...u, _count: { ownedProjects: 0 } }))
+      }
+    } else {
+      // Hauptbenutzer: nur Benutzer, die in mindestens einem eigenen Projekt als Projektmitarbeiter sind (eigener Projektbereich)
+      try {
+        const memberUserIds = await prisma.projectMember.findMany({
+          where: { project: { ownerId: userId } },
+          select: { userId: true },
+          distinct: ['userId'],
+        })
+        const ids = memberUserIds.map((m) => m.userId)
+        users = ids.length
+          ? await prisma.user.findMany({
+              where: { id: { in: ids } },
+              select: { id: true, name: true, email: true },
+              orderBy: { name: 'asc' },
+            })
+          : []
+      } catch {
+        users = []
       }
     }
 
@@ -155,6 +174,20 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
     })
+
+    // Neuer Hauptbenutzer: Standard-Projekt anlegen (eigener Projektbereich: Projekte → Projektmitarbeiter, Aufgaben, Bereiche)
+    if (editionId && user.id) {
+      try {
+        await prisma.project.create({
+          data: {
+            ownerId: user.id,
+            name: `Projekt ${validatedData.name}`,
+          },
+        })
+      } catch (e) {
+        console.error('Default project for new main user could not be created:', e)
+      }
+    }
 
     return NextResponse.json(user, { status: 201 })
   } catch (error) {
