@@ -44,6 +44,8 @@ export default function DashboardPage() {
   const [allowedPageIds, setAllowedPageIds] = useState<string[]>([])
   const [allowedCategoryIds, setAllowedCategoryIds] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [projects, setProjects] = useState<{ id: string; name: string; ownerId: string; isOwner: boolean }[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -65,13 +67,17 @@ export default function DashboardPage() {
       }
       setUser({ name: 'Kullanıcı', email: '' })
       try {
-        const res = await fetch('/api/me', { credentials: 'include' })
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const url = projectId ? `/api/me?projectId=${encodeURIComponent(projectId)}` : '/api/me'
+        const res = await fetch(url, { credentials: 'include' })
         if (res.ok) {
           const data = await res.json()
           setUser(data.user)
           setAllowedPageIds(data.allowedPageIds || [])
           setAllowedCategoryIds(data.allowedCategoryIds || [])
           setIsAdmin(!!data.isAdmin)
+          setProjects(data.projects || [])
+          setSelectedProjectId(projectId || (data.projects?.[0]?.id ?? null))
         }
       } catch {
         setAllowedPageIds([])
@@ -436,6 +442,31 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-bold text-white drop-shadow-lg">Iftar Organizasyon Sistemi</h1>
               <p className="mt-2 text-lg text-white drop-shadow-md">Titanic Hotel 26.02.2026</p>
+              {projects.length > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-sm text-white drop-shadow-md">Projekt:</label>
+                  <select
+                    value={selectedProjectId || ''}
+                    onChange={(e) => {
+                      const id = e.target.value || null
+                      setSelectedProjectId(id)
+                      if (typeof window !== 'undefined') {
+                        if (id) localStorage.setItem('dashboard-project-id', id)
+                        else localStorage.removeItem('dashboard-project-id')
+                        window.dispatchEvent(new CustomEvent('dashboard-project-changed'))
+                      }
+                    }}
+                    className="rounded border border-white/30 bg-white/20 px-2 py-1 text-sm text-white focus:border-white focus:outline-none"
+                  >
+                    <option value="">— auswählen —</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.isOwner ? '(Inhaber)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <button
               onClick={handleLogout}
@@ -583,6 +614,25 @@ export default function DashboardPage() {
                 <h3 className="text-lg font-semibold text-gray-900">Tischplanung</h3>
                 <p className="text-sm text-gray-600">
                   Grundriss hochladen, Tische und Podeste anordnen, Gäste zuweisen
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
+          {projects.length > 0 && (
+          <Link
+            href="/dashboard/projects"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600 text-2xl text-white">
+                📁
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Projekte</h3>
+                <p className="text-sm text-gray-600">
+                  Projekte verwalten und Projektmitarbeiter einladen
                 </p>
               </div>
               <div className="text-indigo-600">→</div>

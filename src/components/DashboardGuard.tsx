@@ -38,7 +38,9 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
       }
 
       try {
-        const res = await fetch('/api/me', { credentials: 'include', cache: 'no-store' })
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const url = projectId ? `/api/me?projectId=${encodeURIComponent(projectId)}` : '/api/me'
+        const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
         if (!res.ok) {
           router.replace('/login')
           setAllowed(false)
@@ -49,8 +51,8 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
         const allowedCategoryIds: string[] = data.allowedCategoryIds || []
         const isAdmin = !!data.isAdmin
 
-        // Dashboard-Hauptseite: immer erlauben
-        if (pathname === '/dashboard' || pathname === '/dashboard/') {
+        // Dashboard-Hauptseite und Projekte: immer erlauben (Eingeloggt reicht)
+        if (pathname === '/dashboard' || pathname === '/dashboard/' || pathname === '/dashboard/projects') {
           setAllowed(true)
           return
         }
@@ -105,6 +107,11 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
     }
 
     check()
+    const onProjectChange = () => check()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
   }, [pathname, router])
 
   // Während Prüfung: nichts anzeigen oder kurzer Ladezustand

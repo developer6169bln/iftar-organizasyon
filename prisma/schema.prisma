@@ -12,13 +12,15 @@ datasource db {
 
 // Editionen: Free, Silver, Gold (Admin legt Preise und Berechtigungen fest)
 model Edition {
-  id               String   @id @default(cuid())
-  code             String   @unique // FREE | SILVER | GOLD
-  name             String
-  annualPriceCents  Int      @default(0) // 0 = Free, sonst jährliche Gebühr in Cent
-  order            Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  code                  String   @unique // FREE | SILVER | GOLD
+  name                  String
+  annualPriceCents      Int      @default(0) // 0 = Free, sonst jährliche Gebühr in Cent
+  order                 Int      @default(0)
+  maxProjects           Int      @default(1) // Max. Projekte pro Hauptaccount
+  maxProjectStaffPerProject Int   @default(0) // Max. Projektmitarbeiter pro Projekt
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   users         User[]
   categories    EditionCategory[]
@@ -124,6 +126,8 @@ model User {
   pagePermissions          UserPagePermission[]
   subscriptions            Subscription[]
   passwordResetTokens      PasswordResetToken[]
+  ownedProjects            Project[] // Hauptaccount: eigene Projekte
+  projectMemberships       ProjectMember[] // Projektmitarbeiter in Projekten anderer
 
   @@map("users")
 }
@@ -141,9 +145,73 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-// Iftar Event Details
+// Projekt eines Hauptaccounts (z.B. "Iftar Organizasyon Sistemi")
+model Project {
+  id        String   @id @default(cuid())
+  ownerId   String   // Hauptaccount (User)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  events  Event[]
+  members ProjectMember[]
+
+  @@map("projects")
+}
+
+// Projektmitarbeiter: User mit Zugriff auf ein Projekt (Berechtigungen vom Hauptaccount vergeben)
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("MEMBER") // MEMBER | COORDINATOR
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryPermissions ProjectMemberCategoryPermission[]
+  pagePermissions      ProjectMemberPagePermission[]
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// Welche Kategorien ein Projektmitarbeiter in diesem Projekt nutzen darf (Teilmenge der Edition des Owners)
+model ProjectMemberCategoryPermission {
+  id         String   @id @default(cuid())
+  projectId  String
+  userId     String
+  categoryId String
+  allowed    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  member ProjectMember @relation(fields: [projectId, userId], references: [projectId, userId], onDelete: Cascade)
+
+  @@unique([projectId, userId, categoryId])
+  @@map("project_member_category_permissions")
+}
+
+// Welche Seiten ein Projektmitarbeiter in diesem Projekt nutzen darf
+model ProjectMemberPagePermission {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  pageId    String
+  allowed   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  member ProjectMember @relation(fields: [projectId, userId], references: [projectId, userId], onDelete: Cascade)
+
+  @@unique([projectId, userId, pageId])
+  @@map("project_member_page_permissions")
+}
+
+// Iftar Event Details (gehört zu einem Projekt)
 model Event {
   id                        String    @id @default(cuid())
+  projectId                 String?   // Projekt des Hauptaccounts (nullable für Migration)
   title                     String
   date                      DateTime
   location                  String
@@ -157,13 +225,13 @@ model Event {
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
-  // Beziehungen
-  guests         Guest[]
-  tasks          Task[]
+  project       Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  guests        Guest[]
+  tasks         Task[]
   checklistItems ChecklistItem[]
-  programItems   ProgramItem[]
-  invitations    Invitation[]
-  tablePlan      TablePlan?
+  programItems  ProgramItem[]
+  invitations   Invitation[]
+  tablePlan     TablePlan?
 
   @@map("events")
 }

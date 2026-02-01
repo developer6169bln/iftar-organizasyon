@@ -29,28 +29,30 @@ export async function GET(request: NextRequest) {
     }
     const currentUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, ownedProjects: { take: 1, select: { id: true } } },
     })
-    if (currentUser?.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Nur für Admin' }, { status: 403 })
+    const isAdmin = currentUser?.role === 'ADMIN'
+    const isProjectOwner = (currentUser?.ownedProjects?.length ?? 0) > 0
+    if (!isAdmin && !isProjectOwner) {
+      return NextResponse.json({ error: 'Nur für Admin oder Projektinhaber' }, { status: 403 })
     }
 
     const users = await prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        editionId: true,
-        editionExpiresAt: true,
-        createdAt: true,
-        edition: { select: { id: true, code: true, name: true } },
-        categoryPermissions: { select: { categoryId: true, allowed: true } },
-        pagePermissions: { select: { pageId: true, allowed: true } },
-      },
-      orderBy: {
-        name: 'asc',
-      },
+      select: isAdmin
+        ? {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            editionId: true,
+            editionExpiresAt: true,
+            createdAt: true,
+            edition: { select: { id: true, code: true, name: true } },
+            categoryPermissions: { select: { categoryId: true, allowed: true } },
+            pagePermissions: { select: { pageId: true, allowed: true } },
+          }
+        : { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
     })
 
     return NextResponse.json(users)

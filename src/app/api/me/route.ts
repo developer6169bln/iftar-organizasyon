@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getUserIdFromRequest } from '@/lib/auditLog'
-import { getAllowListForUser } from '@/lib/permissions'
+import { getAllowListForUser, getProjectsForUser } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +9,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
 
-    const { allowedPageIds, allowedCategoryIds, isAdmin, user } = await getAllowListForUser(userId)
+    const projectId = request.nextUrl.searchParams.get('projectId') || undefined
+    const [allowList, projects] = await Promise.all([
+      getAllowListForUser(userId, projectId || null),
+      getProjectsForUser(userId),
+    ])
+    const { allowedPageIds, allowedCategoryIds, isAdmin, user, isProjectOwner } = allowList
     if (!user) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
     }
@@ -19,6 +24,9 @@ export async function GET(request: NextRequest) {
       allowedPageIds,
       allowedCategoryIds,
       isAdmin,
+      projects,
+      projectId: projectId || null,
+      isProjectOwner: isProjectOwner ?? null,
     })
   } catch (error) {
     console.error('GET /api/me error:', error)
