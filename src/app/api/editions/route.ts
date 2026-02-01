@@ -11,8 +11,8 @@ const patchEditionSchema = z.object({
   pageIds: z.array(z.string()).optional(),
 })
 
-/** GET /api/editions – alle Editionen mit Kategorien und Seiten (Admin oder für Auswahl). */
-export async function GET(request: NextRequest) {
+/** GET /api/editions – alle Editionen mit Kategorien und Seiten. */
+export async function GET(_request: NextRequest) {
   try {
     const editions = await prisma.edition.findMany({
       orderBy: { order: 'asc' },
@@ -28,14 +28,15 @@ export async function GET(request: NextRequest) {
         name: e.name,
         annualPriceCents: e.annualPriceCents,
         order: e.order,
-        categoryIds: e.categories.map((c) => c.categoryId),
-        pageIds: e.pages.map((p) => p.pageId),
+        categoryIds: (e.categories ?? []).map((c) => c.categoryId),
+        pageIds: (e.pages ?? []).map((p) => p.pageId),
       }))
     )
   } catch (error) {
     console.error('Editions GET error:', error)
+    const msg = error instanceof Error ? error.message : 'Editionen konnten nicht geladen werden'
     return NextResponse.json(
-      { error: 'Editionen konnten nicht geladen werden' },
+      { error: msg },
       { status: 500 }
     )
   }
@@ -71,16 +72,18 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (data.categoryIds !== undefined) {
+      const uniqueCategoryIds = [...new Set(data.categoryIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
       await prisma.editionCategory.deleteMany({ where: { editionId: data.id } })
-      for (const categoryId of data.categoryIds) {
+      for (const categoryId of uniqueCategoryIds) {
         await prisma.editionCategory.create({
           data: { editionId: data.id, categoryId },
         })
       }
     }
     if (data.pageIds !== undefined) {
+      const uniquePageIds = [...new Set(data.pageIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
       await prisma.editionPage.deleteMany({ where: { editionId: data.id } })
-      for (const pageId of data.pageIds) {
+      for (const pageId of uniquePageIds) {
         await prisma.editionPage.create({
           data: { editionId: data.id, pageId },
         })

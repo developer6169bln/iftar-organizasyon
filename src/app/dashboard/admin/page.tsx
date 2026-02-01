@@ -53,6 +53,7 @@ export default function AdminPage() {
   const [categories, setCategories] = useState<{ id: string; categoryId: string; name: string }[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [loadingEditions, setLoadingEditions] = useState(false)
+  const [editionsError, setEditionsError] = useState<string | null>(null)
 
   const [editUser, setEditUser] = useState<UserRow | null>(null)
   const [editUserForm, setEditUserForm] = useState({
@@ -119,10 +120,20 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isAdmin) return
     setLoadingEditions(true)
+    setEditionsError(null)
     fetch('/api/editions', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data) => (Array.isArray(data) ? setEditions(data) : setEditions([])))
-      .catch(() => setEditions([]))
+      .then((res) => {
+        if (!res.ok) return res.json().then((err) => { throw new Error(err?.error || `Fehler ${res.status}`) })
+        return res.json()
+      })
+      .then((data) => {
+        if (Array.isArray(data)) setEditions(data)
+        else setEditions([])
+      })
+      .catch((e) => {
+        setEditions([])
+        setEditionsError(e?.message || 'Editionen konnten nicht geladen werden.')
+      })
       .finally(() => setLoadingEditions(false))
   }, [isAdmin])
 
@@ -206,10 +217,10 @@ export default function AdminPage() {
   const openEditEdition = (e: EditionRow) => {
     setEditEdition(e)
     setEditEditionForm({
-      name: e.name,
-      annualPriceCents: e.annualPriceCents,
-      categoryIds: [...e.categoryIds],
-      pageIds: [...e.pageIds],
+      name: e.name ?? '',
+      annualPriceCents: e.annualPriceCents ?? 0,
+      categoryIds: Array.isArray(e.categoryIds) ? [...e.categoryIds] : [],
+      pageIds: Array.isArray(e.pageIds) ? [...e.pageIds] : [],
     })
   }
 
@@ -485,6 +496,11 @@ export default function AdminPage() {
           <p className="mb-4 text-sm text-gray-600">
             Legen Sie pro Edition fest, welche Arbeitsbereiche und Seiten nutzbar sind. Preis in Cent (z. B. 9900 = 99,00 €).
           </p>
+          {editionsError && (
+            <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              {editionsError}
+            </div>
+          )}
           {loadingEditions ? (
             <p className="text-gray-500">Editionen werden geladen...</p>
           ) : (
