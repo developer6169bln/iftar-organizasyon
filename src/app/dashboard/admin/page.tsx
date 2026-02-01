@@ -26,6 +26,7 @@ type UserRow = {
   edition?: { id: string; code: string; name: string } | null
   categoryPermissions?: { categoryId: string; allowed: boolean }[]
   pagePermissions?: { pageId: string; allowed: boolean }[]
+  _count?: { ownedProjects: number }
 }
 
 type EditionRow = {
@@ -85,6 +86,14 @@ export default function AdminPage() {
     pageIds: [] as string[],
   })
   const [savingAddEdition, setSavingAddEdition] = useState(false)
+  const [showAddMainUser, setShowAddMainUser] = useState(false)
+  const [addMainUserForm, setAddMainUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    editionId: '' as string,
+  })
+  const [savingAddMainUser, setSavingAddMainUser] = useState(false)
 
   useEffect(() => {
     const token =
@@ -382,7 +391,19 @@ export default function AdminPage() {
 
         {/* Benutzer verwalten */}
         <div className="mb-8 rounded-xl bg-white p-6 shadow">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">Benutzer verwalten</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Benutzer verwalten</h2>
+            <button
+              type="button"
+              onClick={() => setShowAddMainUser(true)}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              + Neuer Hauptbenutzer
+            </button>
+          </div>
+          <p className="mb-4 text-sm text-gray-600">
+            Hauptbenutzer haben eigene Projekte und eigene Projektmitarbeiter-Listen. Nur Sie (Administrator) können neue Hauptbenutzer anlegen. Die vorhandenen User sind Ihre Projektmitarbeiter.
+          </p>
           {loadingUsers ? (
             <p className="text-gray-500">Benutzer werden geladen...</p>
           ) : (
@@ -390,6 +411,7 @@ export default function AdminPage() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-gray-200">
+                    <th className="py-2 font-medium text-gray-700">Typ</th>
                     <th className="py-2 font-medium text-gray-700">Name</th>
                     <th className="py-2 font-medium text-gray-700">E-Mail</th>
                     <th className="py-2 font-medium text-gray-700">Rolle</th>
@@ -401,6 +423,11 @@ export default function AdminPage() {
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id} className="border-b border-gray-100">
+                      <td className="py-2">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${u.editionId || (u._count?.ownedProjects ?? 0) > 0 ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-700'}`}>
+                          {u.role === 'ADMIN' ? 'Administrator' : u.editionId || (u._count?.ownedProjects ?? 0) > 0 ? 'Hauptbenutzer' : 'Projektmitarbeiter'}
+                        </span>
+                      </td>
                       <td className="py-2">{u.name}</td>
                       <td className="py-2 text-gray-600">{u.email}</td>
                       <td className="py-2">{u.role}</td>
@@ -424,6 +451,114 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+
+        {/* Modal: Neuer Hauptbenutzer */}
+        {showAddMainUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+            <div className="my-8 w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-4 text-lg font-semibold">Neuer Hauptbenutzer anlegen</h3>
+              <p className="mb-4 text-sm text-gray-500">
+                Hauptbenutzer erhalten eine Edition und können eigene Projekte anlegen sowie eigene Projektmitarbeiter verwalten.
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    value={addMainUserForm.name}
+                    onChange={(e) => setAddMainUserForm((f) => ({ ...f, name: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="Max Mustermann"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">E-Mail</label>
+                  <input
+                    type="email"
+                    value={addMainUserForm.email}
+                    onChange={(e) => setAddMainUserForm((f) => ({ ...f, email: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="max@beispiel.de"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Passwort</label>
+                  <input
+                    type="password"
+                    value={addMainUserForm.password}
+                    onChange={(e) => setAddMainUserForm((f) => ({ ...f, password: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="min. 6 Zeichen"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Edition</label>
+                  <select
+                    value={addMainUserForm.editionId}
+                    onChange={(e) => setAddMainUserForm((f) => ({ ...f, editionId: e.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">– Bitte wählen –</option>
+                    {editions.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name} ({e.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddMainUser(false)
+                    setAddMainUserForm({ name: '', email: '', password: '', editionId: '' })
+                  }}
+                  className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  disabled={savingAddMainUser || !addMainUserForm.name.trim() || !addMainUserForm.email.trim() || !addMainUserForm.password || addMainUserForm.password.length < 6 || !addMainUserForm.editionId}
+                  onClick={async () => {
+                    setSavingAddMainUser(true)
+                    try {
+                      const res = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                          name: addMainUserForm.name.trim(),
+                          email: addMainUserForm.email.trim(),
+                          password: addMainUserForm.password,
+                          role: 'COORDINATOR',
+                          editionId: addMainUserForm.editionId || null,
+                        }),
+                      })
+                      if (res.ok) {
+                        const created = await res.json()
+                        setUsers((prev) => [...prev, { ...created, _count: { ownedProjects: 0 } }])
+                        setShowAddMainUser(false)
+                        setAddMainUserForm({ name: '', email: '', password: '', editionId: '' })
+                      } else {
+                        const err = await res.json()
+                        alert(err.error || 'Anlegen fehlgeschlagen')
+                      }
+                    } catch {
+                      alert('Anlegen fehlgeschlagen')
+                    } finally {
+                      setSavingAddMainUser(false)
+                    }
+                  }}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingAddMainUser ? 'Wird angelegt…' : 'Hauptbenutzer anlegen'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal: Benutzer bearbeiten */}
         {editUser && (

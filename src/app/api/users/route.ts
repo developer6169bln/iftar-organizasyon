@@ -9,6 +9,7 @@ const userSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   role: z.string().optional(),
+  editionId: z.string().nullable().optional(),
 })
 
 const patchUserSchema = z.object({
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
             edition: { select: { id: true, code: true, name: true } },
             categoryPermissions: { select: { categoryId: true, allowed: true } },
             pagePermissions: { select: { pageId: true, allowed: true } },
+            _count: { select: { ownedProjects: true } },
           }
         : { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
@@ -67,8 +69,24 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await getUserIdFromRequest(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+    }
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    if (currentUser?.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Nur der Administrator (Hauptbenutzer) kann neue Benutzer anlegen.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const validatedData = userSchema.parse(body)
+    const editionId = (body.editionId as string) || null
 
     // Prüfe ob E-Mail bereits existiert
     const existingUser = await prisma.user.findUnique({
@@ -82,16 +100,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Erstelle neuen Benutzer
+    // Erstelle neuen Benutzer (Hauptbenutzer wenn editionId gesetzt, sonst Projektmitarbeiter)
     const hashedPassword = await hashPassword(validatedData.password)
-    const freeEdition = await prisma.edition.findUnique({ where: { code: 'FREE' } })
     const user = await prisma.user.create({
       data: {
         name: validatedData.name,
         email: validatedData.email,
         password: hashedPassword,
-        role: validatedData.role || 'COORDINATOR',
-        editionId: freeEdition?.id ?? undefined,
+        role: (validatedData.role as 'ADMIN' | 'COORDINATOR') || 'COORDINATOR',
+        editionId: editionId || undefined,
       },
       select: {
         id: true,
