@@ -28,59 +28,68 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
-    let isAdmin = false
-    let isProjectOwner = false
-    let hasEdition = false
+
+    // Aktuellen User per Raw-SQL (ohne projects-Relation), damit GET auch funktioniert wenn projects-Tabelle fehlt
+    let role: string = ''
+    let editionId: string | null = null
     try {
-      const currentUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true, editionId: true, ownedProjects: { take: 1, select: { id: true } } },
-      })
-      isAdmin = currentUser?.role === 'ADMIN'
-      isProjectOwner = (currentUser?.ownedProjects?.length ?? 0) > 0
-      hasEdition = !!currentUser?.editionId
-    } catch {
-      const fallback = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { role: true, editionId: true },
-      })
-      isAdmin = fallback?.role === 'ADMIN'
-      isProjectOwner = false
-      hasEdition = !!fallback?.editionId
+      const rows = await prisma.$queryRaw<{ role: string; editionId: string | null }[]>`
+        SELECT "role", "editionId" FROM "users" WHERE "id" = ${userId} LIMIT 1
+      `
+      const row = rows[0]
+      if (row) {
+        role = row.role
+        editionId = row.editionId
+      }
+    } catch (e) {
+      console.error('GET /api/users current user lookup:', e)
+      return NextResponse.json(
+        { error: 'Benutzer konnten nicht geladen werden', details: e instanceof Error ? e.message : String(e) },
+        { status: 500 }
+      )
     }
-    // Erlauben: Admin, Projektinhaber oder Hauptnutzer (editionId) – auch ohne Projekte leere Liste
+
+    const isAdmin = role === 'ADMIN'
+    const hasEdition = !!editionId
+    let isProjectOwner = false
+    try {
+      const countRows = await prisma.$queryRaw<{ c: bigint }[]>`SELECT COUNT(*) as c FROM "projects" WHERE "ownerId" = ${userId}`
+      isProjectOwner = Number(countRows[0]?.c ?? 0) > 0
+    } catch {
+      // projects-Tabelle fehlt evtl. → nicht Projektinhaber
+    }
+
     if (!isAdmin && !isProjectOwner && !hasEdition) {
       return NextResponse.json({ error: 'Nur für Admin oder Projektinhaber' }, { status: 403 })
     }
 
-    const baseSelect = {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      editionId: true,
-      editionExpiresAt: true,
-      createdAt: true,
-      edition: { select: { id: true, code: true, name: true } },
-      categoryPermissions: { select: { categoryId: true, allowed: true } },
-      pagePermissions: { select: { pageId: true, allowed: true } },
-    }
     let users: unknown[]
     if (isAdmin) {
       try {
         users = await prisma.user.findMany({
-          select: { ...baseSelect, _count: { select: { ownedProjects: true } } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            editionId: true,
+            editionExpiresAt: true,
+            createdAt: true,
+            edition: { select: { id: true, code: true, name: true } },
+            categoryPermissions: { select: { categoryId: true, allowed: true } },
+            pagePermissions: { select: { pageId: true, allowed: true } },
+          },
           orderBy: { name: 'asc' },
         })
+        users = (users as any[]).map((u) => ({ ...u, _count: { ownedProjects: 0 } }))
       } catch {
         users = await prisma.user.findMany({
-          select: baseSelect,
+          select: { id: true, name: true, email: true, role: true, editionId: true, editionExpiresAt: true, createdAt: true },
           orderBy: { name: 'asc' },
         })
         users = (users as any[]).map((u) => ({ ...u, _count: { ownedProjects: 0 } }))
       }
     } else {
-      // Hauptbenutzer: nur Benutzer, die in mindestens einem eigenen Projekt als Projektmitarbeiter sind (eigener Projektbereich)
       try {
         const memberUserIds = await prisma.projectMember.findMany({
           where: { project: { ownerId: userId } },
@@ -104,7 +113,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Users fetch error:', error)
     return NextResponse.json(
-      { error: 'Benutzer konnten nicht geladen werden' },
+      { error: 'Benutzer konnten nicht geladen werden', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }

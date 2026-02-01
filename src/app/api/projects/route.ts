@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { getProjectsForUser } from '@/lib/permissions'
@@ -32,59 +33,106 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Projektname ist erforderlich' }, { status: 400 })
     }
 
-    let user: { role: string; editionId: string | null; edition?: { maxProjects: number } | null; ownedCount?: number } | null = null
+    // User nur role + editionId (per Raw-SQL, damit projects-Tabelle/Relation nicht nötig ist)
+    let u: { role: string; editionId: string | null } | null = null
     try {
-      const u = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          role: true,
-          editionId: true,
-          edition: { select: { maxProjects: true } },
-          _count: { select: { ownedProjects: true } },
-        },
-      })
-      if (u) {
-        user = {
-          role: u.role,
-          editionId: u.editionId,
-          edition: u.edition,
-          ownedCount: u._count?.ownedProjects ?? 0,
-        }
-      }
-    } catch (err) {
-      console.error('POST /api/projects user lookup:', err)
-      return NextResponse.json({ error: 'Benutzer konnte nicht geladen werden' }, { status: 500 })
+      const rows = await prisma.$queryRaw<{ role: string; editionId: string | null }[]>`
+        SELECT "role", "editionId" FROM "users" WHERE "id" = ${userId} LIMIT 1
+      `
+      u = rows[0] ?? null
+    } catch (userErr) {
+      console.error('POST /api/projects user lookup:', userErr)
+      return NextResponse.json(
+        { error: 'Benutzerdaten konnten nicht gelesen werden.', details: userErr instanceof Error ? userErr.message : String(userErr) },
+        { status: 500 }
+      )
     }
-
-    if (!user) {
+    if (!u) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
     }
 
     // Nur Admin oder Hauptnutzer (mit Edition) dürfen Projekte anlegen
-    if (user.role !== 'ADMIN' && !user.editionId) {
+    if (u.role !== 'ADMIN' && !u.editionId) {
       return NextResponse.json(
         { error: 'Nur Administratoren oder Hauptnutzer können Projekte anlegen.' },
         { status: 403 }
       )
     }
 
-    const maxProjects = user.role === 'ADMIN' ? 999 : (user.edition?.maxProjects ?? 1)
-    if ((user.ownedCount ?? 0) >= maxProjects) {
+    // maxProjects aus Edition (falls Spalte fehlt → 1)
+    let maxProjects = 1
+    if (u.role === 'ADMIN') {
+      maxProjects = 999
+    } else if (u.editionId) {
+      try {
+        const edition = await prisma.edition.findUnique({
+          where: { id: u.editionId },
+          select: { maxProjects: true },
+        })
+        if (edition?.maxProjects != null) maxProjects = edition.maxProjects
+      } catch {
+        // Spalte maxProjects fehlt evtl. → 1
+      }
+    }
+
+    // Anzahl eigener Projekte separat (robust, wenn Tabelle fehlt → 0)
+    let ownedCount = 0
+    try {
+      ownedCount = await prisma.project.count({ where: { ownerId: userId } })
+    } catch {
+      // Tabelle projects fehlt evtl. → 0, create wird danach ggf. 500 mit klarer Meldung
+    }
+    if (ownedCount >= maxProjects) {
       return NextResponse.json(
         { error: `Maximale Anzahl Projekte (${maxProjects}) erreicht. Bitte Edition erweitern.` },
         { status: 403 }
       )
     }
 
-    const project = await prisma.project.create({
-      data: { ownerId: userId, name },
-    })
+    // Immer Raw-SQL-INSERT (unabhängig von Prisma-Client/Schema, gleiche Struktur wie manual_create_projects_and_members.sql)
+    const id = randomUUID()
+    try {
+      await prisma.$executeRaw`
+        INSERT INTO "projects" ("id", "ownerId", "name", "createdAt", "updatedAt")
+        VALUES (${id}, ${userId}, ${name}, NOW(), NOW())
+      `
+    } catch (insertErr) {
+      const insertMsg = insertErr instanceof Error ? insertErr.message : String(insertErr)
+      console.error('POST /api/projects INSERT error:', insertErr)
+      return NextResponse.json(
+        {
+          error: 'Projekt konnte nicht erstellt werden.',
+          details: insertMsg,
+          hint: insertMsg.toLowerCase().includes('exist') || insertMsg.toLowerCase().includes('relation')
+            ? 'Tabelle "projects" fehlt. Bitte auf Railway (Postgres → Query) die Datei manual_create_projects_and_members.sql ausführen.'
+            : undefined,
+        },
+        { status: 500 }
+      )
+    }
+
+    const rows = await prisma.$queryRaw<{ id: string; ownerId: string; name: string; createdAt: Date; updatedAt: Date }[]>`
+      SELECT "id", "ownerId", "name", "createdAt", "updatedAt" FROM "projects" WHERE "id" = ${id}
+    `
+    const project = rows[0]
+    if (!project) {
+      return NextResponse.json(
+        { error: 'Projekt wurde angelegt, konnte aber nicht gelesen werden.', details: 'SELECT nach INSERT lieferte keine Zeile.' },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(project, { status: 201 })
   } catch (error) {
     console.error('POST /api/projects error:', error)
     const msg = error instanceof Error ? error.message : String(error)
+    const code = error && typeof (error as any).code === 'string' ? (error as any).code : ''
     return NextResponse.json(
-      { error: 'Projekt konnte nicht erstellt werden', details: msg },
+      {
+        error: 'Projekt konnte nicht erstellt werden',
+        details: msg,
+        ...(code ? { code } : {}),
+      },
       { status: 500 }
     )
   }

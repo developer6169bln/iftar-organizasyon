@@ -89,7 +89,10 @@ export default function DashboardProjectsPage() {
         await loadProjectDetail(created.id)
       } else {
         const data = await res.json()
-        setError(data.error || 'Projekt konnte nicht erstellt werden')
+        let msg = data.error || 'Projekt konnte nicht erstellt werden'
+        if (data.details) msg += '\n' + data.details
+        if (data.hint) msg += '\n\n' + data.hint
+        setError(msg)
       }
     } catch {
       setError('Projekt konnte nicht erstellt werden')
@@ -205,7 +208,7 @@ export default function DashboardProjectsPage() {
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="mb-6 whitespace-pre-wrap rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
             {error}
           </div>
         )}
