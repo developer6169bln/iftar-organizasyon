@@ -28,34 +28,54 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
-    const currentUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { role: true, ownedProjects: { take: 1, select: { id: true } } },
-    })
-    const isAdmin = currentUser?.role === 'ADMIN'
-    const isProjectOwner = (currentUser?.ownedProjects?.length ?? 0) > 0
+    let isAdmin = false
+    let isProjectOwner = false
+    try {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, ownedProjects: { take: 1, select: { id: true } } },
+      })
+      isAdmin = currentUser?.role === 'ADMIN'
+      isProjectOwner = (currentUser?.ownedProjects?.length ?? 0) > 0
+    } catch {
+      const fallback = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, editionId: true },
+      })
+      isAdmin = fallback?.role === 'ADMIN'
+      isProjectOwner = false
+    }
     if (!isAdmin && !isProjectOwner) {
       return NextResponse.json({ error: 'Nur für Admin oder Projektinhaber' }, { status: 403 })
     }
 
-    const users = await prisma.user.findMany({
-      select: isAdmin
-        ? {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            editionId: true,
-            editionExpiresAt: true,
-            createdAt: true,
-            edition: { select: { id: true, code: true, name: true } },
-            categoryPermissions: { select: { categoryId: true, allowed: true } },
-            pagePermissions: { select: { pageId: true, allowed: true } },
-            _count: { select: { ownedProjects: true } },
-          }
-        : { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-    })
+    const baseSelect = {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      editionId: true,
+      editionExpiresAt: true,
+      createdAt: true,
+      edition: { select: { id: true, code: true, name: true } },
+      categoryPermissions: { select: { categoryId: true, allowed: true } },
+      pagePermissions: { select: { pageId: true, allowed: true } },
+    }
+    let users: unknown[]
+    try {
+      users = await prisma.user.findMany({
+        select: isAdmin ? { ...baseSelect, _count: { select: { ownedProjects: true } } } : { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+      })
+    } catch {
+      users = await prisma.user.findMany({
+        select: isAdmin ? baseSelect : { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+      })
+      if (isAdmin && Array.isArray(users)) {
+        users = users.map((u: any) => ({ ...u, _count: { ownedProjects: 0 } }))
+      }
+    }
 
     return NextResponse.json(users)
   } catch (error) {
@@ -80,10 +100,17 @@ export async function POST(request: NextRequest) {
         select: { role: true, editionId: true, _count: { select: { ownedProjects: true } } },
       })
     } catch {
-      return NextResponse.json({ error: 'Benutzer konnte nicht geprüft werden' }, { status: 500 })
+      currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true, editionId: true },
+      })
+      if (currentUser) (currentUser as any)._count = { ownedProjects: 0 }
     }
-    const isAdmin = currentUser?.role === 'ADMIN'
-    const isMainUser = isAdmin || !!currentUser?.editionId || (currentUser?._count?.ownedProjects ?? 0) > 0
+    if (!currentUser) {
+      return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 401 })
+    }
+    const isAdmin = currentUser.role === 'ADMIN'
+    const isMainUser = isAdmin || !!currentUser.editionId || (currentUser._count?.ownedProjects ?? 0) > 0
     if (!isMainUser) {
       return NextResponse.json(
         { error: 'Nur Administrator oder Hauptbenutzer können neue Benutzer anlegen.' },
