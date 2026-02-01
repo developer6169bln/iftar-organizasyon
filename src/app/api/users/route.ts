@@ -30,13 +30,15 @@ export async function GET(request: NextRequest) {
     }
     let isAdmin = false
     let isProjectOwner = false
+    let hasEdition = false
     try {
       const currentUser = await prisma.user.findUnique({
         where: { id: userId },
-        select: { role: true, ownedProjects: { take: 1, select: { id: true } } },
+        select: { role: true, editionId: true, ownedProjects: { take: 1, select: { id: true } } },
       })
       isAdmin = currentUser?.role === 'ADMIN'
       isProjectOwner = (currentUser?.ownedProjects?.length ?? 0) > 0
+      hasEdition = !!currentUser?.editionId
     } catch {
       const fallback = await prisma.user.findUnique({
         where: { id: userId },
@@ -44,8 +46,10 @@ export async function GET(request: NextRequest) {
       })
       isAdmin = fallback?.role === 'ADMIN'
       isProjectOwner = false
+      hasEdition = !!fallback?.editionId
     }
-    if (!isAdmin && !isProjectOwner) {
+    // Erlauben: Admin, Projektinhaber oder Hauptnutzer (editionId) – auch ohne Projekte leere Liste
+    if (!isAdmin && !isProjectOwner && !hasEdition) {
       return NextResponse.json({ error: 'Nur für Admin oder Projektinhaber' }, { status: 403 })
     }
 

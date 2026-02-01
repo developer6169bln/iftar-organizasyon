@@ -448,8 +448,8 @@ export default function DashboardPage() {
       <header 
         className="relative bg-cover bg-center bg-no-repeat shadow-sm"
         style={{
-          backgroundImage: logoExists === false ? 'none' : 'url(/uid-berlin-logo.png)',
-          backgroundSize: 'contain',
+          backgroundImage: logoExists === true ? 'url(/uid-berlin-logo.png)' : 'url(/header-bg.jpg)',
+          backgroundSize: logoExists === true ? 'contain' : 'cover',
           backgroundPosition: 'center',
           backgroundColor: '#215F7D',
           minHeight: '200px',
