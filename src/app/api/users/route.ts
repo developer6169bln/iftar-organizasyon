@@ -21,8 +21,20 @@ const patchUserSchema = z.object({
   pagePermissions: z.array(z.object({ pageId: z.string(), allowed: z.boolean() })).optional(),
 })
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const { userId } = await getUserIdFromRequest(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+    }
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    if (currentUser?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Nur für Admin' }, { status: 403 })
+    }
+
     const users = await prisma.user.findMany({
       select: {
         id: true,

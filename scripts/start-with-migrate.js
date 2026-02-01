@@ -105,6 +105,16 @@ async function main() {
     }
   }
 
+  // Optional: Beim Start einen Benutzer auf ADMIN setzen (z. B. SET_ADMIN_EMAIL=yasko1461@gmail.com)
+  if (process.env.SET_ADMIN_EMAIL) {
+    try {
+      console.log('🔄 set-admin-on-start für', process.env.SET_ADMIN_EMAIL)
+      await run(process.execPath, [path.join(process.cwd(), 'scripts', 'set-admin-on-start.js')])
+    } catch (e) {
+      console.warn('⚠️ set-admin-on-start übersprungen:', e?.message || e)
+    }
+  }
+
   console.log('🚀 Starte Next.js (PORT=%s)…', process.env.PORT || 3000)
   await run(binNext, ['start'])
 }
