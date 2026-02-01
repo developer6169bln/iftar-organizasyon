@@ -25,40 +25,72 @@ export type AllowListResult = {
   isProjectOwner?: boolean
 }
 
+/** User-Query ohne Projekt-Relationen (Fallback wenn projects-Tabellen fehlen). */
+const userSelectWithoutProjects = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  editionId: true,
+  editionExpiresAt: true,
+  edition: {
+    select: {
+      id: true,
+      pages: { select: { pageId: true } },
+      categories: { select: { categoryId: true } },
+    },
+  },
+  pagePermissions: { select: { pageId: true, allowed: true } },
+  categoryPermissions: { select: { categoryId: true, allowed: true } },
+} as const
+
 /**
  * Welche Seiten und Kategorien ein User nutzen darf.
  * Ohne projectId: Hauptaccount-Logik (Edition + User-Overrides). Admin = alles.
  * Mit projectId: Wenn Owner des Projekts → Edition; wenn Projektmitarbeiter → nur vergebene Rechte; sonst leer.
+ * Fallback: Wenn Projekt-Tabellen fehlen, wird ohne Projekt-Daten gearbeitet (Login bleibt möglich).
  */
 export async function getAllowListForUser(userId: string, projectId?: string | null): Promise<AllowListResult> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      editionId: true,
-      editionExpiresAt: true,
-      edition: {
-        select: {
-          id: true,
-          pages: { select: { pageId: true } },
-          categories: { select: { categoryId: true } },
+  type UserRow = {
+    id: string
+    email: string
+    name: string
+    role: string
+    editionId: string | null
+    editionExpiresAt: Date | null
+    edition: { pages: { pageId: string }[]; categories: { categoryId: string }[] } | null
+    pagePermissions: { pageId: string; allowed: boolean }[]
+    categoryPermissions: { categoryId: string; allowed: boolean }[]
+    ownedProjects?: { id: string }[]
+    projectMemberships?: { projectId: string; categoryPermissions: { categoryId: string; allowed: boolean }[]; pagePermissions: { pageId: string; allowed: boolean }[] }[]
+  }
+  let user: UserRow | null = null
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        ...userSelectWithoutProjects,
+        ownedProjects: { select: { id: true } },
+        projectMemberships: {
+          select: {
+            projectId: true,
+            categoryPermissions: { select: { categoryId: true, allowed: true } },
+            pagePermissions: { select: { pageId: true, allowed: true } },
+          },
         },
       },
-      pagePermissions: { select: { pageId: true, allowed: true } },
-      categoryPermissions: { select: { categoryId: true, allowed: true } },
-      ownedProjects: { select: { id: true } },
-      projectMemberships: {
-        select: {
-          projectId: true,
-          categoryPermissions: { select: { categoryId: true, allowed: true } },
-          pagePermissions: { select: { pageId: true, allowed: true } },
-        },
-      },
-    },
-  })
+    }) as UserRow | null
+  } catch {
+    // Fallback wenn projects/project_members Tabellen fehlen (z. B. Migration noch nicht ausgeführt)
+    const fallback = await prisma.user.findUnique({
+      where: { id: userId },
+      select: userSelectWithoutProjects,
+    })
+    if (fallback) {
+      user = { ...fallback, ownedProjects: [], projectMemberships: [] }
+    }
+  }
 
   if (!user) {
     return { allowedPageIds: [], allowedCategoryIds: [], isAdmin: false, user: null }
@@ -74,10 +106,13 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
     editionExpiresAt: user.editionExpiresAt,
   }
 
+  const ownedProjects = user.ownedProjects ?? []
+  const projectMemberships = user.projectMemberships ?? []
+
   // Projekt-Kontext: Berechtigungen für dieses Projekt
   if (projectId) {
-    const isOwner = user.ownedProjects.some((p) => p.id === projectId)
-    const membership = user.projectMemberships.find((m) => m.projectId === projectId)
+    const isOwner = ownedProjects.some((p) => p.id === projectId)
+    const membership = projectMemberships.find((m) => m.projectId === projectId)
 
     if (isAdmin) {
       const categories = await prisma.category.findMany({ select: { categoryId: true } })
@@ -189,20 +224,24 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
   }
 }
 
-/** Projekte, die der User besitzt oder in denen er Mitglied ist. */
+/** Projekte, die der User besitzt oder in denen er Mitglied ist. Gibt [] zurück wenn Projekt-Tabellen fehlen. */
 export async function getProjectsForUser(userId: string): Promise<{ id: string; name: string; ownerId: string; isOwner: boolean }[]> {
-  const owned = await prisma.project.findMany({
-    where: { ownerId: userId },
-    select: { id: true, name: true, ownerId: true },
-  })
-  const asMember = await prisma.projectMember.findMany({
-    where: { userId },
-    select: { projectId: true, project: { select: { id: true, name: true, ownerId: true } } },
-  })
-  return [
-    ...owned.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: true })),
-    ...asMember.map((m) => ({ id: m.project.id, name: m.project.name, ownerId: m.project.ownerId, isOwner: false })),
-  ]
+  try {
+    const owned = await prisma.project.findMany({
+      where: { ownerId: userId },
+      select: { id: true, name: true, ownerId: true },
+    })
+    const asMember = await prisma.projectMember.findMany({
+      where: { userId },
+      select: { projectId: true, project: { select: { id: true, name: true, ownerId: true } } },
+    })
+    return [
+      ...owned.map((p) => ({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: true })),
+      ...asMember.map((m) => ({ id: m.project.id, name: m.project.name, ownerId: m.project.ownerId, isOwner: false })),
+    ]
+  } catch {
+    return []
+  }
 }
 
 export function canAccessPage(allowedPageIds: string[], pageId: string): boolean {

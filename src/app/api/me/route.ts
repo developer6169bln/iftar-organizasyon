@@ -10,10 +10,20 @@ export async function GET(request: NextRequest) {
     }
 
     const projectId = request.nextUrl.searchParams.get('projectId') || undefined
-    const [allowList, projects] = await Promise.all([
-      getAllowListForUser(userId, projectId || null),
-      getProjectsForUser(userId),
-    ])
+    let allowList: Awaited<ReturnType<typeof getAllowListForUser>>
+    let projects: Awaited<ReturnType<typeof getProjectsForUser>> = []
+
+    try {
+      ;[allowList, projects] = await Promise.all([
+        getAllowListForUser(userId, projectId || null),
+        getProjectsForUser(userId),
+      ])
+    } catch (err) {
+      console.error('GET /api/me allowList/projects error:', err)
+      allowList = await getAllowListForUser(userId, null)
+      projects = []
+    }
+
     const { allowedPageIds, allowedCategoryIds, isAdmin, user, isProjectOwner } = allowList
     if (!user) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
@@ -21,9 +31,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       user,
-      allowedPageIds,
-      allowedCategoryIds,
-      isAdmin,
+      allowedPageIds: allowedPageIds ?? [],
+      allowedCategoryIds: allowedCategoryIds ?? [],
+      isAdmin: !!isAdmin,
       projects,
       projectId: projectId || null,
       isProjectOwner: isProjectOwner ?? null,
