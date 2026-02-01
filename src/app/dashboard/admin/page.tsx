@@ -380,7 +380,7 @@ export default function AdminPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Edition</label>
                     <select
-                      value={editUserForm.editionId}
+                      value={editUserForm.editionId ?? ''}
                       onChange={(e) =>
                         setEditUserForm((f) => ({
                           ...f,
