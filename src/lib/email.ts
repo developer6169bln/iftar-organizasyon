@@ -170,6 +170,45 @@ async function sendViaMailjet(
   return { success: true, messageId: idStr }
 }
 
+/** Einfacher E-Mail-Versand (z. B. Passwort-Reset). */
+export async function sendEmail(
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody?: string
+): Promise<{ success: true; messageId?: string }> {
+  const config = await prisma.emailConfig.findFirst({
+    where: { isActive: true },
+  })
+
+  if (!config) {
+    throw new Error('Keine aktive Email-Konfiguration')
+  }
+
+  const text = textBody ?? htmlBody.replace(/<[^>]*>/g, '')
+
+  if (config.type === 'MAILJET') {
+    const result = await sendViaMailjet(config, to, subject, htmlBody, text)
+    return result
+  }
+
+  const transporter = await getEmailTransporter()
+  if (!transporter) {
+    throw new Error('Email-Transporter konnte nicht erstellt werden')
+  }
+
+  const mailOptions = {
+    from: `"Iftar Organizasyon" <${config.email}>`,
+    to,
+    subject,
+    html: htmlBody,
+    text,
+  }
+
+  const info = await transporter.sendMail(mailOptions)
+  return { success: true, messageId: info.messageId }
+}
+
 export async function sendInvitationEmail(
   to: string,
   subject: string,
