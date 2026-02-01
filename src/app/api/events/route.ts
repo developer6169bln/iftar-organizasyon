@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { getProjectsForUser } from '@/lib/permissions'
 
@@ -16,25 +17,25 @@ export async function GET(request: NextRequest) {
       : false
 
     // Ohne Login: nur Events aus Projekten mit Zugriff (leer wenn nicht eingeloggt)
-    const where: { projectId?: string | { in: string[] } | { in: string[] } | null; OR?: { projectId: string | null }[] } = {}
+    let where: Prisma.EventWhereInput | undefined
     if (projectId) {
       if (projectIds.length && !projectIds.includes(projectId)) {
         return NextResponse.json({ error: 'Kein Zugriff auf dieses Projekt' }, { status: 403 })
       }
-      where.projectId = projectId
+      where = { projectId }
     } else if (projectIds.length) {
       // Admin: auch Legacy-Events (projectId null) anzeigen – zählen als APP-Admin-Projekt
       if (isAdmin) {
-        where.OR = [{ projectId: { in: projectIds } }, { projectId: null }]
+        where = { OR: [{ projectId: { in: projectIds } }, { projectId: null }] }
       } else {
-        where.projectId = { in: projectIds }
+        where = { projectId: { in: projectIds } }
       }
     } else if (userId) {
-      where.projectId = { in: [] }
+      where = { projectId: { in: [] } }
     }
 
     let event = await prisma.event.findFirst({
-      where: Object.keys(where).length ? where : undefined,
+      where,
       orderBy: { date: 'asc' },
     })
 
