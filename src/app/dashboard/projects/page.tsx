@@ -364,7 +364,7 @@ export default function DashboardProjectsPage() {
         </div>
 
         <p className="mt-8 text-sm text-gray-500">
-          Ihr Projektbereich: Hauptbenutzer → Projekte → je Projekt bestimmte Projektmitarbeiter, Aufgaben und Bereiche. Sie sehen nur Ihre eigenen Projekte und die Benutzer, die Sie in Ihren Projekten angelegt haben. Neue Benutzer registrieren Sie oben und fügen sie dem Projekt hinzu.
+          <strong>Sie sind Administrator nur für Ihren Account.</strong> Sie sehen und verwalten ausschließlich Ihre eigenen Projekte sowie alle Gäste, Aufgaben und Listen, die Sie dort anlegen. Sie haben vollen Zugriff auf Ihre Projekte und können Projektmitarbeiter hinzufügen. Neue Benutzer registrieren Sie oben und fügen sie dem Projekt hinzu.
         </p>
       </main>
     </div>

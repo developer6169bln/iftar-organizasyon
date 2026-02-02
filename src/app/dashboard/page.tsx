@@ -505,6 +505,11 @@ export default function DashboardPage() {
             Sie haben keinen Zugriff auf diesen Bereich. Die Berechtigungen werden vom Administrator festgelegt.
           </div>
         )}
+        {hasEdition && !isAdmin && (
+          <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-800">
+            <strong>Administrator nur für Ihren Account:</strong> Sie verwalten ausschließlich Ihre eigenen Projekte und alle Daten, die Sie dort anlegen (Gäste, Aufgaben, Listen, Einladungen). Sie sehen und bearbeiten nur das, was Sie selbst hinzugefügt haben – keine Daten anderer Konten.
+          </div>
+        )}
         {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
           {(isAdmin || allowedPageIds.includes('invitations')) && (
