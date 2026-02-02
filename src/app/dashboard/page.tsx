@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const [allowedPageIds, setAllowedPageIds] = useState<string[]>([])
   const [allowedCategoryIds, setAllowedCategoryIds] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isProjectOwner, setIsProjectOwner] = useState(false)
   const [projects, setProjects] = useState<{ id: string; name: string; ownerId: string; isOwner: boolean }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [hasEdition, setHasEdition] = useState(false) // Hauptnutzer können Projekte anlegen
@@ -77,6 +78,7 @@ export default function DashboardPage() {
           setAllowedPageIds(data.allowedPageIds || [])
           setAllowedCategoryIds(data.allowedCategoryIds || [])
           setIsAdmin(!!data.isAdmin)
+          setIsProjectOwner(!!data.isProjectOwner)
           setHasEdition(!!data.user?.editionId)
           const list = data.projects || []
           setProjects(list)
@@ -99,6 +101,25 @@ export default function DashboardPage() {
     loadUsers()
     checkImageExists('/uid-berlin-logo.png').then(setLogoExists)
   }, [router])
+
+  // Bei gewähltem Projekt Berechtigungen für dieses Projekt laden (Hauptnutzer sehen dann Bereiche/Seiten/Mitarbeiter)
+  useEffect(() => {
+    let cancelled = false
+    const url = selectedProjectId
+      ? `/api/me?projectId=${encodeURIComponent(selectedProjectId)}`
+      : '/api/me'
+    fetch(url, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setAllowedPageIds(data.allowedPageIds ?? [])
+        setAllowedCategoryIds(data.allowedCategoryIds ?? [])
+        setIsProjectOwner(!!data.isProjectOwner)
+      })
+      .catch(() => {})
+    if (!selectedProjectId) setIsProjectOwner(false)
+    return () => { cancelled = true }
+  }, [selectedProjectId])
 
   // Statistiken nur für das gewählte Projekt laden (damit Hauptnutzer nicht yaskos Gästeliste sehen)
   useEffect(() => {
@@ -730,7 +751,7 @@ export default function DashboardPage() {
                 
                 return (
                 <div key={category.id} className="group relative rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg">
-                  {isAdmin && (
+                  {(isAdmin || isProjectOwner) && (
                   <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     <button
                       onClick={() => handleEditCategory(category)}
@@ -772,8 +793,8 @@ export default function DashboardPage() {
                 )
               })}
               
-              {/* Plus-Zeichen zum Hinzufügen – nur für Admin */}
-              {isAdmin && (
+              {/* Plus-Zeichen zum Hinzufügen – für Admin und Projekt-Inhaber */}
+              {(isAdmin || isProjectOwner) && (
               <button
               onClick={() => setShowAddCategoryModal(true)}
               className="group flex min-h-[180px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white p-6 transition-all hover:border-indigo-500 hover:bg-indigo-50"

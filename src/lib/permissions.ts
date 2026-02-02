@@ -126,7 +126,7 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
       }
     }
     if (isOwner) {
-      // Owner: Edition + User-Overrides (wie bisher)
+      // Owner: volle Rechte für sein Projekt; Edition kann Seiten/Kategorien einschränken (falls befüllt)
       if (!user.editionId || !user.edition) {
         const categories = await prisma.category.findMany({ select: { categoryId: true } })
         return {
@@ -140,6 +140,12 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
       }
       let allowedPageIds = user.edition.pages.map((p) => p.pageId)
       let allowedCategoryIds = user.edition.categories.map((c) => c.categoryId)
+      // Keine Einschränkung in Edition → Owner sieht alle Seiten/Bereiche
+      if (allowedPageIds.length === 0) allowedPageIds = [...ALL_PAGE_IDS]
+      if (allowedCategoryIds.length === 0) {
+        const categories = await prisma.category.findMany({ select: { categoryId: true } })
+        allowedCategoryIds = categories.map((c) => c.categoryId)
+      }
       for (const perm of user.pagePermissions) {
         if (perm.allowed) {
           if (!allowedPageIds.includes(perm.pageId)) allowedPageIds.push(perm.pageId)
