@@ -144,21 +144,13 @@ export default function InvitationsPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      
-      // Lade Events (für eventId)
-      const eventsRes = await fetch('/api/events')
+      const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+      const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+      const eventsRes = await fetch(eventsUrl)
       if (eventsRes.ok) {
         const eventData = await eventsRes.json()
-        
-        // API gibt entweder ein einzelnes Event oder ein Array zurück
-        let event = null
-        if (Array.isArray(eventData)) {
-          event = eventData.length > 0 ? eventData[0] : null
-        } else {
-          event = eventData
-        }
-        
-        if (event && event.id) {
+        let event = Array.isArray(eventData) ? (eventData.length > 0 ? eventData[0] : null) : eventData
+        if (event?.id) {
           setEventId(event.id)
           await Promise.all([
             loadGuests(event.id),
@@ -763,25 +755,18 @@ export default function InvitationsPage() {
     let currentEventId = eventId
     if (!currentEventId) {
       try {
-        const eventsRes = await fetch('/api/events')
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const eventsRes = await fetch(eventsUrl)
         if (!eventsRes.ok) {
           throw new Error('Fehler beim Laden der Events')
         }
         const eventData = await eventsRes.json()
-        
-        // API gibt entweder ein einzelnes Event oder ein Array zurück
-        let event = null
-        if (Array.isArray(eventData)) {
-          event = eventData.length > 0 ? eventData[0] : null
-        } else {
-          event = eventData
-        }
-        
-        if (!event || !event.id) {
-          alert('Kein Event gefunden. Bitte erstellen Sie zuerst ein Event.')
+        const event = Array.isArray(eventData) ? (eventData.length > 0 ? eventData[0] : null) : eventData
+        if (!event?.id) {
+          alert('Kein Event gefunden. Bitte wählen Sie ein Projekt auf dem Dashboard.')
           return
         }
-        
         currentEventId = event.id
         setEventId(currentEventId)
       } catch (error) {

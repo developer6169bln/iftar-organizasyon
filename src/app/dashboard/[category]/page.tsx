@@ -158,23 +158,20 @@ export default function CategoryPage() {
   const loadEventAndData = async () => {
     try {
       setLoading(true)
-      // Lade Benutzer
       await loadUsers()
-      
-      // Önce Event'i al veya oluştur
-      const eventResponse = await fetch('/api/events')
+      const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+      const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+      const eventResponse = await fetch(eventsUrl)
       if (eventResponse.ok) {
         const event = await eventResponse.json()
-        setEventId(event.id)
-        
-        // Tasks ve Checklist items yükle
-        await loadData(event.id)
-      } else {
-        console.error('Event response not ok:', eventResponse.status)
-        setLoading(false)
+        if (event?.id) {
+          setEventId(event.id)
+          await loadData(event.id)
+        }
       }
     } catch (error) {
       console.error('Event yükleme hatası:', error)
+    } finally {
       setLoading(false)
     }
   }

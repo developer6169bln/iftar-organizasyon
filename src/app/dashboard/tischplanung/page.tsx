@@ -122,7 +122,9 @@ export default function TischplanungPage() {
 
   const loadEvent = useCallback(async () => {
     try {
-      const res = await fetch('/api/events')
+      const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+      const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+      const res = await fetch(eventsUrl)
       if (!res.ok) return
       const data = await res.json()
       const events = Array.isArray(data) ? data : [data]

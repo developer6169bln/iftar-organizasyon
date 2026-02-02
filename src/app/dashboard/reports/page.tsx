@@ -22,7 +22,9 @@ export default function ReportsPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const ev = await fetch('/api/events').then((r) => (r.ok ? r.json() : null))
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const ev = await fetch(eventsUrl).then((r) => (r.ok ? r.json() : null))
         if (ev?.id) setEventId(ev.id)
       } catch {}
 

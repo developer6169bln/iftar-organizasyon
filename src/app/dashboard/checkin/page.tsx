@@ -66,19 +66,13 @@ export default function EingangskontrollePage() {
   useEffect(() => {
     const loadEvent = async () => {
       try {
-        const response = await fetch('/api/events')
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const response = await fetch(eventsUrl)
         if (response.ok) {
           const events = await response.json()
-          // API kann einzelnes Event oder Array zurückgeben
-          let event = null
-          if (Array.isArray(events)) {
-            event = events.length > 0 ? events[0] : null
-          } else {
-            event = events
-          }
-          if (event && event.id) {
-            setEventId(event.id)
-          }
+          const event = Array.isArray(events) ? (events.length > 0 ? events[0] : null) : events
+          if (event?.id) setEventId(event.id)
         }
       } catch (error) {
         console.error('Fehler beim Laden des Events:', error)

@@ -46,14 +46,19 @@ export default function ProgramFlowPage() {
 
   const loadEventAndData = async () => {
     try {
-      const eventResponse = await fetch('/api/events')
+      const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+      const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+      const eventResponse = await fetch(eventsUrl)
       if (eventResponse.ok) {
         const event = await eventResponse.json()
-        setEventId(event.id)
-        await loadProgramItems(event.id)
+        if (event?.id) {
+          setEventId(event.id)
+          await loadProgramItems(event.id)
+        }
       }
     } catch (error) {
       console.error('Event yükleme hatası:', error)
+    } finally {
       setLoading(false)
     }
   }
