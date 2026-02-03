@@ -79,9 +79,10 @@ export async function POST(
       return NextResponse.json({ error: 'userId ist erforderlich' }, { status: 400 })
     }
 
+    // 0 oder nicht gesetzt = kein Limit (Hauptnutzer dürfen dann Projektmitarbeiter anlegen)
     const maxStaff = isAdmin ? 999 : (project.owner.edition?.maxProjectStaffPerProject ?? 0)
     const currentCount = await prisma.projectMember.count({ where: { projectId } })
-    if (currentCount >= maxStaff) {
+    if (maxStaff > 0 && currentCount >= maxStaff) {
       return NextResponse.json(
         { error: `Maximale Anzahl Projektmitarbeiter (${maxStaff}) erreicht. Bitte Edition erweitern.` },
         { status: 403 }

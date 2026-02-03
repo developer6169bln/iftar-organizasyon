@@ -432,6 +432,9 @@ export default function DashboardProjectsPage() {
                       </div>
                     </form>
                     <h3 className="mb-2 text-sm font-medium text-gray-700">Bestehenden Benutzer hinzufügen</h3>
+                    {allUsers.filter((u) => !members.some((m) => m.userId === u.id)).length === 0 && (
+                      <p className="mb-2 text-xs text-gray-500">Liste leer? Legen Sie zuerst einen Benutzer unten per „Registrieren & hinzufügen“ an.</p>
+                    )}
                     <form onSubmit={handleAddMember} className="mb-6 flex gap-2">
                       <select
                         value={addMemberUserId}
