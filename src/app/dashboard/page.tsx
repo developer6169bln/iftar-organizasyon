@@ -5,14 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
-// Hilfsfunktion: Prüfe ob Bild existiert
+// Prüfe ob Logo existiert (per HEAD – kein Bild-Load, vermeidet 404 in Konsole)
 const checkImageExists = (url: string): Promise<boolean> => {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => resolve(true)
-    img.onerror = () => resolve(false)
-    img.src = url
-  })
+  return fetch(url, { method: 'HEAD' }).then((r) => r.ok).catch(() => false)
 }
 
 export default function DashboardPage() {

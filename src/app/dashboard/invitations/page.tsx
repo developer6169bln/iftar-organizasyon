@@ -182,10 +182,22 @@ export default function InvitationsPage() {
             loadTemplates(),
             loadEmailConfigs(),
           ])
+        } else {
+          // Kein Event für dieses Projekt: Einladungsliste und Gäste leeren, damit keine alten Daten angezeigt werden
+          setEventId('')
+          setGuests([])
+          setInvitations([])
         }
+      } else {
+        setEventId('')
+        setGuests([])
+        setInvitations([])
       }
     } catch (error) {
       console.error('Fehler beim Laden:', error)
+      setEventId('')
+      setGuests([])
+      setInvitations([])
     } finally {
       setLoading(false)
     }
