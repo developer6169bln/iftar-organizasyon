@@ -1,5 +1,20 @@
 # Railway: Prüfen, warum nach Push nichts passiert
 
+**Push funktioniert:** Dein `git push origin main` landet auf GitHub (Branch **main**). Wenn bei Railway trotzdem nichts passiert, liegt es an der **Verbindung Railway ↔ GitHub**, nicht am Push.
+
+---
+
+## 0. Schnell-Fix: Manuell auf Railway deployen
+
+1. **Railway Dashboard** → https://railway.app/dashboard  
+2. Dein **Projekt** → den **Web-Service** (nicht Postgres) öffnen.  
+3. Tab **Deployments** → oben **„Redeploy“** / **„New Deployment“** klicken.  
+4. **„Deploy from main“** (oder „Use latest commit“) wählen → Railway baut den **aktuellen Stand von GitHub** und deployed ihn.
+
+Damit siehst du sofort den neuesten Code, auch wenn „Deploy on push“ nicht ausgelöst wurde.
+
+---
+
 ## 1. Prüfen, ob der Push auf GitHub angekommen ist
 
 - Repo: **https://github.com/developer6169bln/iftar-organizasyon**
@@ -63,3 +78,9 @@ Dann wird der **aktuelle Stand von GitHub** (inkl. deines letzten Pushes) gebaut
 | Bei Fehler: Build-Logs gelesen? | |
 
 Wenn das Repo verbunden ist und „Deploy on push“ für **main** an ist, löst jeder `git push origin main` ein neues Deployment aus. Sonst: **Redeploy** manuell starten (siehe Abschnitt 4).
+
+---
+
+## 7. GitHub Actions: Push sichtbar machen
+
+Im Projekt gibt es eine **GitHub Action** (`.github/workflows/build.yml`): Bei jedem **Push auf main** läuft auf GitHub ein Build. Unter **GitHub → dein Repo → Actions** siehst du, ob der Push angekommen ist und der Build grün ist. Wenn der Build grün ist, ist der Code in Ordnung – dann liegt das Problem nur bei der Railway-Verbindung (Repo/Branch/Deploy on push) oder du löst **Redeploy** manuell aus (Abschnitt 0).
