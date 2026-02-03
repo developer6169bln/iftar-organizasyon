@@ -112,7 +112,9 @@ export default function DashboardProjectsPage() {
       setSelectedProject(await res.json())
     } else {
       const data = await res.json().catch(() => ({}))
-      setError(data.error || `Projekt konnte nicht geladen werden (${res.status})`)
+      let msg = data.error || `Projekt konnte nicht geladen werden (${res.status})`
+      if (data.details) msg += ` – ${data.details}`
+      setError(msg)
       setSelectedProject(null)
     }
   }

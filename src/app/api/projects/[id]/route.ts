@@ -12,18 +12,21 @@ export async function GET(
     if (!userId) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
-    const { id } = await params
+    const resolvedParams = await params
+    const id = resolvedParams?.id
+    if (!id) {
+      return NextResponse.json({ error: 'Projekt-ID fehlt' }, { status: 400 })
+    }
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     })
     const isAdmin = user?.role === 'ADMIN'
+
+    // Projekt zuerst ohne Relationen laden (robust bei fehlenden Tabellen)
     const project = await prisma.project.findUnique({
       where: { id },
-      include: {
-        owner: { select: { id: true, email: true, name: true } },
-        _count: { select: { events: true, members: true } },
-      },
+      select: { id: true, name: true, ownerId: true, createdAt: true, updatedAt: true },
     })
     if (!project) {
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
@@ -39,10 +42,39 @@ export async function GET(
     if (!isAdmin && !isOwner && !isMember) {
       return NextResponse.json({ error: 'Kein Zugriff auf dieses Projekt' }, { status: 403 })
     }
-    return NextResponse.json({ ...project, isOwner: isOwner || isAdmin, isMember })
+
+    // Owner und _count optional nachladen (falls Relationen/Tabellen fehlen)
+    let owner: { id: string; email: string; name: string } | null = null
+    let _count = { events: 0, members: 0 }
+    try {
+      const [ownerRow, eventsCount, membersCount] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: project.ownerId },
+          select: { id: true, email: true, name: true },
+        }),
+        prisma.event.count({ where: { projectId: id } }),
+        prisma.projectMember.count({ where: { projectId: id } }).catch(() => 0),
+      ])
+      owner = ownerRow
+      _count = { events: eventsCount, members: membersCount }
+    } catch {
+      // Fallback: Projekt trotzdem zurückgeben
+    }
+
+    return NextResponse.json({
+      ...project,
+      owner: owner ?? undefined,
+      _count,
+      isOwner: isOwner || isAdmin,
+      isMember,
+    })
   } catch (error) {
     console.error('GET /api/projects/[id] error:', error)
-    return NextResponse.json({ error: 'Projekt konnte nicht geladen werden' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Projekt konnte nicht geladen werden'
+    return NextResponse.json(
+      { error: 'Projekt konnte nicht geladen werden', details: message },
+      { status: 500 }
+    )
   }
 }
 
