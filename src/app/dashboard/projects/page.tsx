@@ -106,8 +106,15 @@ export default function DashboardProjectsPage() {
   }, [editingMember])
 
   const loadProjectDetail = async (id: string) => {
+    setError(null)
     const res = await fetch(`/api/projects/${id}`, { credentials: 'include' })
-    if (res.ok) setSelectedProject(await res.json())
+    if (res.ok) {
+      setSelectedProject(await res.json())
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || `Projekt konnte nicht geladen werden (${res.status})`)
+      setSelectedProject(null)
+    }
   }
 
   const handleCreateProject = async (e: React.FormEvent) => {
