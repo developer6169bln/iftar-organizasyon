@@ -57,7 +57,8 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Nur Gäste anzeigen, die in der Gästeliste des Projekts im Feld additionalData "Einladungsliste" ausgewählt haben
+    // Nur Gäste anzeigen, die in der Gästeliste im Feld additionalData "Einladungsliste" ausgewählt haben
+    // Ausgewählt gilt: Einladungsliste === true | "true" | "Ja" | "ja" (String case-insensitive)
     const filtered = invitations.filter((inv) => {
       const additional = inv.guest?.additionalData
       if (!additional) return false
@@ -65,7 +66,10 @@ export async function GET(request: NextRequest) {
         const data = typeof additional === 'string' ? JSON.parse(additional) : additional
         const value = data?.Einladungsliste
         if (value === true) return true
-        if (typeof value === 'string' && value.toLowerCase().trim() === 'true') return true
+        if (typeof value === 'string') {
+          const s = value.trim().toLowerCase()
+          if (s === 'true' || s === 'ja') return true
+        }
         return false
       } catch {
         return false
