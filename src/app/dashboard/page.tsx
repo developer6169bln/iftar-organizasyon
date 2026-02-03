@@ -526,9 +526,14 @@ export default function DashboardPage() {
             Sie haben keinen Zugriff auf diesen Bereich. Die Berechtigungen werden vom Administrator festgelegt.
           </div>
         )}
+        {!isAdmin && !hasEdition && projects.length === 0 && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+            <strong>Konto wartet auf Freischaltung:</strong> Der App-Betreiber weist Ihnen eine Edition zu und aktiviert Ihr Konto. Danach können Sie Projekte anlegen und Projektmitarbeiter verwalten.
+          </div>
+        )}
         {hasEdition && !isAdmin && (
           <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-800">
-            <strong>Administrator nur für Ihren Account:</strong> Sie verwalten ausschließlich Ihre eigenen Projekte und alle Daten, die Sie dort anlegen (Gäste, Aufgaben, Listen, Einladungen). Sie sehen und bearbeiten nur das, was Sie selbst hinzugefügt haben – keine Daten anderer Konten.
+            <strong>Administrator nur für Ihren Account:</strong> Sie verwalten ausschließlich Ihre eigenen Projekte und alle Daten, die Sie dort anlegen (Gäste, Aufgaben, Listen, Einladungen). Sie sehen keine Projekte oder Benutzer anderer Hauptnutzer – nur der App-Betreiber hat die Gesamtübersicht.
           </div>
         )}
         {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}

@@ -230,7 +230,11 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
   }
 }
 
-/** Projekte, die der User besitzt oder in denen er Mitglied ist. Admin sieht alle Projekte; eigene (ownerId = userId) als isOwner. */
+/**
+ * Projekte: App-Betreiber (ADMIN) sieht alle Projekte.
+ * Hauptnutzer sehen nur eigene Projekte (ownerId = userId) bzw. Projekte, in denen sie Mitglied sind –
+ * keine Projekte anderer Hauptnutzer.
+ */
 export async function getProjectsForUser(userId: string): Promise<{ id: string; name: string; ownerId: string; isOwner: boolean }[]> {
   try {
     const user = await prisma.user.findUnique({

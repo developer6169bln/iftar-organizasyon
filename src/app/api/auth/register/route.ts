@@ -32,21 +32,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Yeni kullanıcı oluştur
+    // Neuen Benutzer anlegen (ohne Edition – Hauptnutzer werden vom App-Betreiber aktiviert)
     const user = await createUser(
       validatedData.email,
       validatedData.name,
       validatedData.password
     )
 
-    // Free-Edition zuweisen (falls vorhanden)
-    const freeEdition = await prisma.edition.findUnique({ where: { code: 'FREE' } })
-    if (freeEdition) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { editionId: freeEdition.id },
-      })
-    }
+    // Keine Edition automatisch zuweisen: Der App-Betreiber (Admin) bestätigt/aktiviert Hauptnutzer
+    // und weist ihnen per PATCH /api/users eine Edition zu. Erst dann können sie Projekte anlegen.
 
     // Şifreyi response'dan çıkar
     const { password, ...userWithoutPassword } = user

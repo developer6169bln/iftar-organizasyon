@@ -22,6 +22,11 @@ const patchUserSchema = z.object({
   pagePermissions: z.array(z.object({ pageId: z.string(), allowed: z.boolean() })).optional(),
 })
 
+/**
+ * GET: App-Betreiber (ADMIN) sieht alle Benutzer.
+ * Hauptnutzer sehen nur Benutzer, die in ihren eigenen Projekten als Mitglieder eingetragen sind –
+ * keine anderen Hauptnutzer und keine Benutzer anderer Hauptnutzer.
+ */
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await getUserIdFromRequest(request)

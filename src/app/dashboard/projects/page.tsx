@@ -29,6 +29,7 @@ export default function DashboardProjectsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [registerUser, setRegisterUser] = useState({ name: '', email: '', password: '' })
   const [registering, setRegistering] = useState(false)
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -134,6 +135,32 @@ export default function DashboardProjectsPage() {
       if (res.ok) setMembers((prev) => prev.filter((m) => m.userId !== userId))
     } catch {
       alert('Mitglied konnte nicht entfernt werden')
+    }
+  }
+
+  const handleDeleteProject = async (projectId: string, projectName: string) => {
+    if (!confirm(`Projekt „${projectName}“ wirklich löschen? Alle zugehörigen Events werden vom Projekt getrennt (Daten bleiben), Mitglieder und Projekt-Einträge werden entfernt.`)) return
+    setDeletingProjectId(projectId)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== projectId))
+        if (selectedProject?.id === projectId) {
+          setSelectedProject(null)
+          setMembers([])
+          if (typeof window !== 'undefined') localStorage.removeItem('dashboard-project-id')
+        }
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Projekt konnte nicht gelöscht werden')
+      }
+    } catch {
+      alert('Projekt konnte nicht gelöscht werden')
+    } finally {
+      setDeletingProjectId(null)
     }
   }
 
@@ -258,10 +285,24 @@ export default function DashboardProjectsPage() {
           <div className="rounded-xl bg-white p-6 shadow">
             {selectedProject ? (
               <>
-                <h2 className="mb-4 text-lg font-semibold text-gray-900">{selectedProject.name}</h2>
-                <p className="mb-4 text-sm text-gray-600">
-                  Events: {selectedProject._count?.events ?? 0} · Mitglieder: {selectedProject._count?.members ?? members.length}
-                </p>
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">{selectedProject.name}</h2>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Events: {selectedProject._count?.events ?? 0} · Mitglieder: {selectedProject._count?.members ?? members.length}
+                    </p>
+                  </div>
+                  {(selectedProject.isOwner || isAdmin) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProject(selectedProject.id, selectedProject.name)}
+                      disabled={!!deletingProjectId}
+                      className="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {deletingProjectId === selectedProject.id ? '…' : 'Projekt löschen'}
+                    </button>
+                  )}
+                </div>
 
                 {(selectedProject.isOwner || isAdmin) && (
                   <>
