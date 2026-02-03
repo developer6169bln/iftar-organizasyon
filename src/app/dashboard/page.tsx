@@ -681,9 +681,9 @@ export default function DashboardPage() {
                 📁
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">Projekte</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Admin: Projekte & Mitarbeiter</h3>
                 <p className="text-sm text-gray-600">
-                  {projects.length > 0 ? 'Projekte verwalten und Projektmitarbeiter einladen' : 'Neues Projekt anlegen und Mitarbeiter einladen'}
+                  {projects.length > 0 ? 'Projekte verwalten, Mitarbeiter anlegen, zu Projekten zuweisen, Rollen und Berechtigungen vergeben' : 'Neues Projekt anlegen, Mitarbeiter einladen und Berechtigungen vergeben'}
                 </p>
               </div>
               <div className="text-indigo-600">→</div>

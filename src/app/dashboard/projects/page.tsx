@@ -3,6 +3,23 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
+const PAGE_IDS = [
+  'guests', 'program_flow', 'invitations', 'checkin', 'reports',
+  'tischplanung', 'vip-namensschilder', 'push-notifications', 'audit-logs',
+] as const
+
+const PAGE_LABELS: Record<string, string> = {
+  guests: 'Gästeliste',
+  program_flow: 'Programm-Ablauf',
+  invitations: 'Einladungen',
+  checkin: 'Eingangskontrolle',
+  reports: 'Berichte',
+  tischplanung: 'Tischplanung',
+  'vip-namensschilder': 'VIP-Namensschilder',
+  'push-notifications': 'Push-Benachrichtigungen',
+  'audit-logs': 'Audit-Logs',
+}
+
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }
 type ProjectDetail = Project & { _count?: { events: number; members: number }; owner?: { id: string; email: string; name: string } }
 type Member = {
@@ -14,6 +31,7 @@ type Member = {
   categoryPermissions: { categoryId: string; allowed: boolean }[]
   pagePermissions: { pageId: string; allowed: boolean }[]
 }
+type Category = { id: string; categoryId: string; name: string; isActive?: boolean }
 
 export default function DashboardProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -30,6 +48,12 @@ export default function DashboardProjectsPage() {
   const [registerUser, setRegisterUser] = useState({ name: '', email: '', password: '' })
   const [registering, setRegistering] = useState(false)
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
+  const [editingMember, setEditingMember] = useState<Member | null>(null)
+  const [editRole, setEditRole] = useState('MEMBER')
+  const [editPageIds, setEditPageIds] = useState<string[]>([])
+  const [editCategoryIds, setEditCategoryIds] = useState<string[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [savingMember, setSavingMember] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -53,6 +77,13 @@ export default function DashboardProjectsPage() {
   }, [])
 
   useEffect(() => {
+    fetch('/api/categories', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: Category[]) => setCategories(list.filter((c) => c.isActive !== false)))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     if (!selectedProject?.id) return
     setLoadingMembers(true)
     fetch(`/api/projects/${selectedProject.id}/members`, { credentials: 'include' })
@@ -66,6 +97,13 @@ export default function DashboardProjectsPage() {
         .catch(() => {})
     }
   }, [selectedProject?.id, selectedProject?.isOwner, isAdmin])
+
+  useEffect(() => {
+    if (!editingMember) return
+    setEditRole(editingMember.role || 'MEMBER')
+    setEditPageIds(editingMember.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId))
+    setEditCategoryIds(editingMember.categoryPermissions.filter((c) => c.allowed).map((c) => c.categoryId))
+  }, [editingMember])
 
   const loadProjectDetail = async (id: string) => {
     const res = await fetch(`/api/projects/${id}`, { credentials: 'include' })
@@ -132,10 +170,55 @@ export default function DashboardProjectsPage() {
         method: 'DELETE',
         credentials: 'include',
       })
-      if (res.ok) setMembers((prev) => prev.filter((m) => m.userId !== userId))
+      if (res.ok) {
+        setMembers((prev) => prev.filter((m) => m.userId !== userId))
+        if (editingMember?.userId === userId) setEditingMember(null)
+      }
     } catch {
       alert('Mitglied konnte nicht entfernt werden')
     }
+  }
+
+  const handleSaveMemberPermissions = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProject?.id || !editingMember) return
+    setSavingMember(true)
+    try {
+      const res = await fetch(`/api/projects/${selectedProject.id}/members`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          userId: editingMember.userId,
+          role: editRole,
+          pageIds: editPageIds,
+          categoryIds: editCategoryIds,
+        }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setMembers((prev) => prev.map((m) => (m.userId === editingMember.userId ? updated : m)))
+        setEditingMember(null)
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Berechtigungen konnten nicht gespeichert werden')
+      }
+    } catch {
+      alert('Berechtigungen konnten nicht gespeichert werden')
+    } finally {
+      setSavingMember(false)
+    }
+  }
+
+  const toggleEditPage = (pageId: string) => {
+    setEditPageIds((prev) =>
+      prev.includes(pageId) ? prev.filter((id) => id !== pageId) : [...prev, pageId]
+    )
+  }
+  const toggleEditCategory = (categoryId: string) => {
+    setEditCategoryIds((prev) =>
+      prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId]
+    )
   }
 
   const handleDeleteProject = async (projectId: string, projectName: string) => {
@@ -222,7 +305,10 @@ export default function DashboardProjectsPage() {
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Projekte</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Admin-Bereich: Projekte & Projektmitarbeiter</h1>
+              <p className="mt-1 text-sm text-gray-600">Projektmitarbeiter anlegen, Projekten zuweisen, Rollen und Berechtigungen (nur in Ihren Projekten) vergeben.</p>
+            </div>
             <Link
               href="/dashboard"
               className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
@@ -382,13 +468,22 @@ export default function DashboardProjectsPage() {
                           <span className="ml-2 text-xs text-gray-400">({m.role})</span>
                         </div>
                         {(selectedProject.isOwner || isAdmin) && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMember(m.userId)}
-                            className="text-sm text-red-600 hover:underline"
-                          >
-                            Entfernen
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingMember(m)}
+                              className="text-sm font-medium text-indigo-600 hover:underline"
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(m.userId)}
+                              className="text-sm text-red-600 hover:underline"
+                            >
+                              Entfernen
+                            </button>
+                          </div>
                         )}
                       </li>
                     ))}
@@ -404,8 +499,83 @@ export default function DashboardProjectsPage() {
           </div>
         </div>
 
+        {/* Modal: Mitglied bearbeiten – Rolle & Berechtigungen (nur in diesem Projekt) */}
+        {editingMember && selectedProject && (selectedProject.isOwner || isAdmin) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                Bearbeiten: {editingMember.user.name}
+              </h3>
+              <p className="mb-4 text-sm text-gray-600">
+                Rolle und Berechtigungen gelten nur für das Projekt „{selectedProject.name}“.
+              </p>
+              <form onSubmit={handleSaveMemberPermissions} className="space-y-6">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Rolle in diesem Projekt</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="MEMBER">Mitarbeiter (MEMBER)</option>
+                    <option value="COORDINATOR">Koordinator (COORDINATOR)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Seiten (Zugriff)</label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {PAGE_IDS.map((pageId) => (
+                      <label key={pageId} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editPageIds.includes(pageId)}
+                          onChange={() => toggleEditPage(pageId)}
+                          className="rounded border-gray-300"
+                        />
+                        {PAGE_LABELS[pageId] ?? pageId}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Arbeitsbereiche (Kategorien)</label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {categories.map((cat) => (
+                      <label key={cat.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editCategoryIds.includes(cat.categoryId)}
+                          onChange={() => toggleEditCategory(cat.categoryId)}
+                          className="rounded border-gray-300"
+                        />
+                        {cat.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 border-t pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingMember}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingMember ? '…' : 'Speichern'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         <p className="mt-8 text-sm text-gray-500">
-          <strong>Sie sind Administrator nur für Ihren Account.</strong> Sie sehen und verwalten ausschließlich Ihre eigenen Projekte sowie alle Gäste, Aufgaben und Listen, die Sie dort anlegen. Sie haben vollen Zugriff auf Ihre Projekte und können Projektmitarbeiter hinzufügen. Neue Benutzer registrieren Sie oben und fügen sie dem Projekt hinzu.
+          <strong>Admin-Bereich nur für Ihren Account.</strong> Sie legen Projektmitarbeiter an, weisen sie einzelnen Projekten zu und vergeben Rollen (Mitarbeiter/Koordinator) sowie Berechtigungen (Seiten und Arbeitsbereiche) – diese gelten ausschließlich in Ihren Projekten. Sie sehen keine Benutzer oder Projekte anderer Hauptnutzer.
         </p>
       </main>
     </div>
