@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
+import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -96,9 +97,8 @@ export async function POST(request: NextRequest) {
     const declineToken = crypto.randomBytes(32).toString('hex')
     const trackingToken = crypto.randomBytes(32).toString('hex')
 
-    // Erstelle Test-Links
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-      (request.headers.get('origin') || `https://${request.headers.get('host') || 'localhost:3000'}`)
+    // Erstelle Test-Links (App-URL, kein localhost)
+    const baseUrl = getBaseUrlForInvitationEmails(request)
     
     const acceptLink = `${baseUrl}/invitation/accept/${acceptToken}`
     const declineLink = `${baseUrl}/invitation/decline/${declineToken}`

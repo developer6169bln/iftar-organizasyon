@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
+import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 import crypto from 'crypto'
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
 
     const results = []
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin
+    const baseUrl = getBaseUrlForInvitationEmails(request)
 
     // Erstelle Einladungen für jeden Gast
     for (const guest of guests) {

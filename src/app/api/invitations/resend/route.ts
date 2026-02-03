@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
+import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 /** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin
+    const baseUrl = getBaseUrlForInvitationEmails(request)
     const results: { invitationId: string; guestName: string; success: boolean; error?: string }[] = []
 
     for (const inv of invitations) {
