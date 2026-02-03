@@ -56,12 +56,14 @@ export async function POST(
     if (!userId) {
       return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
     }
-    const { id: projectId } = await params
-    const project = await prisma.project.findFirst({
+    const resolvedParams = await params
+    const projectId = resolvedParams?.id
+    if (!projectId) {
+      return NextResponse.json({ error: 'Projekt-ID fehlt' }, { status: 400 })
+    }
+    const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: {
-        owner: { select: { id: true, role: true, edition: { select: { maxProjectStaffPerProject: true } } } },
-      },
+      select: { id: true, ownerId: true },
     })
     if (!project) {
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
@@ -80,8 +82,24 @@ export async function POST(
     }
 
     // 0 oder nicht gesetzt = kein Limit (Hauptnutzer dürfen dann Projektmitarbeiter anlegen)
-    const maxStaff = isAdmin ? 999 : (project.owner.edition?.maxProjectStaffPerProject ?? 0)
-    const currentCount = await prisma.projectMember.count({ where: { projectId } })
+    let maxStaff = isAdmin ? 999 : 0
+    if (!isAdmin) {
+      try {
+        const owner = await prisma.user.findUnique({
+          where: { id: project.ownerId },
+          select: { edition: { select: { maxProjectStaffPerProject: true } } },
+        })
+        maxStaff = owner?.edition?.maxProjectStaffPerProject ?? 0
+      } catch {
+        maxStaff = 0
+      }
+    }
+    let currentCount = 0
+    try {
+      currentCount = await prisma.projectMember.count({ where: { projectId } })
+    } catch {
+      // project_members-Tabelle fehlt evtl.
+    }
     if (maxStaff > 0 && currentCount >= maxStaff) {
       return NextResponse.json(
         { error: `Maximale Anzahl Projektmitarbeiter (${maxStaff}) erreicht. Bitte Edition erweitern.` },
@@ -103,7 +121,11 @@ export async function POST(
     return NextResponse.json(member, { status: 201 })
   } catch (error) {
     console.error('POST /api/projects/[id]/members error:', error)
-    return NextResponse.json({ error: 'Mitglied konnte nicht hinzugefügt werden' }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json(
+      { error: 'Mitglied konnte nicht hinzugefügt werden', details: message },
+      { status: 500 }
+    )
   }
 }
 

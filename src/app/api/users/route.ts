@@ -147,7 +147,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 401 })
     }
     const isAdmin = currentUser.role === 'ADMIN'
-    const isMainUser = isAdmin || !!currentUser.editionId || (currentUser._count?.ownedProjects ?? 0) > 0
+    let ownedProjectsCount = currentUser._count?.ownedProjects ?? 0
+    if (!isAdmin && !currentUser.editionId && ownedProjectsCount === 0) {
+      try {
+        const rows = await prisma.$queryRaw<[{ count: bigint }]>`
+          SELECT COUNT(*) as count FROM "projects" WHERE "ownerId" = ${userId}
+        `
+        ownedProjectsCount = Number(rows[0]?.count ?? 0)
+      } catch {
+        // projects-Tabelle fehlt evtl.
+      }
+    }
+    const isMainUser = isAdmin || !!currentUser.editionId || ownedProjectsCount > 0
     if (!isMainUser) {
       return NextResponse.json(
         { error: 'Nur Administrator oder Hauptbenutzer können neue Benutzer anlegen.' },
@@ -188,7 +199,6 @@ export async function POST(request: NextRequest) {
         email: true,
         role: true,
         editionId: true,
-        edition: { select: { id: true, code: true, name: true } },
         createdAt: true,
       },
     })
@@ -229,7 +239,7 @@ export async function POST(request: NextRequest) {
 
     console.error('User creation error:', error)
     return NextResponse.json(
-      { error: 'Benutzer konnte nicht erstellt werden' },
+      { error: 'Benutzer konnte nicht erstellt werden', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }

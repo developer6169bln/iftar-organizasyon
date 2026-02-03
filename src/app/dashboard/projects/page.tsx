@@ -273,8 +273,9 @@ export default function DashboardProjectsPage() {
         }),
       })
       if (!createRes.ok) {
-        const err = await createRes.json()
-        alert(err.error || 'Benutzer konnte nicht angelegt werden')
+        const err = await createRes.json().catch(() => ({}))
+        const msg = err.error || 'Benutzer konnte nicht angelegt werden'
+        alert(err.details ? `${msg}\n\n${err.details}` : msg)
         setRegistering(false)
         return
       }
@@ -291,8 +292,9 @@ export default function DashboardProjectsPage() {
         setAllUsers((prev) => [...prev, { id: newUser.id, name: newUser.name, email: newUser.email }])
         setRegisterUser({ name: '', email: '', password: '' })
       } else {
-        const err = await addRes.json()
-        alert(err.error || 'Benutzer wurde angelegt, konnte aber nicht zum Projekt hinzugefügt werden.')
+        const err = await addRes.json().catch(() => ({}))
+        const msg = err.error || 'Benutzer wurde angelegt, konnte aber nicht zum Projekt hinzugefügt werden.'
+        alert(err.details ? `${msg}\n\n${err.details}` : msg)
       }
     } catch {
       alert('Registrierung fehlgeschlagen')
