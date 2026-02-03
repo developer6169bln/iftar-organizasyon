@@ -4,19 +4,54 @@ import type { Prisma } from '@prisma/client'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { getProjectsForUser } from '@/lib/permissions'
 
+/** Prüft, ob die Tabelle events eine Spalte projectId hat (Migration möglicherweise noch nicht ausgeführt). */
+async function eventsHasProjectId(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT 1 as count FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'events' AND column_name = 'projectId'
+      LIMIT 1
+    `
+    return (rows?.length ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
 /** Events des Nutzers (aus seinen Projekten). Optional: projectId filtert auf ein Projekt. Vorhandene/Legacy-Events (projectId null) = nur APP-Admin. */
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await getUserIdFromRequest(request)
-    const projectId = request.nextUrl.searchParams.get('projectId') || undefined
+    const projectIdParam = request.nextUrl.searchParams.get('projectId') || undefined
 
+    const hasProjectIdColumn = await eventsHasProjectId()
     const projects = userId ? await getProjectsForUser(userId) : []
     const projectIds = projects.map((p) => p.id)
     const isAdmin = userId
       ? (await prisma.user.findUnique({ where: { id: userId }, select: { role: true } }))?.role === 'ADMIN'
       : false
 
-    // Ohne Login: nur Events aus Projekten mit Zugriff (leer wenn nicht eingeloggt)
+    // Ohne projectId-Spalte: Legacy-DB – bei Projekt-Filter Fehlerhinweis, sonst erstes Event
+    if (!hasProjectIdColumn) {
+      if (projectIdParam) {
+        return NextResponse.json(
+          {
+            error: 'Event konnte nicht geladen werden',
+            details: 'Spalte events.projectId fehlt in der Datenbank. Bitte Migration ausführen (z. B. prisma migrate deploy) oder das SQL-Skript für events.projectId anwenden.',
+          },
+          { status: 500 }
+        )
+      }
+      if (!userId) {
+        return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+      }
+      const event = await prisma.event.findFirst({
+        orderBy: { date: 'asc' },
+      })
+      return NextResponse.json(event ?? null)
+    }
+
+    const projectId = projectIdParam
     let where: Prisma.EventWhereInput | undefined
     if (projectId) {
       if (projectIds.length && !projectIds.includes(projectId)) {
@@ -24,7 +59,6 @@ export async function GET(request: NextRequest) {
       }
       where = { projectId }
     } else if (projectIds.length) {
-      // Admin: auch Legacy-Events (projectId null) anzeigen – zählen als APP-Admin-Projekt
       if (isAdmin) {
         where = { OR: [{ projectId: { in: projectIds } }, { projectId: null }] }
       } else {
@@ -39,7 +73,6 @@ export async function GET(request: NextRequest) {
       orderBy: { date: 'asc' },
     })
 
-    // Fallback: Projekt hat noch kein Event → leeres Event anlegen (keine Verbindung zu alten Listen/Projekten)
     if (!event && userId && projects.length) {
       const firstProjectId = projects[0].id
       event = await prisma.event.findFirst({
@@ -69,8 +102,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(event)
   } catch (error) {
     console.error('Event fetch error:', error)
+    const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Event yüklenirken hata oluştu' },
+      { error: 'Event konnte nicht geladen werden', details: message },
       { status: 500 }
     )
   }
