@@ -27,18 +27,31 @@ export default function ReportsPage() {
         const ev = await fetch(eventsUrl).then((r) => (r.ok ? r.json() : null))
         if (ev?.id) setEventId(ev.id)
       } catch {}
-
       try {
         const u = await fetch('/api/users').then((r) => (r.ok ? r.json() : []))
         setUsers(u || [])
       } catch {}
-
       try {
         const c = await fetch('/api/categories').then((r) => (r.ok ? r.json() : []))
         setCategories(c || [])
       } catch {}
     }
     load()
+  }, [])
+
+  useEffect(() => {
+    const onProjectChange = async () => {
+      try {
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const ev = await fetch(eventsUrl).then((r) => (r.ok ? r.json() : null))
+        if (ev?.id) setEventId(ev.id)
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
   }, [])
 
   const canDownload = useMemo(() => {

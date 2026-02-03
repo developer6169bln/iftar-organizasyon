@@ -82,6 +82,25 @@ export default function EingangskontrollePage() {
   }, [])
 
   useEffect(() => {
+    const onProjectChange = async () => {
+      try {
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const res = await fetch(eventsUrl)
+        if (res.ok) {
+          const data = await res.json()
+          const event = Array.isArray(data) ? (data[0] ?? null) : data
+          if (event?.id) setEventId(event.id)
+        }
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [])
+
+  useEffect(() => {
     if (eventId) {
       loadAcceptedGuests()
     }

@@ -44,6 +44,14 @@ export default function ProgramFlowPage() {
     loadEventAndData()
   }, [])
 
+  useEffect(() => {
+    const onProjectChange = () => loadEventAndData()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [])
+
   const loadEventAndData = async () => {
     try {
       const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null

@@ -172,6 +172,14 @@ export default function TischplanungPage() {
   }, [loadEvent])
 
   useEffect(() => {
+    const onProjectChange = () => loadEvent()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [loadEvent])
+
+  useEffect(() => {
     if (eventId) loadPlan()
   }, [eventId, loadPlan])
 

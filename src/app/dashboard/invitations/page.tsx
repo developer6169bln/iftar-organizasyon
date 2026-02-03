@@ -77,6 +77,14 @@ export default function InvitationsPage() {
     loadData()
   }, [router])
 
+  useEffect(() => {
+    const onProjectChange = () => loadData()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [])
+
   // Lade Einladungen neu, wenn Tab "list" aktiviert wird
   useEffect(() => {
     if (activeTab === 'list' && eventId) {

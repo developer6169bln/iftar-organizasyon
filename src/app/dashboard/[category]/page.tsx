@@ -128,20 +128,23 @@ export default function CategoryPage() {
   })
 
   useEffect(() => {
-    // Warte bis categoryInfo geprüft wurde, bevor wir weiterleiten
-    if (!categoryChecked) {
-      return // Warte noch auf die Prüfung
-    }
-
-    // Prüfe ob Kategorie existiert (nachdem customCategories geladen wurden)
+    if (!categoryChecked) return
     if (!categoryInfo) {
       router.push('/dashboard')
       return
     }
-
-    // Kategorie existiert, lade Daten
     loadEventAndData()
   }, [category, categoryInfo, categoryChecked, router])
+
+  // Bei Projektwechsel: Daten für das neue Projekt laden
+  useEffect(() => {
+    if (!categoryInfo || !categoryChecked) return
+    const onProjectChange = () => loadEventAndData()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [categoryInfo, categoryChecked])
 
   const loadUsers = async () => {
     try {

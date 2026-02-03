@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import DashboardProjectSwitcher from './DashboardProjectSwitcher'
 
 /** Pfad zu Page-ID (feste Dashboard-Seiten). */
 const PATH_TO_PAGE: Record<string, string> = {
@@ -127,5 +128,12 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
     return null
   }
 
-  return <>{children}</>
+  // Auf Unterseiten Projekt-Umschalter anzeigen (Hauptdashboard hat eigenen Header mit Auswahl)
+  const isMainDashboard = pathname === '/dashboard' || pathname === '/dashboard/'
+  return (
+    <>
+      {!isMainDashboard && <DashboardProjectSwitcher />}
+      {children}
+    </>
+  )
 }
