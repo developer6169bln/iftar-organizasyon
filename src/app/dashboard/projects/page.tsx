@@ -326,6 +326,12 @@ export default function DashboardProjectsPage() {
           </div>
         )}
 
+        {projects.length === 0 && !loading && (
+          <div className="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-indigo-800">
+            <strong>Ihr Admin-Bereich.</strong> Noch keine Projekte? Legen Sie unten mit „Neues Projekt“ Ihr erstes Projekt an. Danach können Sie dort Projektmitarbeiter hinzufügen und Rollen sowie Berechtigungen vergeben. Falls Sie noch nicht freigeschaltet sind, weist der App-Betreiber Ihrem Konto eine Edition zu.
+          </div>
+        )}
+
         <div className="grid gap-8 lg:grid-cols-2">
           <div className="rounded-xl bg-white p-6 shadow">
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Meine Projekte</h2>

@@ -82,12 +82,17 @@ export default function DashboardPage() {
           setHasEdition(!!data.user?.editionId)
           const list = data.projects || []
           setProjects(list)
-          // Standard: erst eigenes Projekt (Inhaber), sonst erstes Projekt – damit Hauptnutzer nicht yaskos Daten sehen
-          const defaultProjectId = list.find((p: { isOwner: boolean }) => p.isOwner)?.id ?? list[0]?.id ?? null
-          const projectId = storedProjectId && list.some((p: { id: string }) => p.id === storedProjectId) ? storedProjectId : defaultProjectId
+          const isMainUser = !!data.user?.editionId && !data.isAdmin
+          // Hauptnutzer: kein Projekt vorauswählen; Admin: Standard = gespeichertes oder erstes Projekt
+          let projectId: string | null = null
+          if (!isMainUser) {
+            const defaultProjectId = list.find((p: { isOwner: boolean }) => p.isOwner)?.id ?? list[0]?.id ?? null
+            projectId = storedProjectId && list.some((p: { id: string }) => p.id === storedProjectId) ? storedProjectId : defaultProjectId
+          }
           setSelectedProjectId(projectId)
-          if (typeof window !== 'undefined' && projectId) {
-            localStorage.setItem('dashboard-project-id', projectId)
+          if (typeof window !== 'undefined') {
+            if (projectId) localStorage.setItem('dashboard-project-id', projectId)
+            else if (isMainUser) localStorage.removeItem('dashboard-project-id')
           }
         }
       } catch {
@@ -671,25 +676,28 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
-          {(projects.length > 0 || hasEdition) && (
+          {/* Admin-Bereich für Hauptnutzer: immer sichtbar (Projekte & Mitarbeiter) */}
           <Link
             href="/dashboard/projects"
-            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg border-2 border-indigo-200"
           >
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-600 text-2xl text-white">
                 📁
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900">Admin: Projekte & Mitarbeiter</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Ihr Admin-Bereich: Projekte & Mitarbeiter</h3>
                 <p className="text-sm text-gray-600">
-                  {projects.length > 0 ? 'Projekte verwalten, Mitarbeiter anlegen, zu Projekten zuweisen, Rollen und Berechtigungen vergeben' : 'Neues Projekt anlegen, Mitarbeiter einladen und Berechtigungen vergeben'}
+                  {projects.length > 0
+                    ? 'Projekte verwalten, Mitarbeiter anlegen, zu Projekten zuweisen, Rollen und Berechtigungen vergeben'
+                    : hasEdition
+                      ? 'Neues Projekt anlegen, Mitarbeiter einladen und Berechtigungen vergeben'
+                      : 'Projekte und Projektmitarbeiter verwalten (nach Freischaltung durch den App-Betreiber)'}
                 </p>
               </div>
               <div className="text-indigo-600">→</div>
             </div>
           </Link>
-          )}
           {isAdmin && (
           <Link
             href="/dashboard/admin"
