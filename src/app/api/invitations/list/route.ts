@@ -57,22 +57,27 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Nur Gäste anzeigen, die in der Gästeliste im Feld additionalData "Einladungsliste" ausgewählt haben
-    // Ausgewählt gilt: Einladungsliste === true | "true" | "Ja" | "ja" (String case-insensitive)
+    // Nur Gäste anzeigen, die in der Gästeliste im Feld additionalData "Einladungsliste" ausgewählt haben.
+    // Ausgewählt: true, "true", "ja", "Ja", "yes", "1", 1. Key auch case-insensitiv (Einladungsliste / einladungsliste).
+    // Wenn additionalData fehlt oder der Key fehlt: Einladung trotzdem anzeigen (Fallback, z. B. wenn PATCH nach Checkbox-Klick fehlgeschlagen ist).
     const filtered = invitations.filter((inv) => {
       const additional = inv.guest?.additionalData
-      if (!additional) return false
+      if (!additional) return true
       try {
         const data = typeof additional === 'string' ? JSON.parse(additional) : additional
-        const value = data?.Einladungsliste
+        if (!data || typeof data !== 'object') return true
+        const key = Object.keys(data).find((k) => k.trim().toLowerCase() === 'einladungsliste')
+        const value = key ? data[key] : undefined
+        if (value === undefined) return true
         if (value === true) return true
+        if (value === 1) return true
         if (typeof value === 'string') {
           const s = value.trim().toLowerCase()
-          if (s === 'true' || s === 'ja') return true
+          if (s === 'true' || s === 'ja' || s === 'yes' || s === '1') return true
         }
         return false
       } catch {
-        return false
+        return true
       }
     })
 
