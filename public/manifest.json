@@ -1,7 +1,7 @@
 {
-  "name": "Iftar Organizasyon Sistemi",
-  "short_name": "Iftar Org",
-  "description": "Iftar Organizasyon Sistemi - Titanic Hotel 26.02.2026",
+  "name": "UID BERLIN EVENTS",
+  "short_name": "UID BERLIN EVENTS",
+  "description": "UID Berlin Events – Event- und Einladungsverwaltung",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",

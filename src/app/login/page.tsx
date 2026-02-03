@@ -52,8 +52,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Iftar Organizasyon</h1>
-          <p className="mt-2 text-gray-600">Titanic Hotel 26.02.2026</p>
+          <h1 className="text-3xl font-bold text-gray-900">UID BERLIN EVENTS</h1>
+          <p className="mt-2 text-gray-600">Event- und Einladungsverwaltung</p>
           <p className="mt-1 text-sm text-gray-500">Giriş Yap</p>
         </div>
 

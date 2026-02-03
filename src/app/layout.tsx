@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Iftar Organizasyon Sistemi - Titanic Hotel",
-  description: "27.02.2026 tarihinde Titanic Otel'de verilecek iftar yemeği organizasyon yönetim sistemi",
+  title: "UID BERLIN EVENTS",
+  description: "UID Berlin Events – Event- und Einladungsverwaltung",
 };
 
 export default function RootLayout({
@@ -31,7 +31,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Iftar Org" />
+        <meta name="apple-mobile-web-app-title" content="UID BERLIN EVENTS" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

@@ -38,6 +38,10 @@ export default function DashboardProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
+  const [newEventTitle, setNewEventTitle] = useState('')
+  const [newEventDate, setNewEventDate] = useState('')
+  const [newEventLocation, setNewEventLocation] = useState('')
+  const [newEventDescription, setNewEventDescription] = useState('')
   const [creating, setCreating] = useState(false)
   const [selectedProject, setSelectedProject] = useState<ProjectDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
@@ -122,18 +126,37 @@ export default function DashboardProjectsPage() {
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newProjectName.trim()) return
+    if (!newEventTitle.trim()) {
+      setError('Bitte Event-Titel angeben (unter welchem Titel findet das Event statt?).')
+      return
+    }
+    if (!newEventLocation.trim()) {
+      setError('Bitte Event-Ort angeben (wo findet das Event statt?).')
+      return
+    }
     setCreating(true)
+    setError(null)
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProjectName.trim() }),
+        body: JSON.stringify({
+          name: newProjectName.trim(),
+          eventTitle: newEventTitle.trim(),
+          eventDate: newEventDate || undefined,
+          eventLocation: newEventLocation.trim(),
+          eventDescription: newEventDescription.trim() || undefined,
+        }),
         credentials: 'include',
       })
       if (res.ok) {
         const created = await res.json()
         setProjects((prev) => [...prev, { ...created, isOwner: true }])
         setNewProjectName('')
+        setNewEventTitle('')
+        setNewEventDate('')
+        setNewEventLocation('')
+        setNewEventDescription('')
         await loadProjectDetail(created.id)
       } else {
         const data = await res.json()
@@ -367,21 +390,70 @@ export default function DashboardProjectsPage() {
               ))}
             </ul>
 
-            <form onSubmit={handleCreateProject} className="mt-6 flex gap-2">
-              <input
-                type="text"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="Neues Projekt"
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={creating || !newProjectName.trim()}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {creating ? '…' : 'Anlegen'}
-              </button>
+            <form onSubmit={handleCreateProject} className="mt-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Jedes Projekt hat ein Event – Einladungen gelten für dieses Event. Bitte Titel, Datum und Ort angeben.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-1">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Projektname</label>
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="z. B. Iftar 2026"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Event-Titel *</label>
+                  <input
+                    type="text"
+                    value={newEventTitle}
+                    onChange={(e) => setNewEventTitle(e.target.value)}
+                    placeholder="z. B. Iftar-Essen Titanic Hotel"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Wann (Datum) *</label>
+                  <input
+                    type="date"
+                    value={newEventDate}
+                    onChange={(e) => setNewEventDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Wo (Ort) *</label>
+                  <input
+                    type="text"
+                    value={newEventLocation}
+                    onChange={(e) => setNewEventLocation(e.target.value)}
+                    placeholder="z. B. Titanic Hotel, Berlin"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Beschreibung (optional)</label>
+                  <input
+                    type="text"
+                    value={newEventDescription}
+                    onChange={(e) => setNewEventDescription(e.target.value)}
+                    placeholder="Kurze Beschreibung"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={creating || !newProjectName.trim() || !newEventTitle.trim() || !newEventLocation.trim()}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {creating ? '…' : 'Projekt & Event anlegen'}
+                </button>
+              </div>
             </form>
           </div>
 

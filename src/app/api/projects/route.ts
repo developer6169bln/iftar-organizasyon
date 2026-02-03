@@ -29,8 +29,23 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const name = typeof body.name === 'string' ? body.name.trim() : ''
+    const eventTitle = typeof body.eventTitle === 'string' ? body.eventTitle.trim() : ''
+    const eventDateRaw = body.eventDate
+    const eventLocation = typeof body.eventLocation === 'string' ? body.eventLocation.trim() : ''
+    const eventDescription = typeof body.eventDescription === 'string' ? body.eventDescription.trim() || null : null
+
     if (!name) {
       return NextResponse.json({ error: 'Projektname ist erforderlich' }, { status: 400 })
+    }
+    if (!eventTitle) {
+      return NextResponse.json({ error: 'Event-Titel ist erforderlich (Wann und unter welchem Titel findet das Event statt?).' }, { status: 400 })
+    }
+    if (!eventLocation) {
+      return NextResponse.json({ error: 'Event-Ort ist erforderlich (Wo findet das Event statt?).' }, { status: 400 })
+    }
+    const eventDate = eventDateRaw ? new Date(eventDateRaw) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    if (isNaN(eventDate.getTime())) {
+      return NextResponse.json({ error: 'Ungültiges Event-Datum.' }, { status: 400 })
     }
 
     // User nur role + editionId (per Raw-SQL, damit projects-Tabelle/Relation nicht nötig ist)
@@ -119,6 +134,30 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 }
       )
+    }
+
+    // Jedes Projekt hat ein Event (Einladungen gelten für dieses Event): Event anlegen
+    try {
+      const hasProjectId = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT 1 as count FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'events' AND column_name = 'projectId'
+        LIMIT 1
+      `.then((r) => (r?.length ?? 0) > 0)
+      if (hasProjectId) {
+        await prisma.event.create({
+          data: {
+            projectId: project.id,
+            title: eventTitle,
+            date: eventDate,
+            location: eventLocation,
+            description: eventDescription,
+            status: 'PLANNING',
+          },
+        })
+      }
+    } catch (eventErr) {
+      console.error('POST /api/projects Event create error:', eventErr)
+      // Projekt wurde erstellt; Event fehlgeschlagen (z. B. Spalte projectId fehlt) – Projekt trotzdem zurückgeben
     }
 
     return NextResponse.json(project, { status: 201 })

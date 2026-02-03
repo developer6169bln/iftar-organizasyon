@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [isProjectOwner, setIsProjectOwner] = useState(false)
   const [projects, setProjects] = useState<{ id: string; name: string; ownerId: string; isOwner: boolean }[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [currentEvent, setCurrentEvent] = useState<{ title: string; date: string; location: string; status?: string } | null>(null)
   const [hasEdition, setHasEdition] = useState(false) // Hauptnutzer können Projekte anlegen
 
   useEffect(() => {
@@ -121,21 +122,31 @@ export default function DashboardPage() {
     return () => { cancelled = true }
   }, [selectedProjectId])
 
-  // Statistiken nur für das gewählte Projekt laden (damit Hauptnutzer nicht yaskos Gästeliste sehen)
+  // Statistiken und Event-Infos nur für das gewählte Projekt laden
   useEffect(() => {
     if (!selectedProjectId) {
       setStats({ totalGuests: 0, completedTasks: 0, inProgressTasks: 0, checklistItems: 0 })
+      setCurrentEvent(null)
       setLoadingStats(false)
       return
     }
     let cancelled = false
     const run = async () => {
       setLoadingStats(true)
+      setCurrentEvent(null)
       try {
         const eventResponse = await fetch(`/api/events?projectId=${encodeURIComponent(selectedProjectId)}`)
         if (!eventResponse.ok || cancelled) return
         const event = await eventResponse.json()
         if (!event?.id || cancelled) return
+        if (!cancelled) {
+          setCurrentEvent({
+            title: event.title ?? 'Event',
+            date: event.date,
+            location: event.location ?? '',
+            status: event.status,
+          })
+        }
         const eventId = event.id
         const [guestsRes, tasksRes, checklistRes] = await Promise.all([
           fetch(`/api/guests?eventId=${eventId}`),
@@ -481,8 +492,12 @@ export default function DashboardPage() {
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-48 items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white drop-shadow-lg">Iftar Organizasyon Sistemi</h1>
-              <p className="mt-2 text-lg text-white drop-shadow-md">Titanic Hotel 26.02.2026</p>
+              <h1 className="text-3xl font-bold text-white drop-shadow-lg">UID BERLIN EVENTS</h1>
+              {selectedProjectId && currentEvent && (
+                <p className="mt-2 text-lg text-white drop-shadow-md">
+                  {currentEvent.title} · {new Date(currentEvent.date).toLocaleDateString('de-DE')} · {currentEvent.location}
+                </p>
+              )}
               {projects.length > 0 && (
                 <div className="mt-2 flex items-center gap-2">
                   <label className="text-sm text-white drop-shadow-md">Projekt:</label>
@@ -719,24 +734,26 @@ export default function DashboardPage() {
           <PushNotificationSetup />
         </div>
 
-        {/* Event Info Card */}
-        <div className="mb-8 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shadow-lg">
-          <h2 className="text-2xl font-bold">Etkinlik Bilgileri</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <p className="text-sm opacity-90">Tarih</p>
-              <p className="text-xl font-semibold">26.02.2026</p>
-            </div>
-            <div>
-              <p className="text-sm opacity-90">Lokasyon</p>
-              <p className="text-xl font-semibold">Titanic Hotel</p>
-            </div>
-            <div>
-              <p className="text-sm opacity-90">Durum</p>
-              <p className="text-xl font-semibold">Planlama Aşamasında</p>
+        {/* Event Info Card – nur wenn ein Projekt ausgewählt ist */}
+        {selectedProjectId && currentEvent && (
+          <div className="mb-8 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shadow-lg">
+            <h2 className="text-2xl font-bold">Event-Informationen</h2>
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <p className="text-sm opacity-90">Titel</p>
+                <p className="text-xl font-semibold">{currentEvent.title}</p>
+              </div>
+              <div>
+                <p className="text-sm opacity-90">Datum</p>
+                <p className="text-xl font-semibold">{new Date(currentEvent.date).toLocaleDateString('de-DE')}</p>
+              </div>
+              <div>
+                <p className="text-sm opacity-90">Ort</p>
+                <p className="text-xl font-semibold">{currentEvent.location || '–'}</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Categories Grid */}
         <div className="mb-8">
@@ -1068,6 +1085,10 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        <footer className="mt-12 border-t border-gray-200 pt-6 text-center text-sm text-gray-500">
+          © <a href="mailto:yasin@korkut.de" className="text-indigo-600 hover:underline">yasin@korkut.de</a>
+        </footer>
       </main>
     </div>
   )
