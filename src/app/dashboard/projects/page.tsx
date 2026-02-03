@@ -586,6 +586,9 @@ export default function DashboardProjectsPage() {
         <p className="mt-8 text-sm text-gray-500">
           <strong>Admin-Bereich nur für Ihren Account.</strong> Sie legen Projektmitarbeiter an, weisen sie einzelnen Projekten zu und vergeben Rollen (Mitarbeiter/Koordinator) sowie Berechtigungen (Seiten und Arbeitsbereiche) – diese gelten ausschließlich in Ihren Projekten. Sie sehen keine Benutzer oder Projekte anderer Hauptnutzer.
         </p>
+        <p className="mt-2 text-xs text-gray-400">
+          Stand: Benutzer anlegen &amp; Berechtigungen (Bearbeiten) aktiv. Projekt wählen → „Neuen Benutzer registrieren und zum Projekt hinzufügen“ oder bei Mitglied „Bearbeiten“ für Rolle und Berechtigungen. Bei Problemen: Seite hart neu laden (Strg+F5 / Cmd+Shift+R) oder Railway Redeploy prüfen.
+        </p>
       </main>
     </div>
   )
