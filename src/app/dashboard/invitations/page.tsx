@@ -55,6 +55,7 @@ export default function InvitationsPage() {
   const [sendingTestEmail, setSendingTestEmail] = useState(false)
   const [testingConfig, setTestingConfig] = useState(false)
   const [testConfigEmail, setTestConfigEmail] = useState('')
+  const [resendSending, setResendSending] = useState(false)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1231,15 +1232,38 @@ export default function InvitationsPage() {
                   </span>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => {
-                        if (confirm(`Möchten Sie wirklich ${selectedInvitations.length} Einladung(en) erneut senden?`)) {
-                          // TODO: Implementiere erneutes Senden
-                          alert('Funktion wird noch implementiert')
+                      onClick={async () => {
+                        if (!eventId || selectedInvitations.length === 0) return
+                        if (!confirm(`Möchten Sie wirklich ${selectedInvitations.length} Einladung(en) erneut per E-Mail senden?`)) return
+                        setResendSending(true)
+                        try {
+                          const response = await fetch('/api/invitations/resend', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ invitationIds: selectedInvitations }),
+                          })
+                          const result = await response.json()
+                          if (response.ok) {
+                            alert(`Erneut gesendet: ${result.successful} erfolgreich${result.failed > 0 ? `, ${result.failed} fehlgeschlagen` : ''}`)
+                            setSelectedInvitations([])
+                            await loadInvitations(eventId)
+                            if (typeof window !== 'undefined') {
+                              window.localStorage.setItem('invitation-updated', Date.now().toString())
+                              window.dispatchEvent(new Event('invitation-updated'))
+                            }
+                          } else {
+                            alert('Fehler: ' + (result.error || 'Unbekannter Fehler'))
+                          }
+                        } catch (e) {
+                          alert('Fehler beim erneuten Senden: ' + (e instanceof Error ? e.message : 'Unbekannter Fehler'))
+                        } finally {
+                          setResendSending(false)
                         }
                       }}
-                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                      disabled={resendSending}
+                      className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
                     >
-                      Erneut senden
+                      {resendSending ? 'Wird gesendet...' : 'Erneut senden'}
                     </button>
                     <button
                       onClick={() => setSelectedInvitations([])}
@@ -1946,6 +1970,11 @@ export default function InvitationsPage() {
                     <option value="IMAP">Eigener Mail-Server (SMTP/IMAP)</option>
                     <option value="MAILJET">Mailjet (API)</option>
                   </select>
+                  {(configForm.type === 'GMAIL' || configForm.type === 'ICLOUD' || configForm.type === 'IMAP') && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Auf Railway (Free/Hobby) ist SMTP deaktiviert – nutzen Sie dort <strong>Mailjet (API)</strong>. Siehe <a href="https://docs.railway.com/reference/outbound-networking" target="_blank" rel="noopener noreferrer" className="underline">Railway Outbound Networking</a>.
+                    </p>
+                  )}
                 </div>
 
                 <div>
