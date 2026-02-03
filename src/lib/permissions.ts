@@ -208,6 +208,11 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
 
   let allowedPageIds = user.edition.pages.map((p) => p.pageId)
   let allowedCategoryIds = user.edition.categories.map((c) => c.categoryId)
+  if (allowedPageIds.length === 0) allowedPageIds = [...ALL_PAGE_IDS]
+  if (allowedCategoryIds.length === 0) {
+    const categories = await prisma.category.findMany({ select: { categoryId: true } })
+    allowedCategoryIds = categories.map((c) => c.categoryId)
+  }
   for (const perm of user.pagePermissions) {
     if (perm.allowed) {
       if (!allowedPageIds.includes(perm.pageId)) allowedPageIds.push(perm.pageId)
@@ -356,6 +361,22 @@ export async function requirePageAccess(
 }
 
 /**
+ * Liefert die projectId eines Events (für Projekt-Kontext bei Kategorie-Berechtigungen).
+ */
+export async function getProjectIdForEvent(eventId: string | null | undefined): Promise<string | null> {
+  if (!eventId) return null
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { projectId: true },
+    })
+    return event?.projectId ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Prüft in API-Routen: User angemeldet und hat Zugriff auf die Kategorie.
  * projectId optional: wenn gesetzt, werden Berechtigungen im Projekt-Kontext geprüft.
  */
@@ -368,7 +389,7 @@ export async function requireCategoryAccess(
   if (!userId) {
     return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
   }
-  const { allowedCategoryIds, isAdmin } = await getAllowListForUser(userId, projectId)
+  const { allowedCategoryIds, isAdmin } = await getAllowListForUser(userId, projectId ?? undefined)
   if (isAdmin || allowedCategoryIds.includes(categoryId)) {
     return { userId, projectId: projectId ?? undefined }
   }

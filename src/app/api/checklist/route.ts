@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
-import { requireCategoryAccess, requireEventAccess } from '@/lib/permissions'
+import { getProjectIdForEvent, requireCategoryAccess, requireEventAccess } from '@/lib/permissions'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -49,12 +49,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
+    let projectId: string | null = null
     if (eventId) {
       const eventAccess = await requireEventAccess(request, eventId)
       if (eventAccess instanceof NextResponse) return eventAccess
+      projectId = await getProjectIdForEvent(eventId)
     }
     if (category) {
-      const access = await requireCategoryAccess(request, category)
+      const access = await requireCategoryAccess(request, category, projectId)
       if (access instanceof NextResponse) return access
     }
 
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = checklistSchema.parse(body)
+    let eventIdForProject: string | null = validatedData.eventId ?? null
     if (validatedData.eventId) {
       const eventAccess = await requireEventAccess(request, validatedData.eventId)
       if (eventAccess instanceof NextResponse) return eventAccess
@@ -141,9 +144,11 @@ export async function POST(request: NextRequest) {
       if (task) {
         const eventAccess = await requireEventAccess(request, task.eventId)
         if (eventAccess instanceof NextResponse) return eventAccess
+        eventIdForProject = task.eventId
       }
     }
-    const access = await requireCategoryAccess(request, validatedData.category)
+    const projectId = await getProjectIdForEvent(eventIdForProject)
+    const access = await requireCategoryAccess(request, validatedData.category, projectId)
     if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('checklist_items')
@@ -246,6 +251,7 @@ export async function PATCH(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: 'Checklist-Eintrag nicht gefunden' }, { status: 404 })
     }
+    let eventIdForProject: string | null = existing.eventId
     if (existing.eventId) {
       const eventAccess = await requireEventAccess(request, existing.eventId)
       if (eventAccess instanceof NextResponse) return eventAccess
@@ -255,9 +261,11 @@ export async function PATCH(request: NextRequest) {
       if (task) {
         const eventAccess = await requireEventAccess(request, task.eventId)
         if (eventAccess instanceof NextResponse) return eventAccess
+        eventIdForProject = task.eventId
       }
     }
-    const access = await requireCategoryAccess(request, existing.category)
+    const projectId = await getProjectIdForEvent(eventIdForProject)
+    const access = await requireCategoryAccess(request, existing.category, projectId)
     if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('checklist_items')
@@ -350,6 +358,7 @@ export async function DELETE(request: NextRequest) {
     if (!existing) {
       return NextResponse.json({ error: 'Checklist-Eintrag nicht gefunden' }, { status: 404 })
     }
+    let eventIdForProject: string | null = existing.eventId
     if (existing.eventId) {
       const eventAccess = await requireEventAccess(request, existing.eventId)
       if (eventAccess instanceof NextResponse) return eventAccess
@@ -359,9 +368,11 @@ export async function DELETE(request: NextRequest) {
       if (task) {
         const eventAccess = await requireEventAccess(request, task.eventId)
         if (eventAccess instanceof NextResponse) return eventAccess
+        eventIdForProject = task.eventId
       }
     }
-    const access = await requireCategoryAccess(request, existing.category)
+    const projectId = await getProjectIdForEvent(eventIdForProject)
+    const access = await requireCategoryAccess(request, existing.category, projectId)
     if (access instanceof NextResponse) return access
 
     await prisma.checklistItem.delete({

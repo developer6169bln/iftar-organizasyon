@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { logCreate, logUpdate, logDelete, logView, getUserIdFromRequest } from '@/lib/auditLog'
-import { requireCategoryAccess, requireEventAccess } from '@/lib/permissions'
+import { getProjectIdForEvent, requireCategoryAccess, requireEventAccess } from '@/lib/permissions'
 
 async function getTableColumns(tableName: string): Promise<Set<string>> {
   try {
@@ -50,12 +50,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const category = searchParams.get('category')
     const eventId = searchParams.get('eventId')
+    let projectId: string | null = null
     if (eventId) {
       const eventAccess = await requireEventAccess(request, eventId)
       if (eventAccess instanceof NextResponse) return eventAccess
+      projectId = await getProjectIdForEvent(eventId)
     }
     if (category) {
-      const access = await requireCategoryAccess(request, category)
+      const access = await requireCategoryAccess(request, category, projectId)
       if (access instanceof NextResponse) return access
     }
 
@@ -183,7 +185,8 @@ export async function POST(request: NextRequest) {
     const validatedData = taskSchema.parse(body)
     const eventAccess = await requireEventAccess(request, validatedData.eventId)
     if (eventAccess instanceof NextResponse) return eventAccess
-    const access = await requireCategoryAccess(request, validatedData.category)
+    const projectId = await getProjectIdForEvent(validatedData.eventId)
+    const access = await requireCategoryAccess(request, validatedData.category, projectId)
     if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('tasks')
@@ -307,7 +310,8 @@ export async function PATCH(request: NextRequest) {
     }
     const eventAccess = await requireEventAccess(request, oldTask.eventId)
     if (eventAccess instanceof NextResponse) return eventAccess
-    const access = await requireCategoryAccess(request, oldTask.category)
+    const projectId = await getProjectIdForEvent(oldTask.eventId)
+    const access = await requireCategoryAccess(request, oldTask.category, projectId)
     if (access instanceof NextResponse) return access
 
     const cols = await getTableColumns('tasks')
@@ -424,7 +428,8 @@ export async function DELETE(request: NextRequest) {
     }
     const eventAccess = await requireEventAccess(request, task.eventId)
     if (eventAccess instanceof NextResponse) return eventAccess
-    const access = await requireCategoryAccess(request, task.category)
+    const projectId = await getProjectIdForEvent(task.eventId)
+    const access = await requireCategoryAccess(request, task.category, projectId)
     if (access instanceof NextResponse) return access
 
     await prisma.task.delete({
