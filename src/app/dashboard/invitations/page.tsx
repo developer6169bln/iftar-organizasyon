@@ -85,11 +85,27 @@ export default function InvitationsPage() {
     }
   }, [])
 
-  // Lade Einladungen neu, wenn Tab "list" aktiviert wird
+  // Lade Einladungen neu, wenn Tab "list" aktiviert wird (Event ggf. nachladen)
   useEffect(() => {
-    if (activeTab === 'list' && eventId) {
-      loadInvitations(eventId)
+    if (activeTab !== 'list') return
+    const ensureEventAndLoadList = async () => {
+      let evId = eventId
+      if (!evId) {
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
+        const res = await fetch(eventsUrl)
+        if (res.ok) {
+          const eventData = await res.json()
+          const event = Array.isArray(eventData) ? eventData[0] : eventData
+          if (event?.id) {
+            setEventId(event.id)
+            evId = event.id
+          }
+        }
+      }
+      if (evId) loadInvitations(evId)
     }
+    ensureEventAndLoadList()
   }, [activeTab, eventId])
 
   // Polling: Lade Einladungen alle 5 Sekunden, wenn Tab "list" aktiv ist
@@ -188,14 +204,14 @@ export default function InvitationsPage() {
   }
 
   const loadInvitations = async (evId: string) => {
+    if (!evId) return
     try {
       const response = await fetch(`/api/invitations/list?eventId=${evId}`)
-      if (response.ok) {
-        const data = await response.json()
-        setInvitations(data)
-      }
+      const data = await response.json().catch(() => [])
+      setInvitations(response.ok && Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Fehler beim Laden der Einladungen:', error)
+      setInvitations([])
     }
   }
 
