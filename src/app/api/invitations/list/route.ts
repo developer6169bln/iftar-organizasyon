@@ -57,7 +57,22 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(invitations)
+    // Nur Gäste anzeigen, die in der Gästeliste des Projekts im Feld additionalData "Einladungsliste" ausgewählt haben
+    const filtered = invitations.filter((inv) => {
+      const additional = inv.guest?.additionalData
+      if (!additional) return false
+      try {
+        const data = typeof additional === 'string' ? JSON.parse(additional) : additional
+        const value = data?.Einladungsliste
+        if (value === true) return true
+        if (typeof value === 'string' && value.toLowerCase().trim() === 'true') return true
+        return false
+      } catch {
+        return false
+      }
+    })
+
+    return NextResponse.json(filtered)
   } catch (error) {
     console.error('Fehler beim Abrufen der Einladungen:', error)
     return NextResponse.json(
