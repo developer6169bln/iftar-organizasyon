@@ -149,9 +149,9 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // Erstelle Links
-        const acceptLink = `${baseUrl}/invitation/accept/${acceptToken}`
-        const declineLink = `${baseUrl}/invitation/decline/${declineToken}`
+        // Erstelle Links (API-Routen leiten nach Verarbeitung auf Dankeseite weiter)
+        const acceptLink = `${baseUrl}/api/invitations/accept/${acceptToken}`
+        const declineLink = `${baseUrl}/api/invitations/decline/${declineToken}`
         const trackingPixelUrl = `${baseUrl}/api/invitations/track/${trackingToken}`
 
         // Personalisiere Template

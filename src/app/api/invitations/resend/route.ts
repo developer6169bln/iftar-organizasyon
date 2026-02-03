@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const acceptLink = `${baseUrl}/invitation/accept/${inv.acceptToken}`
-        const declineLink = `${baseUrl}/invitation/decline/${inv.declineToken}`
+        const acceptLink = `${baseUrl}/api/invitations/accept/${inv.acceptToken}`
+        const declineLink = `${baseUrl}/api/invitations/decline/${inv.declineToken}`
         const trackingPixelUrl = `${baseUrl}/api/invitations/track/${inv.trackingToken}`
 
         let personalizedBody = (template?.body ?? inv.body)

@@ -33,12 +33,12 @@ function InvitationSuccessContent() {
                 </svg>
               </div>
               <h1 className="mb-2 text-2xl font-bold text-gray-900">
-                {already ? 'Bereits bestätigt' : 'Zusage erfolgreich!'}
+                {already ? 'Bereits bestätigt' : 'Vielen Dank für Ihre Teilnahme!'}
               </h1>
               <p className="text-gray-600">
                 {already
                   ? 'Ihre Teilnahme wurde bereits bestätigt.'
-                  : 'Vielen Dank für Ihre Zusage. Wir freuen uns auf Ihre Teilnahme!'}
+                  : 'Ihr Dankeschön für die Teilnahme ist bei uns angekommen. Wir freuen uns sehr, Sie bei der Veranstaltung begrüßen zu dürfen!'}
               </p>
             </div>
           </>
@@ -68,7 +68,7 @@ function InvitationSuccessContent() {
               <p className="text-gray-600">
                 {already
                   ? 'Ihre Absage wurde bereits registriert.'
-                  : 'Ihre Absage wurde erfolgreich übermittelt. Wir bedauern, dass Sie nicht teilnehmen können.'}
+                  : 'Ihre Absage wurde übermittelt. Wir bedauern, dass Sie diesmal nicht dabei sein können, und würden uns sehr freuen, Sie bei einer zukünftigen Veranstaltung begrüßen zu dürfen!'}
               </p>
             </div>
           </>
