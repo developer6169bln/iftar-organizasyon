@@ -4,6 +4,26 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+/** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
+function getGuestDisplayEmail(guest: any): string {
+  if (!guest) return ''
+  const main = guest.email && String(guest.email).trim()
+  if (main) return main
+  if (!guest.additionalData) return ''
+  try {
+    const ad = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+    const kurumsal = ad['E-Mail kurumsal']
+    const privat = ad['E-Mail privat']
+    const k = kurumsal != null && String(kurumsal).trim() ? String(kurumsal).trim() : ''
+    const p = privat != null && String(privat).trim() ? String(privat).trim() : ''
+    if (k) return k
+    if (p) return p
+    return ''
+  } catch {
+    return ''
+  }
+}
+
 export default function InvitationsPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -209,7 +229,7 @@ export default function InvitationsPage() {
       const response = await fetch(`/api/guests?eventId=${evId}`)
       if (response.ok) {
         const data = await response.json()
-        setGuests(data.filter((g: any) => g.email)) // Nur Gäste mit Email
+        setGuests(data.filter((g: any) => getGuestDisplayEmail(g))) // Gäste mit E-Mail (guest.email oder E-Mail kurumsal/privat)
       }
     } catch (error) {
       console.error('Fehler beim Laden der Gäste:', error)
@@ -1193,7 +1213,7 @@ export default function InvitationsPage() {
                       className="rounded"
                     />
                     <span className="text-sm">
-                      {guest.name} ({guest.email})
+                      {guest.name} ({getGuestDisplayEmail(guest)})
                     </span>
                   </label>
                 ))}
@@ -1408,7 +1428,7 @@ export default function InvitationsPage() {
                         {invitation.guest?.name}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                        {invitation.guest?.email}
+                        {getGuestDisplayEmail(invitation.guest)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input

@@ -5,6 +5,25 @@ import { getUserIdFromRequest } from '@/lib/auditLog'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 import crypto from 'crypto'
 
+/** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
+function getGuestEmail(guest: { email?: string | null; additionalData?: string | null } | null): string {
+  if (!guest) return ''
+  const main = guest.email && String(guest.email).trim()
+  if (main) return main
+  if (!guest.additionalData) return ''
+  try {
+    const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+    const kurumsal = ad['E-Mail kurumsal']; const privat = ad['E-Mail privat']
+    const k = kurumsal != null && String(kurumsal).trim() ? String(kurumsal).trim() : ''
+    const p = privat != null && String(privat).trim() ? String(privat).trim() : ''
+    if (k) return k
+    if (p) return p
+    return ''
+  } catch {
+    return ''
+  }
+}
+
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
   if (access instanceof NextResponse) return access
@@ -95,12 +114,13 @@ export async function POST(request: NextRequest) {
 
     // Erstelle Einladungen für jeden Gast
     for (const guest of guests) {
-      if (!guest.email) {
+      const toEmail = getGuestEmail(guest)
+      if (!toEmail) {
         results.push({
           guestId: guest.id,
           guestName: guest.name,
           success: false,
-          error: 'Keine E-Mail-Adresse',
+          error: 'Keine E-Mail-Adresse (weder guest.email noch E-Mail kurumsal/privat)',
         })
         continue
       }
@@ -163,7 +183,7 @@ export async function POST(request: NextRequest) {
 
         // Sende Email
         await sendInvitationEmail(
-          guest.email,
+          toEmail,
           personalizedSubject,
           personalizedBody,
           acceptLink,
