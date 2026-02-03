@@ -48,38 +48,41 @@ async function main() {
   const binPrisma = path.resolve(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'prisma.cmd' : 'prisma')
   const binNext = path.resolve(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'next.cmd' : 'next')
 
+  const port = process.env.PORT || '3000'
+  const nextArgs = ['start', '-p', port]
+
   // Sofort starten ohne DB/Migration (z.B. SKIP_MIGRATION=true auf Railway)
   if (process.env.SKIP_MIGRATION === 'true') {
-    console.log('🚀 SKIP_MIGRATION=true – starte Next.js direkt (PORT=%s)', process.env.PORT || 3000)
-    await run(binNext, ['start'])
+    console.log('🚀 SKIP_MIGRATION=true – starte Next.js direkt (PORT=%s)', port)
+    await run(binNext, nextArgs)
     return
   }
 
   const dbUrl = process.env.DATABASE_URL
   if (!dbUrl) {
     console.warn('⚠️ DATABASE_URL fehlt – starte App ohne Migration.')
-    await run(binNext, ['start'])
+    await run(binNext, nextArgs)
     return
   }
 
   let host = null
-  let port = 5432
+  let dbPort = 5432
   try {
     const u = new URL(dbUrl)
     host = u.hostname
-    port = u.port ? parseInt(u.port, 10) : 5432
+    dbPort = u.port ? parseInt(u.port, 10) : 5432
   } catch (e) {
     console.warn('⚠️ Konnte DATABASE_URL nicht parsen – starte App ohne Migration.', e?.message || e)
-    await run(binNext, ['start'])
+    await run(binNext, nextArgs)
     return
   }
 
   const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '15000', 10) // 15s – Railway braucht schnellen Start
   const started = Date.now()
 
-  console.log(`⏳ Warte auf DB TCP: ${host}:${port} (max ${maxWaitMs}ms)`)
+  console.log(`⏳ Warte auf DB TCP: ${host}:${dbPort} (max ${maxWaitMs}ms)`)
   while (Date.now() - started < maxWaitMs) {
-    const ok = await canConnect(host, port, 2000)
+    const ok = await canConnect(host, dbPort, 2000)
     if (ok) {
       console.log('✅ DB erreichbar')
       break
@@ -115,8 +118,8 @@ async function main() {
     }
   }
 
-  console.log('🚀 Starte Next.js (PORT=%s)…', process.env.PORT || 3000)
-  await run(binNext, ['start'])
+  console.log('🚀 Starte Next.js (PORT=%s)…', port)
+  await run(binNext, nextArgs)
 }
 
 main().catch((e) => {

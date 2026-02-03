@@ -66,6 +66,7 @@ export default function AdminPage() {
     pageOverrides: {} as Record<string, 'edition' | 'allow' | 'deny'>,
   })
   const [savingUser, setSavingUser] = useState(false)
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [userModalTab, setUserModalTab] = useState<'basic' | 'permissions'>('basic')
   const autoSaveUserTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -436,13 +437,47 @@ export default function AdminPage() {
                         {u.editionExpiresAt ? new Date(u.editionExpiresAt).toLocaleDateString('de-DE') : '–'}
                       </td>
                       <td className="py-2">
-                        <button
-                          type="button"
-                          onClick={() => openEditUser(u)}
-                          className="rounded bg-indigo-100 px-2 py-1 text-indigo-700 hover:bg-indigo-200"
-                        >
-                          Bearbeiten
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditUser(u)}
+                            className="rounded bg-indigo-100 px-2 py-1 text-indigo-700 hover:bg-indigo-200"
+                          >
+                            Bearbeiten
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingUserId === u.id}
+                            onClick={async () => {
+                              const isMainUser = u.role === 'ADMIN' || !!u.editionId || (u._count?.ownedProjects ?? 0) > 0
+                              const msg = isMainUser
+                                ? `Benutzer „${u.name}" (${u.email}) wirklich löschen?\n\nAlle mit diesem Hauptnutzer verbundenen Projekte und Projektmitarbeiter-Einträge werden dabei mitgelöscht. Die Events dieser Projekte bleiben erhalten (werden vom Projekt getrennt).`
+                                : `Benutzer „${u.name}" (${u.email}) wirklich löschen?`
+                              if (!confirm(msg)) return
+                              setDeletingUserId(u.id)
+                              try {
+                                const res = await fetch(`/api/users?id=${encodeURIComponent(u.id)}`, {
+                                  method: 'DELETE',
+                                  credentials: 'include',
+                                })
+                                if (res.ok) {
+                                  setUsers((prev) => prev.filter((x) => x.id !== u.id))
+                                  if (editUser?.id === u.id) setEditUser(null)
+                                } else {
+                                  const err = await res.json().catch(() => ({}))
+                                  alert(err.error || 'Löschen fehlgeschlagen')
+                                }
+                              } catch {
+                                alert('Löschen fehlgeschlagen')
+                              } finally {
+                                setDeletingUserId(null)
+                              }
+                            }}
+                            className="rounded bg-red-100 px-2 py-1 text-red-700 hover:bg-red-200 disabled:opacity-50"
+                          >
+                            {deletingUserId === u.id ? '…' : 'Löschen'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

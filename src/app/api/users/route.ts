@@ -83,16 +83,30 @@ export async function GET(request: NextRequest) {
             edition: { select: { id: true, code: true, name: true } },
             categoryPermissions: { select: { categoryId: true, allowed: true } },
             pagePermissions: { select: { pageId: true, allowed: true } },
+            _count: { select: { ownedProjects: true } },
           },
           orderBy: { name: 'asc' },
         })
-        users = (users as any[]).map((u) => ({ ...u, _count: { ownedProjects: 0 } }))
       } catch {
         users = await prisma.user.findMany({
           select: { id: true, name: true, email: true, role: true, editionId: true, editionExpiresAt: true, createdAt: true },
           orderBy: { name: 'asc' },
         })
-        users = (users as any[]).map((u) => ({ ...u, _count: { ownedProjects: 0 } }))
+        const withCount = await Promise.all(
+          (users as any[]).map(async (u) => {
+            let owned = 0
+            try {
+              const rows = await prisma.$queryRaw<[{ count: bigint }]>`
+                SELECT COUNT(*) as count FROM "projects" WHERE "ownerId" = ${u.id}
+              `
+              owned = Number(rows[0]?.count ?? 0)
+            } catch {
+              // ignore
+            }
+            return { ...u, _count: { ownedProjects: owned } }
+          })
+        )
+        users = withCount
       }
     } else {
       try {
@@ -317,6 +331,63 @@ export async function PATCH(request: NextRequest) {
     console.error('User PATCH error:', error)
     return NextResponse.json(
       { error: 'Benutzer konnte nicht aktualisiert werden' },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * DELETE: Nur Admin darf Benutzer löschen.
+ * Beim Löschen eines Hauptnutzers werden alle von ihm angelegten Projekte
+ * und zugehörigen Projektmitarbeiter-Einträge kaskadiert mitgelöscht (Schema: onDelete Cascade).
+ * Events dieser Projekte bleiben erhalten, projectId wird auf null gesetzt (SetNull).
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { userId } = await getUserIdFromRequest(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+    }
+    const admin = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+    if (admin?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Nur Administratoren dürfen Benutzer löschen' }, { status: 403 })
+    }
+
+    const targetId = request.nextUrl.searchParams.get('id')?.trim()
+    if (!targetId) {
+      return NextResponse.json({ error: 'Parameter id fehlt' }, { status: 400 })
+    }
+    if (targetId === userId) {
+      return NextResponse.json({ error: 'Sie können sich nicht selbst löschen' }, { status: 400 })
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, email: true, name: true, role: true },
+    })
+    if (!target) {
+      return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
+    }
+
+    const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
+    if (target.role === 'ADMIN' && adminCount <= 1) {
+      return NextResponse.json(
+        { error: 'Der letzte Administrator kann nicht gelöscht werden' },
+        { status: 400 }
+      )
+    }
+
+    await prisma.user.delete({
+      where: { id: targetId },
+    })
+    return new NextResponse(null, { status: 204 })
+  } catch (error) {
+    console.error('User DELETE error:', error)
+    return NextResponse.json(
+      { error: 'Benutzer konnte nicht gelöscht werden', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
