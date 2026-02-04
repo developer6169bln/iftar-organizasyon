@@ -1214,27 +1214,79 @@ export default function InvitationsPage() {
               </div>
             </div>
 
-            {/* Template-Auswahl */}
-            <div className="mb-4">
+            {/* Template-Auswahl: E-Mail wird mit diesem Template gesendet */}
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <label className="mb-2 block text-sm font-medium text-gray-700">
-                Sprache / Template
+                Template für die E-Mail
               </label>
-              <select
-                value={selectedLanguage}
-                onChange={(e) => {
-                  setSelectedLanguage(e.target.value)
-                  const defaultTemplate = templates.find(
-                    (t: any) => t.language === e.target.value && t.isDefault
-                  )
-                  setSelectedTemplate(defaultTemplate?.id || '')
-                }}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
-              >
-                <option value="de">Deutsch</option>
-                <option value="tr">Türkisch</option>
-                <option value="en">Englisch</option>
-                <option value="ar">Arabisch</option>
-              </select>
+              <p className="mb-3 text-xs text-gray-500">
+                Wählen Sie das Template, mit dem die Einladungs-E-Mails versendet werden. Ohne Auswahl wird pro Gast automatisch ein Template nach Kategorie und Sprache gewählt.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    setSelectedTemplate(id)
+                    const t = templates.find((x: any) => x.id === id)
+                    if (t) setSelectedLanguage(t.language)
+                  }}
+                  className="min-w-[280px] rounded-lg border border-gray-300 bg-white px-3 py-2"
+                >
+                  <option value="">Automatisch (nach Kategorie + Sprache)</option>
+                  {templates.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.language.toUpperCase()})
+                      {t.category ? ` – ${getCategoryLabel(t.category, 'de')}` : ' – Global'}
+                      {t.isDefault ? ' [Standard]' : ''}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => {
+                    const lang = e.target.value
+                    setSelectedLanguage(lang)
+                    const defaultTemplate = templates.find(
+                      (t: any) => t.language === lang && (t.category === '' || !t.category) && t.isDefault
+                    )
+                    setSelectedTemplate(defaultTemplate?.id || '')
+                  }}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-2"
+                  title="Sprache für automatische Template-Auswahl"
+                >
+                  <option value="de">Deutsch</option>
+                  <option value="tr">Türkisch</option>
+                  <option value="en">Englisch</option>
+                  <option value="ar">Arabisch</option>
+                </select>
+                {selectedTemplate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = templates.find((x: any) => x.id === selectedTemplate)
+                      if (t) {
+                        setEditingTemplate(t)
+                        setTemplateForm({
+                          name: t.name,
+                          language: t.language,
+                          category: t.category ?? '',
+                          subject: t.subject,
+                          body: t.body,
+                          plainText: t.plainText ?? '',
+                          isDefault: t.isDefault ?? false,
+                        })
+                        setActiveTab('templates')
+                      }
+                    }}
+                    className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200"
+                  >
+                    ✏️ Template bearbeiten
+                  </button>
+                ) : (
+                  <span className="text-sm text-gray-500">Wählen Sie ein Template, um es hier zu bearbeiten.</span>
+                )}
+              </div>
             </div>
 
             {/* Option: Links einbeziehen */}
