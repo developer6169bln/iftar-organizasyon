@@ -20,7 +20,7 @@ type Registration = {
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari'>('uid-iftar')
+  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari'>('uid-iftar')
 
   useEffect(() => {
     const load = async () => {
@@ -42,6 +42,8 @@ export default function RegistrierungenPage() {
 
   const uidIftar = list.filter((r) => r.eventSlug === 'uid-iftar')
   const subeBaskanlari = list.filter((r) => r.eventSlug === 'sube-baskanlari')
+  const kadinKollari = list.filter((r) => r.eventSlug === 'kadin-kollari')
+  const genclikKollari = list.filter((r) => r.eventSlug === 'genclik-kollari')
 
   const formatDate = (s: string) => {
     try {
@@ -148,6 +150,28 @@ export default function RegistrierungenPage() {
           >
             Şube Başkanları ({subeBaskanlari.length})
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('kadin-kollari')}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+              activeTab === 'kadin-kollari'
+                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Kadın Kolları ({kadinKollari.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('genclik-kollari')}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+              activeTab === 'genclik-kollari'
+                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Gençlik Kolları ({genclikKollari.length})
+          </button>
         </div>
 
         {loading ? (
@@ -157,10 +181,20 @@ export default function RegistrierungenPage() {
             <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
             {renderTable(uidIftar, false)}
           </>
-        ) : (
+        ) : activeTab === 'sube-baskanlari' ? (
           <>
             <h2 className="mb-4 text-lg font-semibold text-gray-900">Şube Başkanları</h2>
             {renderTable(subeBaskanlari, true)}
+          </>
+        ) : activeTab === 'kadin-kollari' ? (
+          <>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
+            {renderTable(kadinKollari, false)}
+          </>
+        ) : (
+          <>
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
+            {renderTable(genclikKollari, false)}
           </>
         )}
 
@@ -172,6 +206,14 @@ export default function RegistrierungenPage() {
           {' · '}
           <a href="/anmeldung/sube-baskanlari" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
             Şube Başkanları
+          </a>
+          {' · '}
+          <a href="/anmeldung/kadin-kollari" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+            Kadın Kolları
+          </a>
+          {' · '}
+          <a href="/anmeldung/genclik-kollari" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+            Gençlik Kolları
           </a>
         </p>
       </main>
