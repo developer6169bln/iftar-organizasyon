@@ -54,8 +54,8 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
         const allowedCategoryIds: string[] = data.allowedCategoryIds || []
         const isAdmin = !!data.isAdmin
 
-        // Dashboard-Hauptseite und Projekte: immer erlauben (Eingeloggt reicht)
-        if (pathname === '/dashboard' || pathname === '/dashboard/' || pathname === '/dashboard/projects') {
+        // Dashboard-Hauptseite, Projekte, Registrierungen: immer erlauben (Eingeloggt reicht)
+        if (pathname === '/dashboard' || pathname === '/dashboard/' || pathname === '/dashboard/projects' || pathname === '/dashboard/registrierungen') {
           setAllowed(true)
           return
         }

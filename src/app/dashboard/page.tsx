@@ -559,6 +559,23 @@ export default function DashboardPage() {
         )}
         {/* Quick Links – nur erlaubte Seiten (Admin sieht alle) */}
         <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+          <Link
+            href="/dashboard/registrierungen"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-amber-500 text-2xl text-white">
+                📝
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Anmeldungen (UID Iftar / Şube Başkanları)</h3>
+                <p className="text-sm text-gray-600">
+                  Ergebnisse der öffentlichen Registrierungsformulare einsehen
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
           {(isAdmin || allowedPageIds.includes('invitations')) && (
           <Link
             href="/dashboard/invitations"
