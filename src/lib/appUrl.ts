@@ -34,3 +34,10 @@ export function getBaseUrlForInvitationEmails(request: NextRequest): string {
   console.warn('⚠️ Keine App-URL für E-Mail-Links gefunden – setzen Sie NEXT_PUBLIC_BASE_URL (z. B. auf Railway). Links könnten localhost enthalten.')
   return process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 }
+
+/** Prüft, ob die URL localhost enthält (E-Mails sollen keine localhost-Links haben). */
+export function isLocalhostUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return true
+  const u = url.trim().toLowerCase()
+  return u.includes('localhost') || u.startsWith('http://127.0.0.1') || u.startsWith('https://127.0.0.1')
+}

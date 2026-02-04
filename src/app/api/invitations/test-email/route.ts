@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
-import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
+import { getBaseUrlForInvitationEmails, isLocalhostUrl } from '@/lib/appUrl'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -99,7 +99,15 @@ export async function POST(request: NextRequest) {
 
     // Erstelle Test-Links (App-URL, kein localhost)
     const baseUrl = getBaseUrlForInvitationEmails(request)
-    
+    if (isLocalhostUrl(baseUrl)) {
+      return NextResponse.json(
+        {
+          error: 'E-Mail-Links dürfen keine localhost-URL enthalten. Bitte setzen Sie NEXT_PUBLIC_BASE_URL (z. B. Ihre Railway-/Produktions-URL) in den Umgebungsvariablen.',
+        },
+        { status: 400 }
+      )
+    }
+
     const acceptLink = `${baseUrl}/api/invitations/accept/${acceptToken}`
     const declineLink = `${baseUrl}/api/invitations/decline/${declineToken}`
     const trackingPixelUrl = `${baseUrl}/api/invitations/track/${trackingToken}`

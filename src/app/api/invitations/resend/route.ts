@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
-import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
+import { getBaseUrlForInvitationEmails, isLocalhostUrl } from '@/lib/appUrl'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 /** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
@@ -68,6 +68,14 @@ export async function POST(request: NextRequest) {
     }
 
     const baseUrl = getBaseUrlForInvitationEmails(request)
+    if (isLocalhostUrl(baseUrl)) {
+      return NextResponse.json(
+        {
+          error: 'E-Mail-Links dürfen keine localhost-URL enthalten. Bitte setzen Sie NEXT_PUBLIC_BASE_URL (z. B. Ihre Railway-/Produktions-URL) in den Umgebungsvariablen.',
+        },
+        { status: 400 }
+      )
+    }
     const results: { invitationId: string; guestName: string; success: boolean; error?: string }[] = []
 
     for (const inv of invitations) {
