@@ -525,12 +525,17 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={handleLogout}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 shadow-lg"
-            >
-              Çıkış Yap
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              {user?.name && (
+                <span className="text-sm font-medium text-white/90">{user.name}</span>
+              )}
+              <button
+                onClick={handleLogout}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 shadow-lg"
+              >
+                Çıkış Yap
+              </button>
+            </div>
           </div>
         </div>
       </header>
