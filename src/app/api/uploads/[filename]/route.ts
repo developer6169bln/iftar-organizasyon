@@ -31,18 +31,22 @@ export async function GET(
     return NextResponse.json({ error: 'Ungültiger Dateiname' }, { status: 400 })
   }
 
+  const download = request.nextUrl.searchParams.get('download') === '1'
+
   try {
     const uploadDir = getUploadDir()
     const filePath = join(uploadDir, filename)
     const buffer = await readFile(filePath)
     const ext = filename.split('.').pop()?.toLowerCase() || ''
     const contentType = MIME[ext] || 'application/octet-stream'
-    return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=86400',
-      },
-    })
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400',
+    }
+    if (download) {
+      headers['Content-Disposition'] = `attachment; filename="${filename.replace(/"/g, '\\"')}"`
+    }
+    return new NextResponse(buffer, { headers })
   } catch {
     return NextResponse.json({ error: 'Datei nicht gefunden' }, { status: 404 })
   }

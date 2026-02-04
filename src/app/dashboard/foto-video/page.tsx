@@ -53,6 +53,12 @@ export default function FotoVideoPage() {
   })
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailMessage, setEmailMessage] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [downloadingZip, setDownloadingZip] = useState(false)
 
   const loadEvent = useCallback(async () => {
     setEventLoadError(null)
@@ -219,6 +225,82 @@ export default function FotoVideoPage() {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
   const getMediaUrl = (item: MediaItem) =>
     baseUrl + '/api/uploads/' + encodeURIComponent(item.filePath.replace(/^\/uploads\//, '') || item.filePath.split('/').pop() || '')
+  const getDownloadUrl = (item: MediaItem) => getMediaUrl(item) + '?download=1'
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+  const selectAll = () => setSelectedIds(items.map((i) => i.id))
+  const selectNone = () => setSelectedIds([])
+
+  const handleDownload = async () => {
+    if (selectedIds.length === 0) return
+    if (selectedIds.length === 1) {
+      const item = items.find((i) => i.id === selectedIds[0])
+      if (item) window.open(getDownloadUrl(item), '_blank')
+      return
+    }
+    setDownloadingZip(true)
+    try {
+      const res = await fetch(`/api/media/download?ids=${selectedIds.join(',')}`, { credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert((err as { error?: string }).error || 'Download fehlgeschlagen')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'medien.zip'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Download fehlgeschlagen')
+    } finally {
+      setDownloadingZip(false)
+    }
+  }
+
+  const handleShareWhatsApp = () => {
+    if (selectedIds.length === 0) return
+    const text = encodeURIComponent(
+      selectedIds.length === 1
+        ? `Foto/Video: ${baseUrl}/dashboard/foto-video`
+        : `${selectedIds.length} Fotos/Videos: ${baseUrl}/dashboard/foto-video`
+    )
+    window.open(`https://wa.me/?text=${text}`, '_blank')
+  }
+
+  const handleSendEmail = async () => {
+    const to = emailTo.trim()
+    if (!to || !to.includes('@')) {
+      alert('Bitte gültige E-Mail-Adresse eingeben.')
+      return
+    }
+    setSendingEmail(true)
+    try {
+      const res = await fetch('/api/media/share-email', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to, ids: selectedIds, message: emailMessage.trim() || undefined }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert((data as { error?: string }).error || 'E-Mail-Versand fehlgeschlagen')
+        return
+      }
+      setShowEmailModal(false)
+      setEmailTo('')
+      setEmailMessage('')
+      alert('E-Mail wurde gesendet.')
+    } catch {
+      alert('E-Mail-Versand fehlgeschlagen')
+    } finally {
+      setSendingEmail(false)
+    }
+  }
 
   if (!eventId && !loading) {
     return (
@@ -319,13 +401,70 @@ export default function FotoVideoPage() {
           Noch keine Fotos oder Videos. Laden Sie oben eine Datei hoch.
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-gray-600">
+              {selectedIds.length > 0 ? (
+                <>
+                  <button type="button" onClick={selectNone} className="text-indigo-600 hover:underline">
+                    Keine
+                  </button>
+                  {' · '}
+                  <button type="button" onClick={selectAll} className="text-indigo-600 hover:underline">
+                    Alle auswählen
+                  </button>
+                  {' · '}
+                  <strong>{selectedIds.length}</strong> ausgewählt
+                </>
+              ) : (
+                <button type="button" onClick={selectAll} className="text-indigo-600 hover:underline">
+                  Alle auswählen
+                </button>
+              )}
+            </span>
+            {selectedIds.length > 0 && (
+              <span className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={downloadingZip}
+                  className="rounded-lg bg-slate-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {downloadingZip ? 'Lade…' : selectedIds.length === 1 ? 'Herunterladen' : 'Alle herunterladen (ZIP)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
+                >
+                  Teilen (WhatsApp)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEmailModal(true)}
+                  className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Per E-Mail senden
+                </button>
+              </span>
+            )}
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
             <div
               key={item.id}
-              className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
+              className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md ${selectedIds.includes(item.id) ? 'ring-2 ring-indigo-500 border-indigo-300' : 'border-gray-200'}`}
             >
               <div className="relative aspect-video bg-gray-100">
+                <label className="absolute left-2 top-2 z-10 flex cursor-pointer items-center gap-1 rounded bg-black/60 px-2 py-1 text-xs text-white">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={() => toggleSelect(item.id)}
+                    className="rounded border-gray-300"
+                  />
+                  Auswählen
+                </label>
                 {item.type === 'PHOTO' ? (
                   <img
                     src={getMediaUrl(item)}
@@ -360,7 +499,15 @@ export default function FotoVideoPage() {
                   {item.sharedFacebook && <span className="rounded bg-blue-100 px-1.5 py-0.5 text-blue-800">Facebook</span>}
                   {item.sharedOtherMedia && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">Andere</span>}
                 </div>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <a
+                    href={getDownloadUrl(item)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Herunterladen
+                  </a>
                   <button
                     type="button"
                     onClick={() => openEdit(item)}
@@ -380,7 +527,8 @@ export default function FotoVideoPage() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+          </>
       )}
 
       {/* Bearbeiten-Modal */}
@@ -472,6 +620,57 @@ export default function FotoVideoPage() {
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
               >
                 {saving ? 'Speichern…' : 'Speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* E-Mail teilen Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Medien per E-Mail senden</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              {selectedIds.length} {selectedIds.length === 1 ? 'Medium' : 'Medien'} wird/werden mit Link zur App geteilt.
+            </p>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">E-Mail-Adresse (An)</label>
+                <input
+                  type="email"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  placeholder="empfaenger@beispiel.de"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Nachricht (optional)</label>
+                <textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  rows={2}
+                  placeholder="Kurze Nachricht an den Empfänger"
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowEmailModal(false); setEmailTo(''); setEmailMessage('') }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleSendEmail}
+                disabled={sendingEmail}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sendingEmail ? 'Senden…' : 'Senden'}
               </button>
             </div>
           </div>
