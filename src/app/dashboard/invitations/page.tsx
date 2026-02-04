@@ -1360,6 +1360,63 @@ export default function InvitationsPage() {
                 🔄 Aktualisieren
               </button>
             </div>
+
+            {/* Template-Auswahl (wie im Senden-Bereich) + Bearbeiten */}
+            <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Template für E-Mails
+              </label>
+              <p className="mb-3 text-xs text-gray-500">
+                Wählen Sie ein Template; beim „Erneut senden“ wird das gespeicherte E-Mail der Einladung verwendet. Hier können Sie das Template bearbeiten.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    const id = e.target.value
+                    setSelectedTemplate(id)
+                    const t = templates.find((x: any) => x.id === id)
+                    if (t) setSelectedLanguage(t.language)
+                  }}
+                  className="min-w-[280px] rounded-lg border border-gray-300 bg-white px-3 py-2"
+                >
+                  <option value="">— Template wählen —</option>
+                  {templates.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.language.toUpperCase()})
+                      {t.category ? ` – ${getCategoryLabel(t.category, 'de')}` : ' – Global'}
+                      {t.isDefault ? ' [Standard]' : ''}
+                    </option>
+                  ))}
+                </select>
+                {selectedTemplate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = templates.find((x: any) => x.id === selectedTemplate)
+                      if (t) {
+                        setEditingTemplate(t)
+                        setTemplateForm({
+                          name: t.name,
+                          language: t.language,
+                          category: t.category ?? '',
+                          subject: t.subject,
+                          body: t.body,
+                          plainText: t.plainText ?? '',
+                          isDefault: t.isDefault ?? false,
+                        })
+                        setActiveTab('templates')
+                      }
+                    }}
+                    className="rounded-lg bg-amber-100 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-200"
+                  >
+                    ✏️ Template bearbeiten
+                  </button>
+                ) : (
+                  <span className="text-sm text-gray-500">Template wählen, um es zu bearbeiten.</span>
+                )}
+              </div>
+            </div>
             
             {/* Auswahl-Info und Bulk-Aktionen */}
             {selectedInvitations.length > 0 && (
