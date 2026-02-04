@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 const net = require('node:net')
+const fs = require('node:fs/promises')
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 
@@ -105,6 +106,16 @@ async function main() {
         break
       }
       await sleep(2000)
+    }
+  }
+
+  // Optional: Upload-Verzeichnis anlegen (wenn UPLOAD_DIR z. B. für Railway Volume gesetzt)
+  if (process.env.UPLOAD_DIR) {
+    try {
+      await fs.mkdir(process.env.UPLOAD_DIR, { recursive: true })
+      console.log('✅ Upload-Verzeichnis:', process.env.UPLOAD_DIR)
+    } catch (e) {
+      console.warn('⚠️ UPLOAD_DIR anlegen fehlgeschlagen:', e?.message || e)
     }
   }
 
