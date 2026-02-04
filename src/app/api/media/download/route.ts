@@ -53,8 +53,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Kein Zugriff oder keine Dateien gefunden' }, { status: 403 })
   }
 
-  const blob = await zip.generateAsync({ type: 'nodebuffer' })
-  return new NextResponse(blob, {
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' })
+  const body = new Uint8Array(buffer)
+  return new NextResponse(body, {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': 'attachment; filename="medien.zip"',
