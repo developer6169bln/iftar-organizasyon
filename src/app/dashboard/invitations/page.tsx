@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getKnownCategoryKeys, getCategoryLabel } from '@/lib/guestCategory'
@@ -70,6 +70,14 @@ function getGuestStaatInstitution(guest: any): string {
   return ''
 }
 
+/** Bemerkungen aus guest.notes oder additionalData. */
+function getGuestBemerkungen(guest: any): string {
+  if (!guest) return ''
+  if (guest.notes != null && String(guest.notes).trim() !== '') return String(guest.notes).trim()
+  const add = parseAdditionalData(guest)
+  return getFromAdditional(add, ['Bemerkungen', 'bemerkungen', 'Notizen', 'notizen', 'Notes', 'Anmerkungen'])
+}
+
 export default function InvitationsPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -88,6 +96,8 @@ export default function InvitationsPage() {
   const [editingCell, setEditingCell] = useState<{ invitationId: string; field: string } | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
   const [includeLinks, setIncludeLinks] = useState<boolean>(true) // Standard: Links einbeziehen
+  const [listSortBy, setListSortBy] = useState<'bemerkungen' | null>(null)
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc')
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
   const [templateForm, setTemplateForm] = useState({
     name: '',
@@ -1197,6 +1207,16 @@ export default function InvitationsPage() {
 
   const stats = getResponseStats()
 
+  const sortedInvitations = useMemo(() => {
+    if (!listSortBy || listSortBy !== 'bemerkungen') return invitations
+    const dir = listSortDir === 'asc' ? 1 : -1
+    return [...invitations].sort((a, b) => {
+      const va = getGuestBemerkungen(a.guest)
+      const vb = getGuestBemerkungen(b.guest)
+      return dir * (va.localeCompare(vb, 'de'))
+    })
+  }, [invitations, listSortBy, listSortDir])
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -1636,10 +1656,10 @@ export default function InvitationsPage() {
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       <input
                         type="checkbox"
-                        checked={invitations.length > 0 && selectedInvitations.length === invitations.length}
+                        checked={sortedInvitations.length > 0 && selectedInvitations.length === sortedInvitations.length}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedInvitations(invitations.map((inv: any) => inv.id))
+                            setSelectedInvitations(sortedInvitations.map((inv: any) => inv.id))
                           } else {
                             setSelectedInvitations([])
                           }
@@ -1691,12 +1711,33 @@ export default function InvitationsPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Antwort-Datum
                     </th>
+                    <th
+                      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 hover:bg-gray-100"
+                      onClick={() => {
+                        if (listSortBy === 'bemerkungen') {
+                          setListSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+                        } else {
+                          setListSortBy('bemerkungen')
+                          setListSortDir('asc')
+                        }
+                      }}
+                      title="Klicken zum Sortieren nach Bemerkungen"
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Bemerkungen
+                        {listSortBy === 'bemerkungen' && (
+                          <span className="text-indigo-600" aria-hidden>
+                            {listSortDir === 'asc' ? ' ↑' : ' ↓'}
+                          </span>
+                        )}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={16} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={17} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1706,7 +1747,7 @@ export default function InvitationsPage() {
                       </td>
                     </tr>
                   ) : (
-                    invitations.map((invitation) => (
+                    sortedInvitations.map((invitation) => (
                     <tr key={invitation.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input
@@ -2009,6 +2050,9 @@ export default function InvitationsPage() {
                             ? new Date(invitation.respondedAt).toLocaleString('de-DE')
                             : <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
                         )}
+                      </td>
+                      <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={getGuestBemerkungen(invitation.guest)}>
+                        {getGuestBemerkungen(invitation.guest) || '–'}
                       </td>
                     </tr>
                     ))
