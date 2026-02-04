@@ -26,6 +26,30 @@ function getGuestEmail(guest: { email?: string | null; additionalData?: string |
   }
 }
 
+/** Staat/Institution aus guest.organization oder additionalData (für Platzhalter {{STAAT_INSTITUTION}}). */
+function getGuestStaatInstitution(guest: { organization?: string | null; additionalData?: string | null } | null): string {
+  if (!guest) return ''
+  if (guest.organization != null && String(guest.organization).trim() !== '') return String(guest.organization).trim()
+  if (!guest.additionalData) return ''
+  try {
+    const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+    const keys = ['Staat/Institution', 'Staat / Institution', 'StaatInstitution', 'Institution', 'Staat']
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(ad, key) && ad[key] != null) {
+        const v = String(ad[key]).trim()
+        if (v !== '') return v
+      }
+    }
+    for (const [key, value] of Object.entries(ad)) {
+      const k = String(key).toLowerCase()
+      if ((k.includes('staat') || k.includes('institution')) && value != null && String(value).trim() !== '') return String(value).trim()
+    }
+  } catch {
+    // ignore
+  }
+  return ''
+}
+
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
   if (access instanceof NextResponse) return access
@@ -200,6 +224,7 @@ export async function POST(request: NextRequest) {
         const trackingPixelUrl = `${baseUrl}/api/invitations/track/${trackingToken}`
 
         // Personalisiere Template
+        const staatInstitution = getGuestStaatInstitution(guest)
         let personalizedBody = template.body
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
@@ -210,6 +235,7 @@ export async function POST(request: NextRequest) {
             day: 'numeric',
           }))
           .replace(/{{EVENT_LOCATION}}/g, event.location)
+          .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
         
         // Links optional einfügen (Standard: true)
         if (includeLinks) {
@@ -226,6 +252,7 @@ export async function POST(request: NextRequest) {
         let personalizedSubject = template.subject
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
+          .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
 
         // Sende Email
         await sendInvitationEmail(

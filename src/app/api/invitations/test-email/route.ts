@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
         day: 'numeric',
       }))
       .replace(/{{EVENT_LOCATION}}/g, event.location || '')
+      .replace(/{{STAAT_INSTITUTION}}/g, 'Beispiel-Institution')
     
     // Links optional einfügen
     if (includeLinks) {
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
     let personalizedSubject = template.subject
       .replace(/{{GUEST_NAME}}/g, 'Test-Gast')
       .replace(/{{EVENT_TITLE}}/g, event.title)
+      .replace(/{{STAAT_INSTITUTION}}/g, 'Beispiel-Institution')
 
     // Sende Test-E-Mail
     try {

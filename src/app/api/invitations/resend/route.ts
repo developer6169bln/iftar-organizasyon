@@ -23,6 +23,30 @@ function getGuestEmail(guest: { email?: string | null; additionalData?: string |
   }
 }
 
+/** Staat/Institution aus guest.organization oder additionalData (für Platzhalter {{STAAT_INSTITUTION}}). */
+function getGuestStaatInstitution(guest: { organization?: string | null; additionalData?: string | null } | null): string {
+  if (!guest) return ''
+  if (guest.organization != null && String(guest.organization).trim() !== '') return String(guest.organization).trim()
+  if (!guest.additionalData) return ''
+  try {
+    const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+    const keys = ['Staat/Institution', 'Staat / Institution', 'StaatInstitution', 'Institution', 'Staat']
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(ad, key) && ad[key] != null) {
+        const v = String(ad[key]).trim()
+        if (v !== '') return v
+      }
+    }
+    for (const [key, value] of Object.entries(ad)) {
+      const k = String(key).toLowerCase()
+      if ((k.includes('staat') || k.includes('institution')) && value != null && String(value).trim() !== '') return String(value).trim()
+    }
+  } catch {
+    // ignore
+  }
+  return ''
+}
+
 /** Erneutes Senden von Einladungs-E-Mails für bestehende Einladungen (gleiche Links/Tokens). */
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
@@ -113,6 +137,7 @@ export async function POST(request: NextRequest) {
         const bodyBase = overrideTemplate?.body ?? template?.body ?? inv.body
         const subjectBase = overrideTemplate?.subject ?? template?.subject ?? inv.subject
 
+        const staatInstitution = getGuestStaatInstitution(guest)
         let personalizedBody = bodyBase
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
@@ -123,12 +148,14 @@ export async function POST(request: NextRequest) {
             day: 'numeric',
           }))
           .replace(/{{EVENT_LOCATION}}/g, event.location)
+          .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
           .replace(/{{ACCEPT_LINK}}/g, acceptLink)
           .replace(/{{DECLINE_LINK}}/g, declineLink)
 
         let personalizedSubject = subjectBase
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
+          .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
 
         await sendInvitationEmail(
           toEmail,
