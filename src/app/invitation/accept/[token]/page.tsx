@@ -10,6 +10,19 @@ type PublicInfo = {
   alreadyAccepted: boolean
 }
 
+type AccompanyingGuestEntry = {
+  firstName: string
+  lastName: string
+  funktion: string
+  email: string
+}
+
+type CheckInTokenEntry = {
+  label: string
+  token: string
+  type: 'main' | 'accompanying'
+}
+
 export default function InvitationAcceptPage() {
   const params = useParams()
   const router = useRouter()
@@ -18,8 +31,13 @@ export default function InvitationAcceptPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [accompanyingGuestsCount, setAccompanyingGuestsCount] = useState(1)
+  const [accompanyingGuests, setAccompanyingGuests] = useState<AccompanyingGuestEntry[]>([])
   const [maxExceededWarning, setMaxExceededWarning] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [showQrPage, setShowQrPage] = useState(false)
+  const [checkInTokens, setCheckInTokens] = useState<CheckInTokenEntry[]>([])
+  const [redirectUrl, setRedirectUrl] = useState('')
+  const [eventTitle, setEventTitle] = useState('')
 
   useEffect(() => {
     if (!token) {
@@ -39,12 +57,24 @@ export default function InvitationAcceptPage() {
           return
         }
         setAccompanyingGuestsCount(1)
+        setAccompanyingGuests([])
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Unbekannter Fehler'))
       .finally(() => setLoading(false))
   }, [token, router])
 
   const max = info?.maxAccompanyingGuests ?? 5
+  const numAdditional = Math.max(0, accompanyingGuestsCount - 1)
+
+  useEffect(() => {
+    setAccompanyingGuests((prev) => {
+      const next: AccompanyingGuestEntry[] = []
+      for (let i = 0; i < numAdditional; i++) {
+        next.push(prev[i] ?? { firstName: '', lastName: '', funktion: '', email: '' })
+      }
+      return next
+    })
+  }, [numAdditional])
 
   const handleCountChange = (value: number) => {
     setAccompanyingGuestsCount(value)
@@ -55,6 +85,15 @@ export default function InvitationAcceptPage() {
     } else {
       setMaxExceededWarning(null)
     }
+  }
+
+  const updateAccompanying = (index: number, field: keyof AccompanyingGuestEntry, value: string) => {
+    setAccompanyingGuests((prev) => {
+      const next = [...prev]
+      if (!next[index]) next[index] = { firstName: '', lastName: '', funktion: '', email: '' }
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -68,15 +107,34 @@ export default function InvitationAcceptPage() {
     }
     setSubmitting(true)
     setMaxExceededWarning(null)
+    const payload = {
+      accompanyingGuestsCount,
+      accompanyingGuests:
+        numAdditional > 0
+          ? accompanyingGuests.slice(0, numAdditional).map((a) => ({
+              firstName: a.firstName.trim(),
+              lastName: a.lastName.trim(),
+              funktion: a.funktion.trim() || undefined,
+              email: a.email.trim() || undefined,
+            }))
+          : undefined,
+    }
     fetch(`/api/invitations/accept/${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accompanyingGuestsCount }),
+      body: JSON.stringify(payload),
     })
       .then(async (res) => {
         const data = await res.json()
-        if (data.success && data.redirectUrl) {
-          window.location.href = data.redirectUrl
+        if (data.success) {
+          setRedirectUrl(data.redirectUrl || '/invitation/success?type=accepted')
+          setEventTitle(data.eventTitle || info.eventTitle || '')
+          if (Array.isArray(data.checkInTokens) && data.checkInTokens.length > 0) {
+            setCheckInTokens(data.checkInTokens)
+            setShowQrPage(true)
+          } else {
+            window.location.href = data.redirectUrl || '/invitation/success?type=accepted'
+          }
           return
         }
         if (data.error && res.status === 400) {
@@ -115,6 +173,53 @@ export default function InvitationAcceptPage() {
 
   if (info.alreadyAccepted) {
     return null
+  }
+
+  if (showQrPage && checkInTokens.length > 0) {
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
+        <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <svg className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="mb-2 text-xl font-bold text-gray-900">Vielen Dank für Ihre Teilnahme!</h1>
+            <p className="mb-4 text-gray-600">
+              Bitte zeigen Sie am Eventtag beim Einlass Ihren QR-Code zum Scannen. Jede Person hat einen eigenen Code.
+            </p>
+            {eventTitle && <p className="text-sm text-gray-500">{eventTitle}</p>}
+          </div>
+          <div className="space-y-6">
+            {checkInTokens.map((entry, idx) => (
+              <div key={entry.token} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="mb-2 text-sm font-medium text-gray-700">
+                  {entry.type === 'main' ? 'Hauptgast' : 'Begleitperson'} – {entry.label}
+                </p>
+                <div className="flex justify-center">
+                  <img
+                    src={`${base}/api/checkin/qr?t=${encodeURIComponent(entry.token)}`}
+                    alt={`QR-Code für ${entry.label}`}
+                    className="h-48 w-48 rounded border border-gray-300 bg-white object-contain"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 text-center">
+            <button
+              type="button"
+              onClick={() => (window.location.href = redirectUrl)}
+              className="rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700"
+            >
+              Weiter
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -156,6 +261,46 @@ export default function InvitationAcceptPage() {
               </p>
             )}
           </div>
+
+          {numAdditional > 0 && (
+            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-700">
+                Daten der zusätzlichen Gäste (Vorname, Nachname, Funktion, E-Mail)
+              </p>
+              {accompanyingGuests.slice(0, numAdditional).map((ag, idx) => (
+                <div key={idx} className="space-y-2 rounded border border-gray-200 bg-white p-3">
+                  <p className="text-xs font-medium text-gray-500">Gast {idx + 1}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      placeholder="Vorname"
+                      value={ag.firstName}
+                      onChange={(e) => updateAccompanying(idx, 'firstName', e.target.value)}
+                      className="rounded border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    <input
+                      placeholder="Nachname"
+                      value={ag.lastName}
+                      onChange={(e) => updateAccompanying(idx, 'lastName', e.target.value)}
+                      className="rounded border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <input
+                    placeholder="Funktion / Rolle"
+                    value={ag.funktion}
+                    onChange={(e) => updateAccompanying(idx, 'funktion', e.target.value)}
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <input
+                    type="email"
+                    placeholder="E-Mail"
+                    value={ag.email}
+                    onChange={(e) => updateAccompanying(idx, 'email', e.target.value)}
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
           <button
             type="submit"

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
+
+function generateCheckInToken(): string {
+  return randomBytes(24).toString('hex')
+}
 
 /** GET: Weiterleitung zur Zusage-Seite (Formular für Anzahl mitkommender Gäste). */
 export async function GET(
@@ -41,11 +46,16 @@ export async function POST(
     }
 
     if (invitation.response === 'ACCEPTED') {
-      return NextResponse.redirect(`${baseUrl}/invitation/success?type=accepted&already=true`)
+      return NextResponse.json({
+        success: true,
+        redirectUrl: `${baseUrl}/invitation/success?type=accepted&already=true`,
+        already: true,
+      })
     }
 
     const maxAccompanyingGuests = invitation.event?.maxAccompanyingGuests ?? 5
     let accompanyingGuestsCount = 1
+    let accompanyingGuests: Array<{ firstName: string; lastName: string; funktion?: string; email?: string }> = []
     try {
       const body = await request.json()
       const raw = body?.accompanyingGuestsCount
@@ -68,9 +78,30 @@ export async function POST(
         }
         accompanyingGuestsCount = n
       }
+      const rawList = body?.accompanyingGuests
+      if (Array.isArray(rawList) && accompanyingGuestsCount > 1) {
+        const needed = accompanyingGuestsCount - 1
+        for (let i = 0; i < needed && i < rawList.length; i++) {
+          const item = rawList[i]
+          if (item && typeof item === 'object') {
+            const firstName = typeof item.firstName === 'string' ? item.firstName.trim() : ''
+            const lastName = typeof item.lastName === 'string' ? item.lastName.trim() : ''
+            if (firstName || lastName) {
+              accompanyingGuests.push({
+                firstName: firstName || '-',
+                lastName: lastName || '-',
+                funktion: typeof item.funktion === 'string' ? item.funktion.trim() : undefined,
+                email: typeof item.email === 'string' ? item.email.trim() || undefined : undefined,
+              })
+            }
+          }
+        }
+      }
     } catch {
       // Body fehlt oder ungültig → Standard 1 beibehalten
     }
+
+    const mainGuestCheckInToken = generateCheckInToken()
 
     await prisma.invitation.update({
       where: { id: invitation.id },
@@ -95,20 +126,47 @@ export async function POST(
           data: {
             status: 'CONFIRMED',
             additionalData: JSON.stringify(additionalData),
+            checkInToken: mainGuestCheckInToken,
           },
         })
       } catch (e) {
         console.error('Fehler beim Aktualisieren von additionalData:', e)
         await prisma.guest.update({
           where: { id: invitation.guestId },
-          data: { status: 'CONFIRMED' },
+          data: { status: 'CONFIRMED', checkInToken: mainGuestCheckInToken },
         })
       }
+    }
+
+    const checkInTokens: Array<{ label: string; token: string; type: 'main' | 'accompanying' }> = [
+      { label: invitation.guest?.name ?? 'Hauptgast', token: mainGuestCheckInToken, type: 'main' },
+    ]
+
+    for (const ag of accompanyingGuests) {
+      const token = generateCheckInToken()
+      await prisma.accompanyingGuest.create({
+        data: {
+          invitationId: invitation.id,
+          firstName: ag.firstName,
+          lastName: ag.lastName,
+          funktion: ag.funktion ?? null,
+          email: ag.email ?? null,
+          checkInToken: token,
+        },
+      })
+      checkInTokens.push({
+        label: `${ag.firstName} ${ag.lastName}`.trim(),
+        token,
+        type: 'accompanying',
+      })
     }
 
     return NextResponse.json({
       success: true,
       redirectUrl: `${baseUrl}/invitation/success?type=accepted`,
+      checkInTokens,
+      eventTitle: invitation.event?.title ?? '',
+      eventDate: invitation.event?.date ? new Date(invitation.event.date).toISOString() : '',
     })
   } catch (error) {
     console.error('Fehler bei Zusage:', error)

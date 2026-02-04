@@ -1625,6 +1625,9 @@ export default function InvitationsPage() {
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       Mitkommende
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Begleitpersonen (Name, Funktion, E-Mail)
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       Abgesagt
                     </th>
@@ -1642,7 +1645,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1717,6 +1720,21 @@ export default function InvitationsPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center text-gray-700">
                         {invitation.response === 'ACCEPTED'
                           ? (invitation.accompanyingGuestsCount ?? 1)
+                          : '–'}
+                      </td>
+                      <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
+                        {invitation.accompanyingGuests?.length
+                          ? (
+                              <ul className="list-inside list-disc space-y-0.5 text-xs">
+                                {(invitation.accompanyingGuests as Array<{ firstName: string; lastName: string; funktion?: string | null; email?: string | null }>).map((ag, i) => (
+                                  <li key={i}>
+                                    {[ag.firstName, ag.lastName].filter(Boolean).join(' ')}
+                                    {ag.funktion ? ` · ${ag.funktion}` : ''}
+                                    {ag.email ? ` · ${ag.email}` : ''}
+                                  </li>
+                                ))}
+                              </ul>
+                            )
                           : '–'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">

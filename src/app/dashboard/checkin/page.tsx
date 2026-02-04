@@ -17,6 +17,10 @@ interface EingangGuestRow {
   anrede3: string
   notizen: string
   anwesend: boolean
+  /** Begleitperson (bei Zusage erfasst); dann Anwesend über /api/accompanying-guests/anwesend */
+  isAccompanying?: boolean
+  accompanyingGuestId?: string
+  mainGuestName?: string
 }
 
 function parseAdditionalData(additionalData: any): Record<string, any> {
@@ -120,41 +124,35 @@ export default function EingangskontrollePage() {
 
     try {
       setLoading(true)
-      // Lade alle Gäste für das Event
-      const response = await fetch(`/api/guests?eventId=${eventId}`)
-      if (!response.ok) {
+      const [guestsRes, accompanyingRes] = await Promise.all([
+        fetch(`/api/guests?eventId=${eventId}`),
+        fetch(`/api/accompanying-guests?eventId=${eventId}`),
+      ])
+
+      if (!guestsRes.ok) {
         console.error('Fehler beim Laden der Gäste')
         setRows([])
         setFilteredRows([])
         return
       }
 
-      const guests = await response.json()
-      
-      // Filtere nach Gästen mit Zusage = true in additionalData
+      const guests = await guestsRes.json()
       const guestsWithZusage = guests.filter((g: any) => {
         const add = parseAdditionalData(g.additionalData)
         return add['Zusage'] === true || add['Zusage'] === 'true'
       })
-      
-      console.log(`📥 Eingangskontrolle: ${guestsWithZusage.length} Gäste mit Zusage geladen`)
 
       const mapped: EingangGuestRow[] = guestsWithZusage.map((g: any) => {
         const add = parseAdditionalData(g.additionalData)
-
         const fullName: string = g.name || ''
         const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
         const vorname = nameParts[0] || ''
         const nachname = nameParts.slice(1).join(' ') || fullName
-
         const tischNummer =
           g.tableNumber != null
             ? String(g.tableNumber)
             : getFromAdditional(add, ['Tisch-Nummer', 'Tischnummer', 'Tisch'])
-
         const kategorie = getFromAdditional(add, ['Kategorie', 'Kategorie ', 'KATEGORIE'])
-
-        // Staat/Institution: zuerst organization, dann additionalData
         let staatInstitution = ''
         if (g.organization && String(g.organization).trim() !== '') {
           staatInstitution = String(g.organization).trim()
@@ -168,7 +166,6 @@ export default function EingangskontrollePage() {
               'Institution',
               'Staat',
             ]) ||
-            // Fallback: irgendein Key mit Staat/Institution im Namen
             (() => {
               for (const [key, value] of Object.entries(add)) {
                 const k = key.toLowerCase()
@@ -176,20 +173,18 @@ export default function EingangskontrollePage() {
                   (k.includes('staat') || k.includes('institution')) &&
                   value != null &&
                   String(value).trim() !== ''
-                ) {
+                )
                   return String(value).trim()
-                }
+                return ''
               }
               return ''
             })()
         }
-
         const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
         const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
         const anrede3 = getFromAdditional(add, ['Anrede 3', 'Anrede3', 'Anrede_3'])
         const anwesend = add['Anwesend'] === true || add['Anwesend'] === 'true'
         const isVip = isVipFromAdditional(add, !!g.isVip)
-
         return {
           id: g.id,
           name: fullName,
@@ -206,6 +201,32 @@ export default function EingangskontrollePage() {
           anwesend,
         }
       })
+
+      if (accompanyingRes.ok) {
+        const accompanyingList = await accompanyingRes.json()
+        for (const a of accompanyingList) {
+          const name = [a.firstName, a.lastName].filter(Boolean).join(' ') || 'Begleitperson'
+          const nameParts = name.split(' ').filter((p: string) => p.trim() !== '')
+          mapped.push({
+            id: `accompanying-${a.id}`,
+            name,
+            vorname: nameParts[0] || a.firstName || '',
+            nachname: nameParts.slice(1).join(' ') || a.lastName || '',
+            tischNummer: '-',
+            kategorie: 'Begleitperson',
+            isVip: false,
+            staatInstitution: a.mainGuestName || '',
+            anrede1: a.funktion || '',
+            anrede2: '',
+            anrede3: '',
+            notizen: '',
+            anwesend: !!a.arrivedAt,
+            isAccompanying: true,
+            accompanyingGuestId: a.id,
+            mainGuestName: a.mainGuestName || '',
+          })
+        }
+      }
 
       setRows(mapped)
       setFilteredRows(mapped)
@@ -280,14 +301,26 @@ export default function EingangskontrollePage() {
     const newValue = !row.anwesend
     setTogglingAnwesendId(row.id)
     try {
-      const response = await fetch('/api/checkin/anwesend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guestId: row.id, anwesend: newValue }),
-      })
-      if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Fehler beim Speichern')
+      if (row.isAccompanying && row.accompanyingGuestId) {
+        const response = await fetch('/api/accompanying-guests/anwesend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accompanyingGuestId: row.accompanyingGuestId, anwesend: newValue }),
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          throw new Error(err.error || 'Fehler beim Speichern')
+        }
+      } else {
+        const response = await fetch('/api/checkin/anwesend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guestId: row.id, anwesend: newValue }),
+        })
+        if (!response.ok) {
+          const err = await response.json()
+          throw new Error(err.error || 'Fehler beim Speichern')
+        }
       }
       setRows((prev) =>
         prev.map((r) => (r.id === row.id ? { ...r, anwesend: newValue } : r))
@@ -295,9 +328,6 @@ export default function EingangskontrollePage() {
       setFilteredRows((prev) =>
         prev.map((r) => (r.id === row.id ? { ...r, anwesend: newValue } : r))
       )
-      if (newValue) {
-        // Push wurde serverseitig an alle User gesendet
-      }
     } catch (error) {
       console.error('Fehler beim Setzen Anwesend:', error)
       alert(error instanceof Error ? error.message : 'Fehler beim Speichern')
@@ -365,6 +395,13 @@ export default function EingangskontrollePage() {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm text-green-800">
+            <strong>QR-Check-in am Einlass:</strong> Jeder Gast erhält nach der Zusage einen persönlichen QR-Code.
+            Beim Scannen des Codes wird die Person automatisch als anwesend eingetragen.
+          </p>
         </div>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">

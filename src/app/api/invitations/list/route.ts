@@ -54,6 +54,16 @@ export async function GET(request: NextRequest) {
             language: true,
           },
         },
+        accompanyingGuests: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            funktion: true,
+            email: true,
+            arrivedAt: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })

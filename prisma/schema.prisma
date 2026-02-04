@@ -318,6 +318,7 @@ model Guest {
   receptionBy           String? // Wer empfängt diesen Gast
   notes                 String?
   additionalData        String? // JSON: Alle zusätzlichen Spalten aus Google Sheets (1:1)
+  checkInToken          String?   @unique // QR-Code-Check-in am Eventtag
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -325,6 +326,25 @@ model Guest {
   invitations Invitation[]
 
   @@map("guests")
+}
+
+// Zusätzliche Gäste (Begleitpersonen) pro Einladung – bei Zusage abgefragt
+model AccompanyingGuest {
+  id           String    @id @default(cuid())
+  invitationId String
+  firstName    String
+  lastName     String
+  funktion     String?   // Funktion/Rolle
+  email        String?
+  checkInToken String    @unique // Für QR-Code-Check-in
+  arrivedAt    DateTime? // Am Eventtag: wann eingecheckt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  invitation Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+
+  @@index([invitationId])
+  @@map("accompanying_guests")
 }
 
 // Aufgabenbereiche (9 Hauptbereiche)
@@ -592,10 +612,11 @@ model Invitation {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  guest       Guest          @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  template    EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  emailConfig EmailConfig?   @relation(fields: [emailConfigId], references: [id], onDelete: SetNull)
+  guest             Guest             @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  event             Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template          EmailTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  emailConfig       EmailConfig?      @relation(fields: [emailConfigId], references: [id], onDelete: SetNull)
+  accompanyingGuests AccompanyingGuest[]
 
   @@index([guestId])
   @@index([eventId])
