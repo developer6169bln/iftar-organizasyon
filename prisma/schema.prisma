@@ -626,3 +626,22 @@ model Invitation {
   @@index([response])
   @@map("invitations")
 }
+
+// Öffentliche Registrierung von Interessenten (z. B. UID Iftar, Şube Başkanları)
+model EventRegistration {
+  id            String   @id @default(cuid())
+  eventSlug     String   // z. B. "uid-iftar", "sube-baskanlari"
+  firstName     String   // Vorname
+  lastName      String   // Name
+  district      String?  // Bezirk
+  sube          String?  // Şube (z. B. bei Şube Başkanları: aus welchem Bezirk/Şube)
+  phone         String?
+  email         String
+  participating Boolean @default(true) // Ich nehme teil
+  notes         String?  // Notizen / Vorschläge
+  createdAt     DateTime @default(now())
+
+  @@index([eventSlug])
+  @@index([createdAt])
+  @@map("event_registrations")
+}
