@@ -25,6 +25,51 @@ function getGuestDisplayEmail(guest: any): string {
   }
 }
 
+function parseAdditionalData(guest: any): Record<string, unknown> {
+  if (!guest?.additionalData) return {}
+  try {
+    const ad = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+    return ad && typeof ad === 'object' ? (ad as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function getFromAdditional(add: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(add, key) && add[key] != null) {
+      const v = String(add[key]).trim()
+      if (v !== '') return v
+    }
+  }
+  return ''
+}
+
+/** Vorname aus guest.name (erstes Wort) oder additionalData „Vorname“. */
+function getGuestVorname(guest: any): string {
+  if (!guest) return ''
+  const add = parseAdditionalData(guest)
+  const fromAdd = getFromAdditional(add, ['Vorname', 'vorname', 'Vorname ', 'FirstName'])
+  if (fromAdd) return fromAdd
+  const name = guest.name ? String(guest.name).trim() : ''
+  const parts = name.split(/\s+/).filter((p: string) => p.trim() !== '')
+  return parts[0] || ''
+}
+
+/** Staat/Institution aus guest.organization oder additionalData. */
+function getGuestStaatInstitution(guest: any): string {
+  if (!guest) return ''
+  if (guest.organization && String(guest.organization).trim() !== '') return String(guest.organization).trim()
+  const add = parseAdditionalData(guest)
+  const fromAdd = getFromAdditional(add, ['Staat/Institution', 'Staat / Institution', 'StaatInstitution', 'Institution', 'Staat'])
+  if (fromAdd) return fromAdd
+  for (const [key, value] of Object.entries(add)) {
+    const k = String(key).toLowerCase()
+    if ((k.includes('staat') || k.includes('institution')) && value != null && String(value).trim() !== '') return String(value).trim()
+  }
+  return ''
+}
+
 export default function InvitationsPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -1608,6 +1653,12 @@ export default function InvitationsPage() {
                       Gast
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Vorname
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Staat/Institution
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Email
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
@@ -1645,7 +1696,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={16} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1673,6 +1724,12 @@ export default function InvitationsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {invitation.guest?.name}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                        {getGuestVorname(invitation.guest)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                        {getGuestStaatInstitution(invitation.guest)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                         {getGuestDisplayEmail(invitation.guest)}
