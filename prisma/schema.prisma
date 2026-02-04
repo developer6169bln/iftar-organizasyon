@@ -254,8 +254,35 @@ model Event {
   programItems  ProgramItem[]
   invitations   Invitation[]
   tablePlan     TablePlan?
+  mediaItems    MediaItem[]
 
   @@map("events")
+}
+
+// Foto- und Video-Bereich: Uploads pro Event mit Titel, Text, Teilen-Checkboxen, Notizen
+model MediaItem {
+  id                   String   @id @default(cuid())
+  eventId              String
+  type                 String   // PHOTO | VIDEO
+  fileName             String
+  filePath             String   // z.B. /uploads/...
+  fileType             String   // MIME-Type
+  fileSize             Int      // Bytes
+  title                String?
+  text                 String?  // Kommentar/Beschreibung
+  approvedForSharing   Boolean  @default(false) // Geprüft fürs Teilen
+  sharedInstagram     Boolean  @default(false)
+  sharedFacebook       Boolean  @default(false)
+  sharedOtherMedia    Boolean  @default(false)
+  notes                String?
+  uploadedBy           String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("media_items")
 }
 
 // Tischplanung: Grundriss + Tische + Podeste pro Event

@@ -14,6 +14,7 @@ const PATH_TO_PAGE: Record<string, string> = {
   '/dashboard/push-notifications': 'push-notifications',
   '/dashboard/vip-namensschilder': 'vip-namensschilder',
   '/dashboard/tischplanung': 'tischplanung',
+  '/dashboard/foto-video': 'foto-video',
   '/dashboard/program_flow': 'program_flow',
 }
 

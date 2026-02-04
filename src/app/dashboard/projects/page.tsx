@@ -5,7 +5,7 @@ import Link from 'next/link'
 
 const PAGE_IDS = [
   'guests', 'program_flow', 'invitations', 'checkin', 'reports',
-  'tischplanung', 'vip-namensschilder', 'push-notifications', 'audit-logs',
+  'tischplanung', 'vip-namensschilder', 'push-notifications', 'audit-logs', 'foto-video',
 ] as const
 
 const PAGE_LABELS: Record<string, string> = {
@@ -18,6 +18,7 @@ const PAGE_LABELS: Record<string, string> = {
   'vip-namensschilder': 'VIP-Namensschilder',
   'push-notifications': 'Push-Benachrichtigungen',
   'audit-logs': 'Audit-Logs',
+  'foto-video': 'Foto & Video',
 }
 
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }

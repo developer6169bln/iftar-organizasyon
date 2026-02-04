@@ -12,6 +12,7 @@ const PAGE_LABELS: Record<string, string> = {
   'push-notifications': 'Push-Benachrichtigungen',
   'vip-namensschilder': 'VIP-Namensschilder',
   tischplanung: 'Tischplanung',
+  'foto-video': 'Foto & Video',
   guests: 'Gästeliste',
   program_flow: 'Programmablauf',
 }

@@ -10,6 +10,7 @@ export const ALL_PAGE_IDS = [
   'push-notifications',
   'vip-namensschilder',
   'tischplanung',
+  'foto-video',
   'guests',
   'program_flow',
 ] as const
