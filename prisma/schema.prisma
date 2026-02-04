@@ -500,21 +500,21 @@ model EmailConfig {
   @@map("email_configs")
 }
 
-// Email-Templates für Einladungen (mehrsprachig)
+// Email-Templates für Einladungen (mehrsprachig, optional pro Kategorie aus Gästeliste)
 model EmailTemplate {
   id        String   @id @default(cuid())
   name      String // Template-Name
   language  String // de, tr, en, ar, etc.
+  category  String   @default("") // "" = global; sonst Kategorie-Key (z. B. protokol, gasteliste) – kann TR/DE in Gästeliste sein
   subject   String // Betreff
   body      String // HTML-Body
   plainText String? // Plain-Text-Version
-  isDefault Boolean  @default(false) // Standard-Template für Sprache
+  isDefault Boolean  @default(false) // Standard-Template für (Sprache + Kategorie)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   invitations Invitation[]
 
-  @@unique([language, isDefault])
   @@map("email_templates")
 }
 

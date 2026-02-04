@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET: Alle Email-Templates
+// GET: Alle Email-Templates (optional: language, category)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const language = searchParams.get('language')
+    const category = searchParams.get('category')
 
-    const where: any = {}
-    if (language) {
-      where.language = language
+    const where: Record<string, unknown> = {}
+    if (language) where.language = language
+    if (category !== undefined && category !== null) {
+      where.category = category === '' ? '' : category
     }
 
     const templates = await prisma.emailTemplate.findMany({
       where,
-      orderBy: [{ language: 'asc' }, { isDefault: 'desc' }],
+      orderBy: [{ category: 'asc' }, { language: 'asc' }, { isDefault: 'desc' }],
     })
 
     return NextResponse.json(templates)
@@ -30,7 +32,7 @@ export async function GET(request: NextRequest) {
 // POST: Neues Email-Template erstellen
 export async function POST(request: NextRequest) {
   try {
-    const { name, language, subject, body, plainText, isDefault } =
+    const { name, language, category: categoryParam, subject, body, plainText, isDefault } =
       await request.json()
 
     if (!name || !language || !subject || !body) {
@@ -40,10 +42,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Wenn Standard, entferne Standard von anderen Templates derselben Sprache
+    const category = categoryParam != null ? String(categoryParam).trim() : ''
+
+    // Wenn Standard: nur ein Default pro (Sprache + Kategorie)
     if (isDefault) {
       await prisma.emailTemplate.updateMany({
-        where: { language, isDefault: true },
+        where: { language, category, isDefault: true },
         data: { isDefault: false },
       })
     }
@@ -52,6 +56,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         language,
+        category,
         subject,
         body,
         plainText,
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest) {
 // PUT: Email-Template aktualisieren
 export async function PUT(request: NextRequest) {
   try {
-    const { id, name, language, subject, body, plainText, isDefault } =
+    const { id, name, language, category: categoryParam, subject, body, plainText, isDefault } =
       await request.json()
 
     if (!id) {
@@ -82,14 +87,22 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Wenn Standard, entferne Standard von anderen Templates derselben Sprache
+    const category = categoryParam != null ? String(categoryParam).trim() : ''
+
+    // Wenn Standard: nur ein Default pro (Sprache + Kategorie)
     if (isDefault) {
       const existing = await prisma.emailTemplate.findUnique({
         where: { id },
       })
       if (existing) {
+        const cat = existing.category ?? ''
         await prisma.emailTemplate.updateMany({
-          where: { language: existing.language, isDefault: true, id: { not: id } },
+          where: {
+            language: existing.language,
+            category: cat,
+            isDefault: true,
+            id: { not: id },
+          },
           data: { isDefault: false },
         })
       }
@@ -100,6 +113,7 @@ export async function PUT(request: NextRequest) {
       data: {
         name,
         language,
+        category,
         subject,
         body,
         plainText,

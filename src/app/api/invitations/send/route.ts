@@ -4,6 +4,7 @@ import { sendInvitationEmail } from '@/lib/email'
 import { getBaseUrlForInvitationEmails, isLocalhostUrl } from '@/lib/appUrl'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
+import { getGuestCategoryKey } from '@/lib/guestCategory'
 import crypto from 'crypto'
 
 /** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
@@ -60,25 +61,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hole Template
-    let template
-    if (templateId) {
-      template = await prisma.emailTemplate.findUnique({
+    // Bei festem templateId: ein Template für alle; sonst pro Gast nach Kategorie + Sprache wählen
+    const useFixedTemplate = !!templateId
+    let fixedTemplate: Awaited<ReturnType<typeof prisma.emailTemplate.findUnique>> = null
+    if (useFixedTemplate) {
+      fixedTemplate = await prisma.emailTemplate.findUnique({
         where: { id: templateId },
       })
-    } else {
-      // Hole Standard-Template für Sprache
-      template = await prisma.emailTemplate.findFirst({
-        where: {
-          language: language || 'de',
-          isDefault: true,
-        },
-      })
+      if (!fixedTemplate) {
+        return NextResponse.json(
+          { error: 'Email-Template nicht gefunden' },
+          { status: 404 }
+        )
+      }
     }
 
-    if (!template) {
+    // Alle Templates laden (für pro-Gast-Auswahl nach Kategorie + Sprache)
+    const allTemplates = useFixedTemplate
+      ? []
+      : await prisma.emailTemplate.findMany({
+          orderBy: [{ category: 'asc' }, { language: 'asc' }, { isDefault: 'desc' }],
+        })
+
+    const lang = language || 'de'
+
+    /** Template für Gast wählen: Kategorie+Sprache (Default), dann Kategorie+Sprache, dann Global+Sprache. */
+    function findTemplateForGuest(guest: { additionalData?: string | null }) {
+      if (fixedTemplate) return fixedTemplate
+      const categoryKey = getGuestCategoryKey(guest)
+      const forCategoryDefault = allTemplates.find(
+        (x) => x.language === lang && x.category === categoryKey && x.isDefault
+      )
+      if (forCategoryDefault) return forCategoryDefault
+      const forCategory = allTemplates.find((x) => x.language === lang && x.category === categoryKey)
+      if (forCategory) return forCategory
+      const globalDefault = allTemplates.find(
+        (x) => x.language === lang && (x.category === '' || !x.category) && x.isDefault
+      )
+      if (globalDefault) return globalDefault
+      return allTemplates.find((x) => x.language === lang && (x.category === '' || !x.category)) ?? null
+    }
+
+    if (!useFixedTemplate && allTemplates.length === 0) {
       return NextResponse.json(
-        { error: 'Email-Template nicht gefunden' },
+        { error: 'Kein Email-Template vorhanden. Bitte legen Sie mindestens ein Template (z. B. Standard) an.' },
         { status: 404 }
       )
     }
@@ -130,6 +156,17 @@ export async function POST(request: NextRequest) {
           guestName: guest.name,
           success: false,
           error: 'Keine E-Mail-Adresse (weder guest.email noch E-Mail kurumsal/privat)',
+        })
+        continue
+      }
+
+      const template = findTemplateForGuest(guest)
+      if (!template) {
+        results.push({
+          guestId: guest.id,
+          guestName: guest.name,
+          success: false,
+          error: `Kein Template für Kategorie/Sprache gefunden (Sprache: ${lang})`,
         })
         continue
       }

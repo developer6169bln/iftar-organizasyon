@@ -57,13 +57,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(existingInvitation)
     }
 
-    // Hole Standard-Template (deutsch) oder erstelle eines, falls nicht vorhanden
+    // Hole Standard-Template (deutsch, global) oder erstelle eines, falls nicht vorhanden
     let template = await prisma.emailTemplate.findFirst({
       where: {
         language: 'de',
+        category: '',
         isDefault: true,
       },
     })
+
+    if (!template) {
+      // Fallback: beliebiges deutsches Global-Template
+      template = await prisma.emailTemplate.findFirst({
+        where: { language: 'de', category: '' },
+      })
+    }
 
     if (!template) {
       // Erstelle Standard-Template falls keines vorhanden
@@ -71,6 +79,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: 'Standard Einladung (Deutsch)',
           language: 'de',
+          category: '',
           subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
           body: `<p>Liebe/r {{GUEST_NAME}},</p>
 <p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getKnownCategoryKeys, getCategoryLabel } from '@/lib/guestCategory'
 
 /** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
 function getGuestDisplayEmail(guest: any): string {
@@ -46,6 +47,7 @@ export default function InvitationsPage() {
   const [templateForm, setTemplateForm] = useState({
     name: '',
     language: 'de',
+    category: '' as string,
     subject: '',
     body: '',
     plainText: '',
@@ -460,6 +462,7 @@ export default function InvitationsPage() {
         setTemplateForm({
           name: '',
           language: 'de',
+          category: '',
           subject: '',
           body: '',
           plainText: '',
@@ -482,10 +485,11 @@ export default function InvitationsPage() {
     setTemplateForm({
       name: template.name,
       language: template.language,
+      category: template.category ?? '',
       subject: template.subject,
       body: template.body,
       plainText: template.plainText || '',
-      isDefault: template.isDefault || false,
+      isDefault: template.isDefault ?? false,
     })
   }
 
@@ -522,6 +526,7 @@ export default function InvitationsPage() {
         {
           name: 'Standard Einladung (Deutsch)',
           language: 'de',
+          category: '',
           subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
           body: `<p>Liebe/r {{GUEST_NAME}},</p>
 <p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
@@ -535,6 +540,7 @@ export default function InvitationsPage() {
         {
           name: 'Standard Einladung (Türkisch)',
           language: 'tr',
+          category: '',
           subject: 'İftar Yemeği Daveti - {{EVENT_TITLE}}',
           body: `<p>Sayın {{GUEST_NAME}},</p>
 <p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
@@ -574,6 +580,7 @@ export default function InvitationsPage() {
         {
           name: 'Formelle Einladung (Deutsch)',
           language: 'de',
+          category: '',
           subject: 'Offizielle Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Offizielle Einladung</h2>
@@ -594,6 +601,7 @@ export default function InvitationsPage() {
         {
           name: 'Formelle Einladung (Türkisch)',
           language: 'tr',
+          category: '',
           subject: 'Resmi İftar Yemeği Daveti - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Resmi Davet</h2>
@@ -614,6 +622,7 @@ export default function InvitationsPage() {
         {
           name: 'Formelle Einladung (Englisch)',
           language: 'en',
+          category: '',
           subject: 'Official Invitation to Iftar Dinner - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">Official Invitation</h2>
@@ -635,6 +644,7 @@ export default function InvitationsPage() {
         {
           name: 'Persönliche Einladung (Deutsch)',
           language: 'de',
+          category: '',
           subject: 'Herzliche Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Herzliche Einladung</h2>
@@ -655,6 +665,7 @@ export default function InvitationsPage() {
         {
           name: 'Persönliche Einladung (Türkisch)',
           language: 'tr',
+          category: '',
           subject: 'Samimi İftar Yemeği Daveti - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Samimi Davet</h2>
@@ -675,6 +686,7 @@ export default function InvitationsPage() {
         {
           name: 'Persönliche Einladung (Englisch)',
           language: 'en',
+          category: '',
           subject: 'Warm Invitation to Iftar Dinner - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
 <h2 style="color: #e67e22; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Warm Invitation</h2>
@@ -696,6 +708,7 @@ export default function InvitationsPage() {
         {
           name: 'VIP Einladung (Deutsch)',
           language: 'de',
+          category: '',
           subject: 'Exklusive VIP-Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
 <h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Exklusive VIP-Einladung</h2>
@@ -722,6 +735,7 @@ export default function InvitationsPage() {
         {
           name: 'VIP Einladung (Türkisch)',
           language: 'tr',
+          category: '',
           subject: 'Özel VIP İftar Yemeği Daveti - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
 <h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Özel VIP Daveti</h2>
@@ -748,6 +762,7 @@ export default function InvitationsPage() {
         {
           name: 'VIP Einladung (Englisch)',
           language: 'en',
+          category: '',
           subject: 'Exclusive VIP Invitation to Iftar Dinner - {{EVENT_TITLE}}',
           body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; color: white;">
 <h2 style="color: #fff; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px;">Exclusive VIP Invitation</h2>
@@ -799,6 +814,57 @@ export default function InvitationsPage() {
     } catch (error) {
       console.error('Fehler beim Erstellen der Templates:', error)
       alert('Fehler beim Erstellen der Templates')
+    }
+  }
+
+  /** Pro Kategorie aus der Gästeliste je ein Template in DE, TR, EN anlegen (Kategorie kann in Gästeliste TR oder DE geschrieben sein). */
+  const handleCreateTemplatesPerCategory = async () => {
+    if (!confirm('Für jede Kategorie (Protokoll, Gästeliste, Diplomatik, Medien, VIP, …) werden 3 Templates (Deutsch, Türkisch, Englisch) erstellt. Fortfahren?')) {
+      return
+    }
+    const keys = getKnownCategoryKeys()
+    const baseBody = `<p>Liebe/r {{GUEST_NAME}},</p>
+<p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
+<p>Bitte bestätigen Sie Ihre Teilnahme:</p>
+<p><a href="{{ACCEPT_LINK}}">Zusage</a> | <a href="{{DECLINE_LINK}}">Absage</a></p>
+<p>Mit freundlichen Grüßen<br>Ihr Organisationsteam</p>`
+    const baseBodyTr = `<p>Sayın {{GUEST_NAME}},</p>
+<p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
+<p>Lütfen katılımınızı onaylayın:</p>
+<p><a href="{{ACCEPT_LINK}}">Kabul</a> | <a href="{{DECLINE_LINK}}">Red</a></p>
+<p>Saygılarımızla<br>Organizasyon Ekibi</p>`
+    const baseBodyEn = `<p>Dear {{GUEST_NAME}},</p>
+<p>We cordially invite you to the Iftar dinner on {{EVENT_DATE}} at {{EVENT_LOCATION}}.</p>
+<p>Please confirm your attendance:</p>
+<p><a href="{{ACCEPT_LINK}}">Accept</a> | <a href="{{DECLINE_LINK}}">Decline</a></p>
+<p>Best regards<br>Your Organization Team</p>`
+    let created = 0
+    let errors = 0
+    try {
+      for (const key of keys) {
+        const labelDe = getCategoryLabel(key, 'de')
+        const labelTr = getCategoryLabel(key, 'tr')
+        const labelEn = getCategoryLabel(key, 'en')
+        const templates = [
+          { name: `Einladung ${labelDe} (DE)`, language: 'de', category: key, subject: `Einladung - ${labelDe} - {{EVENT_TITLE}}`, body: baseBody, plainText: '', isDefault: true },
+          { name: `Einladung ${labelTr} (TR)`, language: 'tr', category: key, subject: `Davet - ${labelTr} - {{EVENT_TITLE}}`, body: baseBodyTr, plainText: '', isDefault: true },
+          { name: `Einladung ${labelEn} (EN)`, language: 'en', category: key, subject: `Invitation - ${labelEn} - {{EVENT_TITLE}}`, body: baseBodyEn, plainText: '', isDefault: true },
+        ]
+        for (const t of templates) {
+          try {
+            const res = await fetch('/api/email-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t) })
+            if (res.ok) created++
+            else errors++
+          } catch {
+            errors++
+          }
+        }
+      }
+      await loadTemplates()
+      alert(`✅ ${created} Templates pro Kategorie erstellt${errors > 0 ? `\n⚠️ ${errors} Fehler` : ''}`)
+    } catch (error) {
+      console.error('Fehler beim Erstellen der Templates pro Kategorie:', error)
+      alert('Fehler beim Erstellen der Templates pro Kategorie')
     }
   }
 
@@ -1712,6 +1778,12 @@ export default function InvitationsPage() {
                 >
                   ✨ 3 Fertige Templates (DE/TR/EN)
                 </button>
+                <button
+                  onClick={handleCreateTemplatesPerCategory}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                >
+                  📂 Pro Kategorie DE/TR/EN
+                </button>
               </div>
             </div>
 
@@ -1810,6 +1882,27 @@ export default function InvitationsPage() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Kategorie (Gästeliste)
+                  </label>
+                  <select
+                    value={templateForm.category}
+                    onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="">— Global / Alle —</option>
+                    {getKnownCategoryKeys().map((key) => (
+                      <option key={key} value={key}>
+                        {getCategoryLabel(key, 'de')} (DE/TR/EN)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Kategorie in der Gästeliste kann auf Türkisch oder Deutsch stehen; wird automatisch zugeordnet.
+                  </p>
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Betreff *
@@ -1884,6 +1977,7 @@ export default function InvitationsPage() {
                       setTemplateForm({
                         name: '',
                         language: 'de',
+                        category: '',
                         subject: '',
                         body: '',
                         plainText: '',
@@ -1923,6 +2017,15 @@ export default function InvitationsPage() {
                           {template.isDefault && (
                             <span className="ml-2 rounded bg-green-500 px-2 py-1 text-xs text-white">
                               Standard
+                            </span>
+                          )}
+                          {template.category ? (
+                            <span className="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                              {getCategoryLabel(template.category, 'de')}
+                            </span>
+                          ) : (
+                            <span className="ml-2 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                              Global
                             </span>
                           )}
                         </div>
