@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 import { prisma } from '@/lib/prisma'
-import { requireEventAccess, requirePageAccess } from '@/lib/permissions'
+import { requireEventAccess, requireAnyPageAccess } from '@/lib/permissions'
 
 async function getMediaAndCheckAccess(
   request: NextRequest,
@@ -19,7 +19,7 @@ async function getMediaAndCheckAccess(
     where: { id: media.eventId },
     select: { projectId: true },
   })
-  const access = await requirePageAccess(request, 'foto-video', event?.projectId ?? undefined)
+  const access = await requireAnyPageAccess(request, ['foto-video', 'media-upload'], event?.projectId ?? undefined)
   if (access instanceof NextResponse) return access
 
   const eventAccess = await requireEventAccess(request, media.eventId)

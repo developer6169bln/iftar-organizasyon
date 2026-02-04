@@ -11,6 +11,7 @@ export const ALL_PAGE_IDS = [
   'vip-namensschilder',
   'tischplanung',
   'foto-video',
+  'media-upload',
   'guests',
   'program_flow',
 ] as const
@@ -357,6 +358,32 @@ export async function requirePageAccess(
     (pageId === 'program_flow' && allowedCategoryIds.includes('PROGRAM_FLOW'))
   if (isAdmin || hasPage || hasCategoryForPage) {
     return { userId, projectId: projectId ?? undefined }
+  }
+  return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })
+}
+
+/**
+ * Prüft, ob User Zugriff auf mindestens eine der angegebenen Seiten hat.
+ */
+export async function requireAnyPageAccess(
+  request: NextRequest,
+  pageIds: string[],
+  projectId?: string | null
+): Promise<{ userId: string; projectId?: string | null } | NextResponse> {
+  const { userId } = await getUserIdFromRequest(request)
+  if (!userId) {
+    return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+  }
+  const { allowedPageIds, allowedCategoryIds, isAdmin } = await getAllowListForUser(userId, projectId)
+  if (isAdmin) return { userId, projectId: projectId ?? undefined }
+  for (const pageId of pageIds) {
+    const hasPage = allowedPageIds.includes(pageId)
+    const hasCategoryForPage =
+      (pageId === 'guests' && allowedCategoryIds.includes('GUEST_LIST')) ||
+      (pageId === 'program_flow' && allowedCategoryIds.includes('PROGRAM_FLOW'))
+    if (hasPage || hasCategoryForPage) {
+      return { userId, projectId: projectId ?? undefined }
+    }
   }
   return NextResponse.json({ error: 'Kein Zugriff auf diesen Bereich' }, { status: 403 })
 }

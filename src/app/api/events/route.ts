@@ -18,11 +18,12 @@ async function eventsHasProjectId(): Promise<boolean> {
   }
 }
 
-/** Events des Nutzers (aus seinen Projekten). Optional: projectId filtert auf ein Projekt. Vorhandene/Legacy-Events (projectId null) = nur APP-Admin. */
+/** Events des Nutzers (aus seinen Projekten). Optional: projectId filtert auf ein Projekt. list=true liefert alle Events (Array). */
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await getUserIdFromRequest(request)
     const projectIdParam = request.nextUrl.searchParams.get('projectId') || undefined
+    const listMode = request.nextUrl.searchParams.get('list') === 'true'
 
     const hasProjectIdColumn = await eventsHasProjectId()
     const projects = userId ? await getProjectsForUser(userId) : []
@@ -45,6 +46,10 @@ export async function GET(request: NextRequest) {
       if (!userId) {
         return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
       }
+      if (listMode) {
+        const events = await prisma.event.findMany({ orderBy: { date: 'asc' } })
+        return NextResponse.json(events)
+      }
       const event = await prisma.event.findFirst({
         orderBy: { date: 'asc' },
       })
@@ -66,6 +71,19 @@ export async function GET(request: NextRequest) {
       }
     } else if (userId) {
       where = { projectId: { in: [] } }
+    }
+
+    // list=true: alle Events für die Where-Bedingung zurückgeben
+    if (listMode) {
+      if (!userId) {
+        return NextResponse.json({ error: 'Nicht angemeldet' }, { status: 401 })
+      }
+      const listWhere = where ?? { projectId: { in: [] } }
+      const events = await prisma.event.findMany({
+        where: listWhere,
+        orderBy: { date: 'asc' },
+      })
+      return NextResponse.json(events)
     }
 
     let event = await prisma.event.findFirst({

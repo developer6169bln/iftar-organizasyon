@@ -711,6 +711,25 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
+          {(isAdmin || allowedPageIds.includes('media-upload')) && (
+          <Link
+            href="/dashboard/media-upload"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-violet-600 text-2xl text-white">
+                📤
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Media-Upload</h3>
+                <p className="text-sm text-gray-600">
+                  Projekt und Event wählen, dann Fotos und Videos mit Titel, Kommentar und Teilen-Status hochladen
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
           {/* Admin-Bereich für Hauptnutzer: immer sichtbar (Projekte & Mitarbeiter) */}
           <Link
             href="/dashboard/projects"

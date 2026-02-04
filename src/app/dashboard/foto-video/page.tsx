@@ -28,6 +28,7 @@ export default function FotoVideoPage() {
   const [items, setItems] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [eventLoadError, setEventLoadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadType, setUploadType] = useState<'PHOTO' | 'VIDEO'>('PHOTO')
   const [uploadTitle, setUploadTitle] = useState('')
@@ -54,15 +55,24 @@ export default function FotoVideoPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const loadEvent = useCallback(async () => {
+    setEventLoadError(null)
     try {
       const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
       const url = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
       const res = await fetch(url, { credentials: 'include' })
-      if (!res.ok) return
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setEventLoadError((data as { error?: string }).error || `Event laden: ${res.status}`)
+        return
+      }
+      if (data?.error) {
+        setEventLoadError((data as { error: string }).error)
+        return
+      }
       const event = Array.isArray(data) ? data[0] : data
       if (event?.id) setEventId(event.id)
     } catch (e) {
+      setEventLoadError(e instanceof Error ? e.message : 'Event laden fehlgeschlagen')
       console.error(e)
     }
   }, [])
@@ -70,6 +80,7 @@ export default function FotoVideoPage() {
   const loadMedia = useCallback(async () => {
     if (!eventId) return
     setLoadError(null)
+    setLoading(true)
     try {
       const res = await fetch(`/api/media?eventId=${eventId}`, { credentials: 'include' })
       const data = await res.json().catch(() => null)
@@ -81,6 +92,7 @@ export default function FotoVideoPage() {
       }
       const list = Array.isArray(data) ? data : []
       setItems(list)
+      setLoadError(null)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Laden fehlgeschlagen')
       setItems([])
@@ -212,9 +224,15 @@ export default function FotoVideoPage() {
         <Link href="/dashboard" className="text-indigo-600 hover:underline">
           ← Dashboard
         </Link>
-        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800">
-          Kein Event für das aktuelle Projekt vorhanden. Bitte wählen Sie ein Projekt mit Event oder legen Sie ein Event an.
-        </div>
+        {eventLoadError ? (
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-6 text-red-800">
+            <strong>Fehler beim Laden des Events:</strong> {eventLoadError}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800">
+            Kein Event für das aktuelle Projekt vorhanden. Bitte wählen Sie ein Projekt mit Event oder legen Sie ein Event an.
+          </div>
+        )}
       </div>
     )
   }
@@ -286,9 +304,9 @@ export default function FotoVideoPage() {
       </div>
 
       {/* Liste */}
-      {loadError && (
+      {(loadError || eventLoadError) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
-          {loadError}
+          {loadError || eventLoadError}
         </div>
       )}
 

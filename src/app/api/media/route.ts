@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { prisma } from '@/lib/prisma'
-import { requireEventAccess, requirePageAccess } from '@/lib/permissions'
+import { requireEventAccess, requireAnyPageAccess } from '@/lib/permissions'
 
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
 const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo']
@@ -11,30 +11,42 @@ const MAX_VIDEO_SIZE = 100 * 1024 * 1024 // 100MB
 
 /** Liste aller Media-Items eines Events */
 export async function GET(request: NextRequest) {
-  const eventId = request.nextUrl.searchParams.get('eventId')
-  if (!eventId) {
-    return NextResponse.json({ error: 'eventId erforderlich' }, { status: 400 })
-  }
+  try {
+    const eventId = request.nextUrl.searchParams.get('eventId')
+    if (!eventId) {
+      return NextResponse.json({ error: 'eventId erforderlich' }, { status: 400 })
+    }
 
-  const event = await prisma.event.findUnique({
-    where: { id: eventId },
-    select: { projectId: true },
-  })
-  if (!event) {
-    return NextResponse.json({ error: 'Event nicht gefunden' }, { status: 404 })
-  }
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { projectId: true },
+    })
+    if (!event) {
+      return NextResponse.json({ error: 'Event nicht gefunden' }, { status: 404 })
+    }
 
-  const access = await requirePageAccess(request, 'foto-video', event.projectId ?? undefined)
+  const access = await requireAnyPageAccess(request, ['foto-video', 'media-upload'], event.projectId ?? undefined)
   if (access instanceof NextResponse) return access
 
   const eventAccess = await requireEventAccess(request, eventId)
-  if (eventAccess instanceof NextResponse) return eventAccess
+    if (eventAccess instanceof NextResponse) return eventAccess
 
-  const items = await prisma.mediaItem.findMany({
-    where: { eventId },
-    orderBy: { createdAt: 'desc' },
-  })
-  return NextResponse.json(items)
+    const items = await prisma.mediaItem.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(items)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const hint = msg.includes('media_items') || msg.includes('does not exist')
+      ? ' Tabelle media_items fehlt – Migration ausführen: npx prisma migrate deploy'
+      : ''
+    console.error('GET /api/media error:', err)
+    return NextResponse.json(
+      { error: 'Medien konnten nicht geladen werden.' + hint, details: msg },
+      { status: 500 }
+    )
+  }
 }
 
 /** Upload: Foto oder Video mit optionalem Titel und Text */
@@ -61,7 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Event nicht gefunden' }, { status: 404 })
   }
 
-  const access = await requirePageAccess(request, 'foto-video', event.projectId ?? undefined)
+  const access = await requireAnyPageAccess(request, ['foto-video', 'media-upload'], event.projectId ?? undefined)
   if (access instanceof NextResponse) return access
   const { userId } = access
 

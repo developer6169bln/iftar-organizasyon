@@ -13,6 +13,7 @@ const PAGE_LABELS: Record<string, string> = {
   'vip-namensschilder': 'VIP-Namensschilder',
   tischplanung: 'Tischplanung',
   'foto-video': 'Foto & Video',
+  'media-upload': 'Media-Upload (Projekt/Event)',
   guests: 'Gästeliste',
   program_flow: 'Programmablauf',
 }
