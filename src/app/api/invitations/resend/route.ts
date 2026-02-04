@@ -28,13 +28,27 @@ export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
   if (access instanceof NextResponse) return access
   try {
-    const { invitationIds } = await request.json()
+    const { invitationIds, templateId: selectedTemplateId } = await request.json()
 
     if (!invitationIds || !Array.isArray(invitationIds) || invitationIds.length === 0) {
       return NextResponse.json(
         { error: 'Mindestens eine Einladung auswählen' },
         { status: 400 }
       )
+    }
+
+    // Optional: ausgewähltes Template für alle erneut gesendeten E-Mails verwenden
+    let overrideTemplate: Awaited<ReturnType<typeof prisma.emailTemplate.findUnique>> = null
+    if (selectedTemplateId) {
+      overrideTemplate = await prisma.emailTemplate.findUnique({
+        where: { id: selectedTemplateId },
+      })
+      if (!overrideTemplate) {
+        return NextResponse.json(
+          { error: 'Gewähltes Template nicht gefunden' },
+          { status: 404 }
+        )
+      }
     }
 
     const invitations = await prisma.invitation.findMany({
@@ -96,7 +110,10 @@ export async function POST(request: NextRequest) {
         const declineLink = `${baseUrl}/api/invitations/decline/${inv.declineToken}`
         const trackingPixelUrl = `${baseUrl}/api/invitations/track/${inv.trackingToken}`
 
-        let personalizedBody = (template?.body ?? inv.body)
+        const bodyBase = overrideTemplate?.body ?? template?.body ?? inv.body
+        const subjectBase = overrideTemplate?.subject ?? template?.subject ?? inv.subject
+
+        let personalizedBody = bodyBase
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
           .replace(/{{EVENT_DATE}}/g, new Date(event.date).toLocaleDateString('de-DE', {
@@ -109,7 +126,7 @@ export async function POST(request: NextRequest) {
           .replace(/{{ACCEPT_LINK}}/g, acceptLink)
           .replace(/{{DECLINE_LINK}}/g, declineLink)
 
-        let personalizedSubject = (template?.subject ?? inv.subject)
+        let personalizedSubject = subjectBase
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{EVENT_TITLE}}/g, event.title)
 
@@ -128,6 +145,7 @@ export async function POST(request: NextRequest) {
             sentAt: new Date(),
             subject: personalizedSubject,
             body: personalizedBody,
+            templateId: overrideTemplate ? overrideTemplate.id : inv.templateId,
             errorMessage: null,
           },
         })

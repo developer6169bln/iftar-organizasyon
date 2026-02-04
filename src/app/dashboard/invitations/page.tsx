@@ -1435,7 +1435,10 @@ export default function InvitationsPage() {
                           const response = await fetch('/api/invitations/resend', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ invitationIds: selectedInvitations }),
+                            body: JSON.stringify({
+                              invitationIds: selectedInvitations,
+                              templateId: selectedTemplate || undefined,
+                            }),
                           })
                           const result = await response.json()
                           if (response.ok) {
