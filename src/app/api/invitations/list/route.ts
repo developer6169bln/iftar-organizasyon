@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
             title: true,
             date: true,
             location: true,
+            maxAccompanyingGuests: true,
           },
         },
         template: {

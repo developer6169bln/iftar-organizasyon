@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { getUserIdFromRequest } from '@/lib/auditLog'
-import { getProjectsForUser } from '@/lib/permissions'
+import { getProjectsForUser, requireEventAccess } from '@/lib/permissions'
 
 /** Prüft, ob die Tabelle events eine Spalte projectId hat (Migration möglicherweise noch nicht ausgeführt). */
 async function eventsHasProjectId(): Promise<boolean> {
@@ -165,6 +165,39 @@ export async function POST(request: NextRequest) {
     console.error('Event creation error:', error)
     return NextResponse.json(
       { error: 'Event oluşturulurken hata oluştu' },
+      { status: 500 }
+    )
+  }
+}
+
+/** Event aktualisieren (z. B. maxAccompanyingGuests für Einladungsliste). */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : ''
+    if (!eventId) {
+      return NextResponse.json({ error: 'eventId ist erforderlich' }, { status: 400 })
+    }
+    const access = await requireEventAccess(request, eventId)
+    if (access instanceof NextResponse) return access
+
+    const data: { maxAccompanyingGuests?: number } = {}
+    if (typeof body.maxAccompanyingGuests === 'number' && Number.isInteger(body.maxAccompanyingGuests) && body.maxAccompanyingGuests >= 0) {
+      data.maxAccompanyingGuests = body.maxAccompanyingGuests
+    }
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: 'Keine gültigen Felder zum Aktualisieren' }, { status: 400 })
+    }
+
+    const event = await prisma.event.update({
+      where: { id: eventId },
+      data,
+    })
+    return NextResponse.json(event)
+  } catch (error) {
+    console.error('Event PATCH error:', error)
+    return NextResponse.json(
+      { error: 'Event konnte nicht aktualisiert werden' },
       { status: 500 }
     )
   }

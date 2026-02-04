@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Keine Medien gefunden' }, { status: 404 })
   }
 
-  const uploadDir = getUploadDir()
+  const tryDirs = [getUploadDir(), join(process.cwd(), 'public', 'uploads')]
   const zip = new JSZip()
 
   let idx = 0
@@ -37,15 +37,20 @@ export async function GET(request: NextRequest) {
     if (eventAccess instanceof NextResponse) continue
     const filename = item.filePath.replace(/^\/uploads\//, '') || item.filePath.split('/').pop()
     if (!filename) continue
-    try {
-      const filePath = join(uploadDir, filename)
-      const buffer = await readFile(filePath)
-      const ext = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : ''
-      const base = (item.title || item.fileName || filename).replace(/[^\w.\-äöüßÄÖÜ]/g, '_').slice(0, 80)
-      zip.file(`${idx + 1}-${base}${ext}`, buffer)
-      idx++
-    } catch {
-      // Einzelne Datei fehlt – überspringen
+    let read = false
+    for (const uploadDir of tryDirs) {
+      try {
+        const filePath = join(uploadDir, filename)
+        const buffer = await readFile(filePath)
+        const ext = filename.includes('.') ? filename.substring(filename.lastIndexOf('.')) : ''
+        const base = (item.title || item.fileName || filename).replace(/[^\w.\-äöüßÄÖÜ]/g, '_').slice(0, 80)
+        zip.file(`${idx + 1}-${base}${ext}`, buffer)
+        idx++
+        read = true
+        break
+      } catch {
+        continue
+      }
     }
   }
 

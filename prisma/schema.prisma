@@ -244,6 +244,7 @@ model Event {
   googleSheetsEnabled       Boolean   @default(false) // Synchronisation aktiviert
   googleSheetsLastSync      DateTime? // Letzte Synchronisation
   googleSheetsColumnMapping String? // JSON: Mapping von Sheet-Spalten zu DB-Feldern
+  maxAccompanyingGuests     Int      @default(5) // Max. mitkommende Gäste pro Zusage (Einladungsliste)
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
@@ -585,6 +586,7 @@ model Invitation {
   openedAt      DateTime? // Wann wurde Email geöffnet (Tracking)
   respondedAt   DateTime? // Wann wurde geantwortet
   response      String? // ACCEPTED, DECLINED, PENDING
+  accompanyingGuestsCount Int? // Anzahl mitkommender Gäste (bei Zusage abgefragt)
   emailConfigId String? // Welche Email-Konfiguration wurde verwendet
   errorMessage  String? // Fehlermeldung falls Versand fehlgeschlagen
   createdAt     DateTime  @default(now())

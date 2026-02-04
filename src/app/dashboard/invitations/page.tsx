@@ -78,6 +78,9 @@ export default function InvitationsPage() {
   const [testingConfig, setTestingConfig] = useState(false)
   const [testConfigEmail, setTestConfigEmail] = useState('')
   const [resendSending, setResendSending] = useState(false)
+  const [currentEvent, setCurrentEvent] = useState<{ id: string; maxAccompanyingGuests?: number } | null>(null)
+  const [maxAccompanyingGuestsInput, setMaxAccompanyingGuestsInput] = useState<string>('5')
+  const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -199,6 +202,8 @@ export default function InvitationsPage() {
         let event = Array.isArray(eventData) ? (eventData.length > 0 ? eventData[0] : null) : eventData
         if (event?.id) {
           setEventId(event.id)
+          setCurrentEvent(event)
+          setMaxAccompanyingGuestsInput(String(event.maxAccompanyingGuests ?? 5))
           await Promise.all([
             loadGuests(event.id),
             loadInvitations(event.id),
@@ -208,17 +213,20 @@ export default function InvitationsPage() {
         } else {
           // Kein Event für dieses Projekt: Einladungsliste und Gäste leeren, damit keine alten Daten angezeigt werden
           setEventId('')
+          setCurrentEvent(null)
           setGuests([])
           setInvitations([])
         }
       } else {
         setEventId('')
+        setCurrentEvent(null)
         setGuests([])
         setInvitations([])
       }
     } catch (error) {
       console.error('Fehler beim Laden:', error)
       setEventId('')
+      setCurrentEvent(null)
       setGuests([])
       setInvitations([])
     } finally {
@@ -1417,6 +1425,61 @@ export default function InvitationsPage() {
                 )}
               </div>
             </div>
+
+            {/* Max. mitkommende Gäste pro Zusage (für dieses Event) */}
+            {eventId && (
+              <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Max. mitkommende Gäste pro Zusage
+                </label>
+                <p className="mb-2 text-xs text-gray-500">
+                  Beim Klick auf den Zusage-Link können Gäste angeben, wie viele Personen mitkommen. Hier legen Sie das Maximum fest.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={maxAccompanyingGuestsInput}
+                    onChange={(e) => setMaxAccompanyingGuestsInput(e.target.value)}
+                    className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={savingMaxAccompanying}
+                    onClick={async () => {
+                      const n = parseInt(maxAccompanyingGuestsInput, 10)
+                      if (!eventId || !Number.isInteger(n) || n < 1) {
+                        alert('Bitte eine gültige Zahl (mind. 1) eingeben.')
+                        return
+                      }
+                      setSavingMaxAccompanying(true)
+                      try {
+                        const res = await fetch('/api/events', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ eventId, maxAccompanyingGuests: n }),
+                        })
+                        if (res.ok) {
+                          setCurrentEvent((prev) => (prev ? { ...prev, maxAccompanyingGuests: n } : null))
+                          await loadInvitations(eventId)
+                        } else {
+                          const data = await res.json().catch(() => ({}))
+                          alert('Fehler: ' + (data.error || 'Speichern fehlgeschlagen'))
+                        }
+                      } catch (e) {
+                        alert('Fehler beim Speichern: ' + (e instanceof Error ? e.message : 'Unbekannt'))
+                      } finally {
+                        setSavingMaxAccompanying(false)
+                      }
+                    }}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingMaxAccompanying ? 'Wird gespeichert…' : 'Speichern'}
+                  </button>
+                </div>
+              </div>
+            )}
             
             {/* Auswahl-Info und Bulk-Aktionen */}
             {selectedInvitations.length > 0 && (
@@ -1560,6 +1623,9 @@ export default function InvitationsPage() {
                       Nimmt Teil
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Mitkommende
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       Abgesagt
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
@@ -1576,7 +1642,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={13} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1647,6 +1713,11 @@ export default function InvitationsPage() {
                           }}
                           className="rounded border-gray-300 text-green-600 focus:ring-green-500"
                         />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center text-gray-700">
+                        {invitation.response === 'ACCEPTED'
+                          ? (invitation.accompanyingGuestsCount ?? 1)
+                          : '–'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input

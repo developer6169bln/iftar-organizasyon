@@ -33,21 +33,30 @@ export async function GET(
 
   const download = request.nextUrl.searchParams.get('download') === '1'
 
-  try {
-    const uploadDir = getUploadDir()
-    const filePath = join(uploadDir, filename)
-    const buffer = await readFile(filePath)
-    const ext = filename.split('.').pop()?.toLowerCase() || ''
-    const contentType = MIME[ext] || 'application/octet-stream'
-    const headers: Record<string, string> = {
-      'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=86400',
-    }
-    if (download) {
-      headers['Content-Disposition'] = `attachment; filename="${filename.replace(/"/g, '\\"')}"`
-    }
-    return new NextResponse(buffer, { headers })
-  } catch {
-    return NextResponse.json({ error: 'Datei nicht gefunden' }, { status: 404 })
+  const ext = filename.split('.').pop()?.toLowerCase() || ''
+  const contentType = MIME[ext] || 'application/octet-stream'
+  const headers: Record<string, string> = {
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=86400',
   }
+  if (download) {
+    headers['Content-Disposition'] = `attachment; filename="${filename.replace(/"/g, '\\"')}"`
+  }
+
+  const tryPaths = [
+    join(getUploadDir(), filename),
+    join(process.cwd(), 'public', 'uploads', filename),
+  ]
+  for (const filePath of tryPaths) {
+    try {
+      const buffer = await readFile(filePath)
+      return new NextResponse(new Uint8Array(buffer), { headers })
+    } catch {
+      continue
+    }
+  }
+  return NextResponse.json(
+    { error: 'Datei nicht gefunden. Auf Railway: UPLOAD_DIR/Volume prüfen, Dateien können nach Deploy weg sein.' },
+    { status: 404 }
+  )
 }
