@@ -31,7 +31,15 @@ type Member = {
   categoryPermissions: { categoryId: string; allowed: boolean }[]
   pagePermissions: { pageId: string; allowed: boolean }[]
 }
-type Category = { id: string; categoryId: string; name: string; isActive?: boolean }
+type Category = {
+  id: string
+  categoryId: string
+  name: string
+  description?: string | null
+  responsibleUserId?: string | null
+  responsibleUser?: { id: string; name: string; email: string } | null
+  isActive?: boolean
+}
 
 export default function DashboardProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -58,6 +66,10 @@ export default function DashboardProjectsPage() {
   const [editCategoryIds, setEditCategoryIds] = useState<string[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [savingMember, setSavingMember] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [editCategoryDescription, setEditCategoryDescription] = useState('')
+  const [editCategoryResponsibleUserId, setEditCategoryResponsibleUserId] = useState('')
+  const [savingCategory, setSavingCategory] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -108,6 +120,42 @@ export default function DashboardProjectsPage() {
     setEditPageIds(editingMember.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId))
     setEditCategoryIds(editingMember.categoryPermissions.filter((c) => c.allowed).map((c) => c.categoryId))
   }, [editingMember])
+
+  useEffect(() => {
+    if (!editingCategory) return
+    setEditCategoryDescription(editingCategory.description ? String(editingCategory.description) : '')
+    setEditCategoryResponsibleUserId(editingCategory.responsibleUserId ? String(editingCategory.responsibleUserId) : '')
+  }, [editingCategory])
+
+  const handleSaveCategoryDetails = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingCategory) return
+    setSavingCategory(true)
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          id: editingCategory.id,
+          description: editCategoryDescription,
+          responsibleUserId: editCategoryResponsibleUserId,
+        }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+        setEditingCategory(null)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Kategorie konnte nicht aktualisiert werden')
+      }
+    } catch {
+      alert('Kategorie konnte nicht aktualisiert werden')
+    } finally {
+      setSavingCategory(false)
+    }
+  }
 
   const loadProjectDetail = async (id: string) => {
     setError(null)
@@ -544,6 +592,69 @@ export default function DashboardProjectsPage() {
                   </>
                 )}
 
+                {(selectedProject.isOwner || isAdmin) && (
+                  <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-medium text-gray-700">Arbeitsbereiche (Kategorien) – Details</h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          fetch('/api/categories', { credentials: 'include' })
+                            .then((r) => (r.ok ? r.json() : []))
+                            .then((list: Category[]) => setCategories(list.filter((c) => c.isActive !== false)))
+                            .catch(() => {})
+                        }}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                        title="Kategorien neu laden"
+                      >
+                        🔄 Neu laden
+                      </button>
+                    </div>
+                    <p className="mb-3 text-xs text-gray-500">
+                      Hier können Sie pro Arbeitsbereich die <strong>Beschreibung</strong> und den <strong>Verantwortlichen</strong> ändern.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-gray-500">
+                            <th className="py-2 pr-3">Arbeitsbereich</th>
+                            <th className="py-2 pr-3">Beschreibung</th>
+                            <th className="py-2 pr-3">Verantwortlich</th>
+                            <th className="py-2 pr-3"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {categories.map((c) => (
+                            <tr key={c.id} className="border-t">
+                              <td className="py-2 pr-3 font-medium text-gray-900">{c.name}</td>
+                              <td className="py-2 pr-3 text-gray-700">{c.description ? c.description : <span className="text-gray-400">—</span>}</td>
+                              <td className="py-2 pr-3 text-gray-700">
+                                {c.responsibleUser ? (
+                                  <>
+                                    {c.responsibleUser.name}{' '}
+                                    <span className="text-xs text-gray-400">({c.responsibleUser.email})</span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCategory(c)}
+                                  className="text-sm font-medium text-indigo-600 hover:underline"
+                                >
+                                  Bearbeiten
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 <h3 className="mb-2 text-sm font-medium text-gray-700">Mitglieder</h3>
                 {loadingMembers ? (
                   <p className="text-sm text-gray-500">Laden…</p>
@@ -659,6 +770,64 @@ export default function DashboardProjectsPage() {
                     className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {savingMember ? '…' : 'Speichern'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Kategorie bearbeiten – Beschreibung & Verantwortliche */}
+        {editingCategory && selectedProject && (selectedProject.isOwner || isAdmin) && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">Arbeitsbereich bearbeiten</h3>
+              <p className="mb-4 text-sm text-gray-600">
+                {editingCategory.name} ({editingCategory.categoryId})
+              </p>
+              <form onSubmit={handleSaveCategoryDetails} className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Beschreibung</label>
+                  <textarea
+                    value={editCategoryDescription}
+                    onChange={(e) => setEditCategoryDescription(e.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Beschreibung für diesen Arbeitsbereich"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Verantwortlich</label>
+                  <select
+                    value={editCategoryResponsibleUserId}
+                    onChange={(e) => setEditCategoryResponsibleUserId(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">— Keine Auswahl —</option>
+                    {allUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Hinweis: Verantwortliche werden global gesetzt (für alle Projekte gleich), nicht pro Projekt.
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2 border-t pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setEditingCategory(null)}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingCategory}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingCategory ? '…' : 'Speichern'}
                   </button>
                 </div>
               </form>
