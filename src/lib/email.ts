@@ -170,6 +170,81 @@ async function sendViaMailjet(
   return { success: true, messageId: idStr }
 }
 
+/** Mailjet-Versand mit PDF-Anhang (Base64). */
+async function sendViaMailjetWithAttachment(
+  config: { email: string; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody: string,
+  attachment: { filename: string; content: Buffer }
+): Promise<{ success: true; messageId: string }> {
+  if (!config.mailjetApiKey || !config.mailjetApiSecret) {
+    throw new Error('Mailjet API Key und API Secret sind erforderlich')
+  }
+  const mailjet = Mailjet.apiConnect(config.mailjetApiKey, config.mailjetApiSecret)
+  const base64Content = attachment.content.toString('base64')
+  const request = mailjet.post('send', { version: 'v3.1' }).request({
+    Messages: [
+      {
+        From: { Email: config.email, Name: 'UID BERLIN EVENTS' },
+        To: [{ Email: to, Name: to }],
+        Subject: subject,
+        TextPart: textBody,
+        HTMLPart: htmlBody,
+        Attachments: [
+          {
+            ContentType: 'application/pdf',
+            Filename: attachment.filename,
+            Base64Content: base64Content,
+          },
+        ],
+      },
+    ],
+  })
+  const result = await request
+  const messageId = (result.body as { Messages?: { To?: { MessageID?: number }[] }[] })?.Messages?.[0]?.To?.[0]?.MessageID
+  const idStr = messageId != null ? String(messageId) : 'mailjet-sent'
+  console.log('✅ Mailjet E-Mail mit Anhang gesendet:', idStr)
+  return { success: true, messageId: idStr }
+}
+
+/** E-Mail mit PDF-Anhang (z. B. Check-in-QR-PDF an Hauptgast). */
+export async function sendEmailWithAttachment(
+  to: string,
+  subject: string,
+  htmlBody: string,
+  textBody: string | undefined,
+  attachment: { filename: string; content: Buffer }
+): Promise<{ success: true; messageId?: string }> {
+  const config = await prisma.emailConfig.findFirst({
+    where: { isActive: true },
+  })
+  if (!config) {
+    throw new Error('Keine aktive Email-Konfiguration')
+  }
+  const text = textBody ?? htmlBody.replace(/<[^>]*>/g, '')
+
+  if (config.type === 'MAILJET') {
+    return sendViaMailjetWithAttachment(config, to, subject, htmlBody, text, attachment)
+  }
+
+  const transporter = await getEmailTransporter()
+  if (!transporter) {
+    throw new Error('Email-Transporter konnte nicht erstellt werden')
+  }
+  const mailOptions = {
+    from: `"UID BERLIN EVENTS" <${config.email}>`,
+    to,
+    subject,
+    html: htmlBody,
+    text,
+    attachments: [{ filename: attachment.filename, content: attachment.content }],
+  }
+  const info = await transporter.sendMail(mailOptions)
+  return { success: true, messageId: info.messageId }
+}
+
 /** Einfacher E-Mail-Versand (z. B. Passwort-Reset). */
 export async function sendEmail(
   to: string,
