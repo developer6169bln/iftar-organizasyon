@@ -93,11 +93,13 @@ export default function DashboardProjectsPage() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/categories', { credentials: 'include' })
+    const projectId = selectedProject?.id
+    const url = projectId ? `/api/categories?projectId=${encodeURIComponent(projectId)}` : '/api/categories'
+    fetch(url, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : []))
       .then((list: Category[]) => setCategories(list.filter((c) => c.isActive !== false)))
       .catch(() => {})
-  }, [])
+  }, [selectedProject?.id])
 
   useEffect(() => {
     if (!selectedProject?.id) return
@@ -129,22 +131,24 @@ export default function DashboardProjectsPage() {
 
   const handleSaveCategoryDetails = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingCategory) return
+    if (!editingCategory || !selectedProject?.id) return
     setSavingCategory(true)
     try {
-      const res = await fetch('/api/categories', {
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProject.id)}/category-settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          id: editingCategory.id,
+          categoryId: editingCategory.categoryId,
           description: editCategoryDescription,
           responsibleUserId: editCategoryResponsibleUserId,
         }),
       })
       if (res.ok) {
-        const updated = await res.json()
-        setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+        // Kategorien neu laden, damit effektive (projektbezogene) Werte angezeigt werden
+        const url = `/api/categories?projectId=${encodeURIComponent(selectedProject.id)}`
+        const refreshed = await fetch(url, { credentials: 'include' }).then((r) => (r.ok ? r.json() : []))
+        setCategories((refreshed as Category[]).filter((c) => c.isActive !== false))
         setEditingCategory(null)
       } else {
         const data = await res.json().catch(() => ({}))
@@ -599,7 +603,8 @@ export default function DashboardProjectsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          fetch('/api/categories', { credentials: 'include' })
+                          if (!selectedProject?.id) return
+                          fetch(`/api/categories?projectId=${encodeURIComponent(selectedProject.id)}`, { credentials: 'include' })
                             .then((r) => (r.ok ? r.json() : []))
                             .then((list: Category[]) => setCategories(list.filter((c) => c.isActive !== false)))
                             .catch(() => {})
@@ -804,14 +809,14 @@ export default function DashboardProjectsPage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   >
                     <option value="">— Keine Auswahl —</option>
-                    {allUsers.map((u) => (
+                    {Array.from(new Map(members.map((m) => [m.user.id, m.user])).values()).map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.email})
                       </option>
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-500">
-                    Hinweis: Verantwortliche werden global gesetzt (für alle Projekte gleich), nicht pro Projekt.
+                    Hinweis: Verantwortliche gelten nur für das ausgewählte Projekt (nicht global).
                   </p>
                 </div>
                 <div className="flex justify-end gap-2 border-t pt-4">

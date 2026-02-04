@@ -128,6 +128,7 @@ model User {
   passwordResetTokens      PasswordResetToken[]
   ownedProjects            Project[] // Hauptaccount: eigene Projekte
   projectMemberships       ProjectMember[] // Projektmitarbeiter in Projekten anderer
+  responsibleProjectCategorySettings ProjectCategorySetting[] @relation("ProjectCategoryResponsibleUser")
 
   @@map("users")
 }
@@ -156,8 +157,29 @@ model Project {
   owner   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   events  Event[]
   members ProjectMember[]
+  categorySettings ProjectCategorySetting[]
 
   @@map("projects")
+}
+
+// Projekt-spezifische Kategorie-Details (Beschreibung/Verantwortlicher) – gilt nur im jeweiligen Projekt
+model ProjectCategorySetting {
+  id                String   @id @default(cuid())
+  projectId         String
+  categoryId        String   // verweist auf Category.categoryId (unique)
+  description       String?
+  responsibleUserId String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category        Category @relation(fields: [categoryId], references: [categoryId], onDelete: Cascade)
+  responsibleUser User?    @relation("ProjectCategoryResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, categoryId])
+  @@index([projectId])
+  @@index([categoryId])
+  @@map("project_category_settings")
 }
 
 // Projektmitarbeiter: User mit Zugriff auf ein Projekt (Berechtigungen vom Hauptaccount vergeben)
@@ -412,6 +434,7 @@ model Category {
   updatedAt         DateTime @updatedAt
 
   responsibleUser User? @relation(fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  projectSettings ProjectCategorySetting[]
 
   @@map("categories")
 }

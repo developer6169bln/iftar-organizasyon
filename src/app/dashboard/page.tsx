@@ -199,14 +199,15 @@ export default function DashboardPage() {
   const loadCategories = async () => {
     try {
       setLoadingCategories(true)
-      const response = await fetch('/api/categories')
+      const url = selectedProjectId ? `/api/categories?projectId=${encodeURIComponent(selectedProjectId)}` : '/api/categories'
+      const response = await fetch(url)
       if (response.ok) {
         const categoriesData = await response.json()
         if (categoriesData.length === 0) {
           // Initialisiere Standard-Categories
           await initializeDefaultCategories()
           // Lade erneut
-          const reloadResponse = await fetch('/api/categories')
+          const reloadResponse = await fetch(url)
           if (reloadResponse.ok) {
             const reloaded = await reloadResponse.json()
             setCategories(reloaded)
