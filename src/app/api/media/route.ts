@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { prisma } from '@/lib/prisma'
+import { getUploadDir } from '@/lib/uploadDir'
 import { requireEventAccess, requireAnyPageAccess } from '@/lib/permissions'
 
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
   const randomString = Math.random().toString(36).substring(2, 15)
   const ext = file.name.split('.').pop() || (type === 'PHOTO' ? 'jpg' : 'mp4')
   const fileName = `${timestamp}-${randomString}.${ext}`
-  const uploadsDir = join(process.cwd(), 'public', 'uploads')
+  const uploadsDir = getUploadDir()
   const filePath = join(uploadsDir, fileName)
 
   await mkdir(uploadsDir, { recursive: true }).catch(() => {})

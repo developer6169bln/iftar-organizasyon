@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { unlink } from 'fs/promises'
 import { join } from 'path'
 import { prisma } from '@/lib/prisma'
+import { getUploadDir } from '@/lib/uploadDir'
 import { requireEventAccess, requireAnyPageAccess } from '@/lib/permissions'
 
 async function getMediaAndCheckAccess(
@@ -95,8 +96,11 @@ export async function DELETE(
   }
 
   try {
-    const absPath = join(process.cwd(), 'public', media.filePath)
-    await unlink(absPath)
+    const filename = media.filePath.replace(/^\/uploads\//, '') || media.filePath.split('/').pop()
+    if (filename) {
+      const absPath = join(getUploadDir(), filename)
+      await unlink(absPath)
+    }
   } catch (e) {
     console.warn('Datei beim Löschen nicht gefunden:', media.filePath, e)
   }

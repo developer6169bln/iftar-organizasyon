@@ -252,6 +252,8 @@ export default function MediaUploadPage() {
   }
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const getMediaUrl = (item: MediaItem) =>
+    baseUrl + '/api/uploads/' + encodeURIComponent(item.filePath.replace(/^\/uploads\//, '') || item.filePath.split('/').pop() || '')
   const selectedEvent = events.find((e) => e.id === selectedEventId)
 
   return (
@@ -401,13 +403,13 @@ export default function MediaUploadPage() {
                   <div className="relative aspect-video bg-gray-100">
                     {item.type === 'PHOTO' ? (
                       <img
-                        src={baseUrl + item.filePath}
+                        src={getMediaUrl(item)}
                         alt={item.title || item.fileName}
                         className="h-full w-full object-cover"
                       />
                     ) : (
                       <video
-                        src={baseUrl + item.filePath}
+                        src={getMediaUrl(item)}
                         controls
                         className="h-full w-full object-contain"
                       />
