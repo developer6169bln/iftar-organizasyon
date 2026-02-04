@@ -72,14 +72,15 @@ export default function FotoVideoPage() {
     setLoadError(null)
     try {
       const res = await fetch(`/api/media?eventId=${eventId}`, { credentials: 'include' })
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        setLoadError(err.error || `Fehler ${res.status}`)
+        setLoadError((data?.error as string) || `Fehler ${res.status}`)
         setItems([])
+        setLoading(false)
         return
       }
-      const list = await res.json()
-      setItems(Array.isArray(list) ? list : [])
+      const list = Array.isArray(data) ? data : []
+      setItems(list)
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : 'Laden fehlgeschlagen')
       setItems([])
@@ -162,13 +163,18 @@ export default function FotoVideoPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        alert(err.error || 'Speichern fehlgeschlagen')
+        alert((data as { error?: string }).error || 'Speichern fehlgeschlagen')
         return
       }
-      await loadMedia()
+      const updated = data as MediaItem
+      // Liste sofort mit aktualisiertem Eintrag aktualisieren (Änderungen sichtbar)
+      setItems((prev) =>
+        prev.map((it) => (it.id === editingId ? { ...it, ...updated } : it))
+      )
       setEditingId(null)
+      await loadMedia()
     } catch {
       alert('Speichern fehlgeschlagen')
     } finally {
