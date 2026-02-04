@@ -1573,6 +1573,34 @@ export default function GuestsPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Links zu öffentlichen Anmeldeseiten */}
+        <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+          <span className="text-sm font-medium text-indigo-900">Öffentliche Anmeldelinks:</span>
+          <a
+            href="/anmeldung/uid-iftar"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-indigo-700 shadow-sm ring-1 ring-indigo-200 hover:bg-indigo-100"
+          >
+            UID Iftar
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+          <a
+            href="/anmeldung/sube-baskanlari"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-indigo-700 shadow-sm ring-1 ring-indigo-200 hover:bg-indigo-100"
+          >
+            Şube Başkanları
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+          <span className="text-xs text-indigo-600">(öffnen in neuem Tab, Link zum Teilen)</span>
+        </div>
+
         {showAddForm && (
           <div className="mb-8 rounded-xl bg-white p-6 shadow-md">
             <h2 className="mb-4 text-xl font-semibold">Yeni Misafir Ekle</h2>
