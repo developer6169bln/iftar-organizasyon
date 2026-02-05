@@ -5,6 +5,105 @@ import Mailjet from 'node-mailjet'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
+/** Detaillierte Fehleranalyse für SMTP (inkl. Office 365). */
+function buildSmtpErrorAnalysis(
+  err: unknown,
+  config: { type: string; smtpHost?: string | null; email?: string }
+): { message: string; analysis: string; code?: string; responseCode?: string; response?: string } {
+  const code = (err as { code?: string })?.code ?? ''
+  const responseCode = String((err as { responseCode?: number })?.responseCode ?? '')
+  const response = (err as { response?: string })?.response ?? ''
+  const errMsg = err instanceof Error ? err.message : String(err)
+  const errMsgLower = errMsg.toLowerCase()
+
+  const isOffice365 =
+    config.type === 'IMAP' &&
+    config.smtpHost?.toLowerCase().includes('office365')
+
+  let message = errMsg
+  let analysis = ''
+
+  // EAUTH / 535 = Authentifizierung
+  if (
+    code === 'EAUTH' ||
+    responseCode === '535' ||
+    errMsgLower.includes('invalid login') ||
+    errMsgLower.includes('authentication failed') ||
+    errMsgLower.includes('auth')
+  ) {
+    if (config.type === 'GMAIL') {
+      message = 'Gmail-Authentifizierung fehlgeschlagen.'
+      analysis =
+        '1. Verwenden Sie ein App-Passwort (nicht Ihr normales Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort ohne Leerzeichen kopieren\n4. E-Mail-Adresse prüfen'
+    } else if (config.type === 'ICLOUD') {
+      message = 'iCloud-Authentifizierung fehlgeschlagen.'
+      analysis =
+        '1. App-spezifisches Passwort verwenden (nicht normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung aktivieren\n3. App-Passwort von appleid.apple.com erstellen\n4. E-Mail vollständig (z.B. name@icloud.com)'
+    } else if (isOffice365) {
+      message = 'Office 365 / Outlook: Authentifizierung fehlgeschlagen.'
+      analysis =
+        '1. E-Mail: Ihre vollständige Office-365-Adresse (z.B. name@firma.com)\n' +
+        '2. Passwort: Bei aktivierter MFA ein App-Kennwort verwenden (Microsoft-Konto → Sicherheit → App-Kennwörter)\n' +
+        '3. SMTP AUTH: Im Microsoft 365 Admin Center muss „Authentifizierter SMTP“ für Ihr Postfach aktiviert sein (Exchange Admin → Postfächer → Ihr Postfach → E-Mail-Apps)\n' +
+        '4. Kein normales Passwort bei MFA – nur App-Kennwort funktioniert'
+    } else {
+      message = 'SMTP-Authentifizierung fehlgeschlagen.'
+      analysis = 'Benutzername (E-Mail) und Passwort prüfen. Bei 2FA oft App-Kennwort nötig.'
+    }
+  }
+  // Verbindung / Timeout / ECONNREFUSED / ENOTFOUND
+  else if (
+    code === 'ECONNECTION' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    code === 'ETIMEDOUT' ||
+    errMsgLower.includes('connection') ||
+    errMsgLower.includes('timeout') ||
+    errMsgLower.includes('econnrefused') ||
+    errMsgLower.includes('enotfound')
+  ) {
+    message = 'Verbindung zum SMTP-Server fehlgeschlagen.'
+    if (isOffice365) {
+      analysis =
+        '1. Host: smtp.office365.com (ohne Tippfehler)\n' +
+        '2. Port: 587\n' +
+        '3. STARTTLS: muss aktiviert sein (Checkbox „STARTTLS-Verschlüsselung verwenden“)\n' +
+        '4. Firewall/Netzwerk: Port 587 ausgehend erlauben\n' +
+        '5. Falls auf Railway/Vercel: ausgehende SMTP-Verbindungen prüfen (evtl. blockiert)'
+    } else {
+      analysis =
+        'Internetverbindung prüfen. Firewall: Port 587 (STARTTLS) oder 465 (SSL) ausgehend erlauben.'
+    }
+  }
+  // TLS / Zertifikat
+  else if (
+    errMsgLower.includes('tls') ||
+    errMsgLower.includes('certificate') ||
+    errMsgLower.includes('self-signed') ||
+    code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+  ) {
+    message = 'TLS-/Zertifikatsproblem.'
+    analysis =
+      'STARTTLS aktiviert? (Port 587). Bei Office 365: Checkbox „STARTTLS-Verschlüsselung verwenden“ muss an sein.'
+  }
+  // Sonst: Rohfehler + Hinweise
+  else {
+    analysis = `Technisch: ${code ? `Code ${code}` : ''} ${responseCode ? `Response ${responseCode}` : ''} ${response ? response.substring(0, 200) : ''}`.trim()
+    if (isOffice365) {
+      analysis +=
+        '\n\nOffice 365: Host smtp.office365.com, Port 587, STARTTLS aktiviert. Bei MFA App-Kennwort verwenden. SMTP AUTH im Admin Center aktivieren.'
+    }
+  }
+
+  return {
+    message,
+    analysis: analysis.trim(),
+    code: code || undefined,
+    responseCode: responseCode || undefined,
+    response: response ? response.substring(0, 500) : undefined,
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { configId, testEmail } = await request.json()
@@ -164,19 +263,30 @@ export async function POST(request: NextRequest) {
           mode: secure ? 'SSL/TLS (465)' : 'STARTTLS (587)',
         })
       } else {
+        // IMAP / Eigener Mailserver (inkl. Office 365)
+        const port = config.smtpPort ?? 587
+        const useStartTls = config.smtpUseStartTls === true
+        const secure = !useStartTls && port === 465
         transporter = require('nodemailer').createTransport({
           host: config.smtpHost || 'smtp.gmail.com',
-          port: config.smtpPort || 587,
-          secure: config.smtpPort === 465, // true für 465, false für andere Ports
+          port,
+          secure,
+          requireTLS: useStartTls,
           auth: {
             user: config.email,
             pass: config.password || config.appPassword || '',
           },
+          ...(useStartTls && {
+            tls: { rejectUnauthorized: true },
+            connectionTimeout: 15000,
+            greetingTimeout: 10000,
+          }),
         } as any)
-        console.log('📧 SMTP-Transporter erstellt:', {
+        console.log('📧 SMTP-Transporter erstellt (IMAP/Office 365):', {
           host: config.smtpHost || 'smtp.gmail.com',
-          port: config.smtpPort || 587,
-          secure: config.smtpPort === 465,
+          port,
+          secure,
+          useStartTls: useStartTls || undefined,
         })
       }
     } catch (error) {
@@ -197,42 +307,15 @@ export async function POST(request: NextRequest) {
       console.log('✅ Email-Verbindung erfolgreich')
     } catch (verifyError) {
       console.error('❌ Email-Verbindungstest fehlgeschlagen:', verifyError)
-      
-      let errorMessage = 'Verbindungstest fehlgeschlagen'
-      if (verifyError instanceof Error) {
-        const errorMsg = verifyError.message.toLowerCase()
-        const errorCode = (verifyError as any).code || ''
-        
-        if (errorCode === 'EAUTH' || errorMsg.includes('invalid login') || errorMsg.includes('authentication failed')) {
-          if (config.type === 'GMAIL') {
-            errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein App-Passwort (nicht Ihr normales Passwort)\n2. 2-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. E-Mail-Adresse ist korrekt'
-          } else if (config.type === 'ICLOUD') {
-            errorMessage = 'iCloud-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein app-spezifisches Passwort (nicht Ihr normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. iCloud-E-Mail-Adresse ist korrekt'
-          } else {
-            errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
-          }
-        } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection') || errorMsg.includes('timeout') || errorMsg.includes('econnrefused') || errorMsg.includes('enotfound')) {
-          if (config.type === 'ICLOUD') {
-            errorMessage = 'Verbindung zum iCloud-Server fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Internetverbindung\n2. Firewall-Einstellungen\n3. Port 587 ist nicht blockiert\n4. smtp.mail.me.com ist erreichbar'
-          } else {
-            errorMessage = 'Verbindung zum Server fehlgeschlagen. Bitte überprüfen Sie Ihre Internetverbindung und Firewall-Einstellungen.'
-          }
-        } else {
-          // Detaillierte Fehlermeldung für Debugging
-          const fullError = verifyError instanceof Error ? verifyError.message : String(verifyError)
-          const errorDetails = (verifyError as any).code ? ` (Code: ${(verifyError as any).code})` : ''
-          errorMessage = `${fullError}${errorDetails}`
-          
-          if (config.type === 'ICLOUD') {
-            errorMessage += '\n\niCloud-spezifische Hinweise:\n- Stellen Sie sicher, dass Zwei-Faktor-Authentifizierung aktiviert ist\n- Verwenden Sie ein app-spezifisches Passwort von appleid.apple.com\n- Die E-Mail-Adresse muss vollständig sein (z.B. name@icloud.com)'
-          }
-        }
-      }
-      
+      const { message: details, analysis, code: errCode, responseCode: respCode, response: resp } = buildSmtpErrorAnalysis(verifyError, config)
       return NextResponse.json(
-        { 
+        {
           error: 'Verbindungstest fehlgeschlagen',
-          details: errorMessage
+          details,
+          analysis,
+          code: errCode,
+          responseCode: respCode,
+          response: resp,
         },
         { status: 500 }
       )
@@ -258,36 +341,15 @@ export async function POST(request: NextRequest) {
       })
     } catch (sendError) {
       console.error('❌ Fehler beim Senden der Test-E-Mail:', sendError)
-      
-      let errorMessage = 'Fehler beim Senden der Test-E-Mail'
-      if (sendError instanceof Error) {
-        const errorMsg = sendError.message.toLowerCase()
-        const errorCode = (sendError as any).code || ''
-        const responseCode = (sendError as any).responseCode || ''
-        
-        if (errorCode === 'EAUTH' || responseCode === '535' || errorMsg.includes('invalid login') || errorMsg.includes('authentication failed')) {
-          if (config.type === 'GMAIL') {
-            errorMessage = 'Gmail-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihr App-Passwort.'
-          } else if (config.type === 'ICLOUD') {
-            errorMessage = 'iCloud-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Verwenden Sie ein app-spezifisches Passwort (nicht Ihr normales iCloud-Passwort)\n2. Zwei-Faktor-Authentifizierung muss aktiviert sein\n3. App-Passwort wurde korrekt kopiert (keine Leerzeichen)\n4. iCloud-E-Mail-Adresse ist vollständig (z.B. name@icloud.com)'
-          } else {
-            errorMessage = 'Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre SMTP-Zugangsdaten.'
-          }
-        } else if (errorCode === 'ECONNECTION' || errorMsg.includes('connection') || errorMsg.includes('timeout')) {
-          if (config.type === 'ICLOUD') {
-            errorMessage = 'Verbindung zum iCloud-Server fehlgeschlagen. Bitte überprüfen Sie:\n\n1. Internetverbindung\n2. Firewall-Einstellungen\n3. Port 587 ist nicht blockiert'
-          } else {
-            errorMessage = 'Verbindung zum Server fehlgeschlagen.'
-          }
-        } else {
-          errorMessage = sendError.message
-        }
-      }
-      
+      const { message: details, analysis, code: errCode, responseCode: respCode, response: resp } = buildSmtpErrorAnalysis(sendError, config)
       return NextResponse.json(
-        { 
+        {
           error: 'Fehler beim Senden der Test-E-Mail',
-          details: errorMessage
+          details,
+          analysis,
+          code: errCode,
+          responseCode: respCode,
+          response: resp,
         },
         { status: 500 }
       )

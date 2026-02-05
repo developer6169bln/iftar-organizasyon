@@ -453,8 +453,12 @@ export default function InvitationsPage() {
         setTestConfigEmail('')
       } else {
         const errorMsg = result.error || 'Unbekannter Fehler'
-        const detailsMsg = result.details ? `\n\nDetails: ${result.details}` : ''
-        alert(`❌ Fehler: ${errorMsg}${detailsMsg}`)
+        const detailsMsg = result.details ? `\n\n${result.details}` : ''
+        const analysisMsg = result.analysis ? `\n\n--- Analyse / Hinweise ---\n${result.analysis}` : ''
+        const techMsg = [result.code, result.responseCode, result.response].filter(Boolean).length
+          ? `\n\nTechnisch: ${[result.code && `Code ${result.code}`, result.responseCode && `Response ${result.responseCode}`, result.response].filter(Boolean).join(', ')}`
+          : ''
+        alert(`❌ ${errorMsg}${detailsMsg}${analysisMsg}${techMsg}`)
       }
     } catch (error) {
       console.error('Fehler beim Testen der Email-Konfiguration:', error)
