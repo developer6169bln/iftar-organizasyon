@@ -138,6 +138,8 @@ export default function InvitationsPage() {
   const [currentEvent, setCurrentEvent] = useState<{ id: string; maxAccompanyingGuests?: number } | null>(null)
   const [maxAccompanyingGuestsInput, setMaxAccompanyingGuestsInput] = useState<string>('5')
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
+  const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1228,6 +1230,56 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleTemplateChange = async (invitationId: string, templateId: string | null) => {
+    try {
+      const response = await fetch('/api/invitations/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: invitationId, templateId: templateId || null }),
+      })
+      if (response.ok) {
+        const updated = await response.json()
+        setInvitations(invitations.map((inv) => (inv.id === invitationId ? updated : inv)))
+      } else {
+        const err = await response.json()
+        alert('Fehler: ' + (err.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Zuweisen des Templates:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleShowPreview = async (invitation: any) => {
+    const tid = invitation.templateId || invitation.template?.id
+    if (!tid) {
+      alert('Bitte weisen Sie diesem Gast zuerst ein Template zu.')
+      return
+    }
+    setLoadingPreview(true)
+    setPreviewModal(null)
+    try {
+      const res = await fetch(
+        `/api/invitations/preview?invitationId=${encodeURIComponent(invitation.id)}&templateId=${encodeURIComponent(tid)}`
+      )
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Vorschau konnte nicht geladen werden.')
+        return
+      }
+      setPreviewModal({
+        guestName: data.guestName || invitation.guest?.name || 'Gast',
+        subject: data.subject || '',
+        body: data.body || '',
+      })
+    } catch (error) {
+      console.error('Fehler beim Laden der Vorschau:', error)
+      alert('Fehler beim Laden der Vorschau')
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
   const handleCellCancel = () => {
     setEditingCell(null)
     setEditingValue('')
@@ -1717,6 +1769,12 @@ export default function InvitationsPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Email
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Template
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Mailvorschau
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       VIP
                     </th>
@@ -1773,7 +1831,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={17} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={19} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1810,6 +1868,32 @@ export default function InvitationsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                         {getGuestDisplayEmail(invitation.guest)}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <select
+                          value={invitation.templateId || ''}
+                          onChange={(e) => handleTemplateChange(invitation.id, e.target.value || null)}
+                          className="w-full max-w-[200px] rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          title="Template für diesen Gast"
+                        >
+                          <option value="">– Keins –</option>
+                          {templates.map((t: any) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.language?.toUpperCase() || ''})
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleShowPreview(invitation)}
+                          disabled={loadingPreview || !(invitation.templateId || invitation.template?.id)}
+                          className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Mailvorschau anzeigen"
+                        >
+                          {loadingPreview ? '…' : 'Vorschau'}
+                        </button>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input
@@ -2096,6 +2180,58 @@ export default function InvitationsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Modal: Mailvorschau */}
+            {previewModal && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setPreviewModal(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Mailvorschau"
+              >
+                <div
+                  className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Mailvorschau – {previewModal.guestName}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModal(null)}
+                      className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                      aria-label="Schließen"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto p-4" style={{ maxHeight: '70vh' }}>
+                    <div className="mb-4">
+                      <span className="text-xs font-medium uppercase text-gray-500">Betreff</span>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{previewModal.subject}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs font-medium uppercase text-gray-500">Inhalt</span>
+                      <div
+                        className="mt-1 rounded border border-gray-200 bg-white p-4 text-sm text-gray-800 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: previewModal.body }}
+                      />
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewModal(null)}
+                      className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

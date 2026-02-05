@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 export async function PUT(request: NextRequest) {
   try {
@@ -33,6 +31,10 @@ export async function PUT(request: NextRequest) {
     
     if (updateData.respondedAt !== undefined) {
       allowedFields.respondedAt = updateData.respondedAt ? new Date(updateData.respondedAt) : null
+    }
+
+    if (updateData.templateId !== undefined) {
+      allowedFields.templateId = updateData.templateId === '' || updateData.templateId == null ? null : updateData.templateId
     }
 
     const updatedInvitation = await prisma.invitation.update({
