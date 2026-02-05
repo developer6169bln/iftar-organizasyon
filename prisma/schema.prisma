@@ -560,6 +560,7 @@ model EmailConfig {
   imapPort         Int? // IMAP Port (z.B. 993)
   smtpHost         String? // SMTP Host
   smtpPort         Int? // SMTP Port (z.B. 587)
+  smtpUseStartTls  Boolean  @default(false) // Eigener Mailserver: STARTTLS-Verschlüsselung (z.B. Port 587)
   mailjetApiKey    String? // Mailjet API Key (public)
   mailjetApiSecret String? // Mailjet API Secret (private)
   isActive         Boolean  @default(false) // Nur eine aktive Konfiguration

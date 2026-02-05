@@ -116,6 +116,7 @@ export default function InvitationsPage() {
     password: '',
     smtpHost: '',
     smtpPort: 587,
+    smtpUseStartTls: false,
     imapHost: '',
     imapPort: 993,
     mailjetApiKey: '',
@@ -388,6 +389,7 @@ export default function InvitationsPage() {
           password: '',
           smtpHost: '',
           smtpPort: 587,
+          smtpUseStartTls: false,
           imapHost: '',
           imapPort: 993,
           mailjetApiKey: '',
@@ -417,6 +419,7 @@ export default function InvitationsPage() {
       password: '',
       smtpHost: config.smtpHost || '',
       smtpPort: config.smtpPort || 587,
+      smtpUseStartTls: config.smtpUseStartTls || false,
       imapHost: config.imapHost || '',
       imapPort: config.imapPort || 993,
       mailjetApiKey: config.mailjetApiKey || '',
@@ -2549,6 +2552,19 @@ export default function InvitationsPage() {
                       />
                     </div>
 
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="smtpUseStartTls"
+                        type="checkbox"
+                        checked={configForm.smtpUseStartTls}
+                        onChange={(e) => setConfigForm({ ...configForm, smtpUseStartTls: e.target.checked })}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <label htmlFor="smtpUseStartTls" className="text-sm font-medium text-gray-700">
+                        STARTTLS-Verschlüsselung verwenden (z. B. Port 587)
+                      </label>
+                    </div>
+
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         Passwort
@@ -2633,6 +2649,7 @@ export default function InvitationsPage() {
                         password: '',
                         smtpHost: '',
                         smtpPort: 587,
+                        smtpUseStartTls: false,
                         imapHost: '',
                         imapPort: 993,
                         mailjetApiKey: '',

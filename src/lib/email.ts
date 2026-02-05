@@ -112,21 +112,29 @@ export async function getEmailTransporter() {
       mode: secure ? 'SSL/TLS (465)' : 'STARTTLS (587)',
     })
   } else {
-    // IMAP/SMTP Konfiguration
+    // IMAP/SMTP Konfiguration (eigener Mailserver)
+    const port = config.smtpPort || 587
+    const useStartTls = config.smtpUseStartTls === true
+    const secure = !useStartTls && port === 465
     transporter = nodemailer.createTransport({
       host: config.smtpHost || 'smtp.gmail.com',
-      port: config.smtpPort || 587,
-      secure: config.smtpPort === 465, // true für 465, false für andere Ports
+      port,
+      secure,
+      requireTLS: useStartTls,
       auth: {
         user: config.email,
         pass: config.password || config.appPassword || '',
       },
+      ...(useStartTls && {
+        tls: { rejectUnauthorized: true },
+      }),
     } as any)
     
     console.log('📧 SMTP-Transporter erstellt:', {
       host: config.smtpHost || 'smtp.gmail.com',
-      port: config.smtpPort || 587,
-      secure: config.smtpPort === 465,
+      port,
+      secure,
+      useStartTls: useStartTls || undefined,
     })
   }
 
