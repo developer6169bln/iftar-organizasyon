@@ -2603,20 +2603,34 @@ export default function InvitationsPage() {
                   <>
                     <div className="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
                       <p className="mb-2 text-sm text-blue-800">
-                        <strong>Office 365 / Outlook:</strong> Mit einem Klick SMTP-Server, Port und STARTTLS voreinstellen.
+                        <strong>Office 365 / Outlook:</strong> Server voreinstellen – wählen Sie die gewünschte Verschlüsselung.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setConfigForm({
-                          ...configForm,
-                          smtpHost: 'smtp.office365.com',
-                          smtpPort: 587,
-                          smtpUseStartTls: true,
-                        })}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-                      >
-                        Office 365 / Outlook übernehmen
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfigForm({
+                            ...configForm,
+                            smtpHost: 'smtp.office365.com',
+                            smtpPort: 587,
+                            smtpUseStartTls: true,
+                          })}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          Office 365 – STARTTLS (Port 587)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfigForm({
+                            ...configForm,
+                            smtpHost: 'smtp.office365.com',
+                            smtpPort: 465,
+                            smtpUseStartTls: false,
+                          })}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          Office 365 – SSL/TLS (Port 465)
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -2634,28 +2648,46 @@ export default function InvitationsPage() {
 
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-700">
+                        Verschlüsselung
+                      </label>
+                      <select
+                        value={configForm.smtpPort === 465 && !configForm.smtpUseStartTls ? 'ssl' : 'starttls'}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setConfigForm({
+                            ...configForm,
+                            smtpPort: v === 'ssl' ? 465 : 587,
+                            smtpUseStartTls: v === 'starttls',
+                          })
+                        }}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                      >
+                        <option value="starttls">STARTTLS (Port 587)</option>
+                        <option value="ssl">SSL/TLS (Port 465)</option>
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {configForm.smtpPort === 465 ? 'SSL/TLS – verschlüsselte Verbindung von Anfang an.' : 'STARTTLS – Verbindung wird auf Port 587 zu TLS hochgestuft.'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-gray-700">
                         SMTP Port *
                       </label>
                       <input
                         type="number"
                         value={configForm.smtpPort}
-                        onChange={(e) => setConfigForm({ ...configForm, smtpPort: parseInt(e.target.value) || 587 })}
+                        onChange={(e) => {
+                          const p = parseInt(e.target.value) || 587
+                          setConfigForm({
+                            ...configForm,
+                            smtpPort: p,
+                            smtpUseStartTls: p === 465 ? false : configForm.smtpUseStartTls,
+                          })
+                        }}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                        placeholder="587"
+                        placeholder="587 oder 465"
                       />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="smtpUseStartTls"
-                        type="checkbox"
-                        checked={configForm.smtpUseStartTls}
-                        onChange={(e) => setConfigForm({ ...configForm, smtpUseStartTls: e.target.checked })}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <label htmlFor="smtpUseStartTls" className="text-sm font-medium text-gray-700">
-                        STARTTLS-Verschlüsselung verwenden (z. B. Port 587)
-                      </label>
                     </div>
 
                     <div>
