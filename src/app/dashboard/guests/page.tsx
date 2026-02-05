@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
@@ -8,7 +8,6 @@ import * as XLSX from 'xlsx'
 export default function GuestsPage() {
   const router = useRouter()
   const [guests, setGuests] = useState<any[]>([])
-  const [filteredGuests, setFilteredGuests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingGuest, setEditingGuest] = useState<string | null>(null)
@@ -393,13 +392,11 @@ export default function GuestsPage() {
       } else {
         setEventId(null)
         setGuests([])
-        setFilteredGuests([])
       }
     } catch (error) {
       console.error('Event yükleme hatası:', error)
       setEventId(null)
       setGuests([])
-      setFilteredGuests([])
     } finally {
       setLoading(false)
     }
@@ -477,6 +474,21 @@ export default function GuestsPage() {
     const str = String(value).trim().toLowerCase()
     return str === 'true' || str === '1' || str === 'ja' || str === 'yes' || str === 'y'
   }
+
+  // Einmal berechnet: welche Spalten Boolean sind (nicht bei jedem Tastendruck im Formular)
+  const booleanColumnsSet = useMemo(() => {
+    const set = new Set<string>()
+    if (guests.length === 0) return set
+    const formColumns = allColumns.filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+    for (const column of formColumns) {
+      const isBooleanCol = guests.some(g => {
+        const value = getColumnValue(g, column, 0)
+        return isBooleanValue(value)
+      })
+      if (isBooleanCol) set.add(column)
+    }
+    return set
+  }, [guests, allColumns])
 
   // Sammle NUR importierte Spalten aus additionalData (keine "gesammelten" Spalten)
   useEffect(() => {
@@ -601,157 +613,107 @@ export default function GuestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guests.length]) // Nur Länge als Dependency, nicht die gesamte guests-Liste
 
-  useEffect(() => {
-    // Filter guests based on search query and column filters
+  // Gefilterte/sortierte Gästeliste als useMemo (kein setState pro Filter-Änderung → weniger Renders)
+  const filteredGuests = useMemo(() => {
     let filtered = guests
 
-    // Apply search query filter
     if (searchQuery.trim() !== '') {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(guest => {
-        const matchesStandard = 
+        const matchesStandard =
           guest.name?.toLowerCase().includes(query) ||
           guest.email?.toLowerCase().includes(query) ||
           guest.title?.toLowerCase().includes(query) ||
           guest.organization?.toLowerCase().includes(query)
-        
-        // Suche auch in additionalData
         let matchesAdditional = false
         if (guest.additionalData) {
           try {
             const additional = JSON.parse(guest.additionalData)
-            matchesAdditional = Object.values(additional).some((val: any) => 
+            matchesAdditional = Object.values(additional).some((val: any) =>
               String(val).toLowerCase().includes(query)
             )
-          } catch (e) {
+          } catch {
             // Ignoriere Parse-Fehler
           }
         }
-        
         return matchesStandard || matchesAdditional
       })
     }
 
-    // Apply column filters (dynamisch für alle Spalten)
     Object.entries(columnFilters).forEach(([columnName, filterValue]) => {
       if (!filterValue) return
-      
       const filter = filterValue.toLowerCase()
-      
       filtered = filtered.filter(guest => {
-        // Standard-Felder - neue Spaltennamen
-        if (columnName === 'Name') {
-          return guest.name?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Partei / Organisation / Unternehmen') {
-          return guest.organization?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Funktion') {
-          return guest.title?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'E-Mail') {
-          return guest.email?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Status') {
-          return guest.status?.toLowerCase().includes(filter)
-        }
-        if (columnName === 'Tischnummer') {
-          return guest.tableNumber?.toString().toLowerCase().includes(filter)
-        }
+        if (columnName === 'Name') return guest.name?.toLowerCase().includes(filter)
+        if (columnName === 'Partei / Organisation / Unternehmen') return guest.organization?.toLowerCase().includes(filter)
+        if (columnName === 'Funktion') return guest.title?.toLowerCase().includes(filter)
+        if (columnName === 'E-Mail') return guest.email?.toLowerCase().includes(filter)
+        if (columnName === 'Status') return guest.status?.toLowerCase().includes(filter)
+        if (columnName === 'Tischnummer') return guest.tableNumber?.toString().toLowerCase().includes(filter)
         if (columnName === 'Anwesend') {
           const isAttended = guest.status === 'ATTENDED'
-          const filterLower = filter.toLowerCase()
-          return (isAttended && (filterLower === 'ja' || filterLower === 'yes')) ||
-            (!isAttended && (filterLower === 'nein' || filterLower === 'no'))
+          return (isAttended && (filter === 'ja' || filter === 'yes')) || (!isAttended && (filter === 'nein' || filter === 'no'))
         }
         if (columnName === 'VIP Begleitung benötigt?') {
           const needsReception = guest.needsSpecialReception
-          const filterLower = filter.toLowerCase()
-          return (needsReception && (filterLower === 'ja' || filterLower === 'yes')) ||
-            (!needsReception && (filterLower === 'nein' || filterLower === 'no'))
+          return (needsReception && (filter === 'ja' || filter === 'yes')) || (!needsReception && (filter === 'nein' || filter === 'no'))
         }
-        if (columnName === 'VIP Begleiter (Name)') {
-          return guest.receptionBy?.toLowerCase().includes(filter)
-        }
+        if (columnName === 'VIP Begleiter (Name)') return guest.receptionBy?.toLowerCase().includes(filter)
         if (columnName === 'VIP Anreise (Uhrzeit)') {
           if (!guest.arrivalDate) return false
-          const dateStr = new Date(guest.arrivalDate).toLocaleString('de-DE').toLowerCase()
-          return dateStr.includes(filter)
+          return new Date(guest.arrivalDate).toLocaleString('de-DE').toLowerCase().includes(filter)
         }
-        if (columnName === 'Notiz') {
-          return guest.notes?.toLowerCase().includes(filter)
-        }
-        
-        // Zusätzliche Spalten aus additionalData
+        if (columnName === 'Notiz') return guest.notes?.toLowerCase().includes(filter)
         if (guest.additionalData) {
           try {
             const additional = JSON.parse(guest.additionalData)
             const value = additional[columnName]
-            if (value !== undefined) {
-              return String(value).toLowerCase().includes(filter)
-            }
-          } catch (e) {
-            // Ignoriere Parse-Fehler
+            if (value !== undefined) return String(value).toLowerCase().includes(filter)
+          } catch {
+            // Ignoriere
           }
         }
-        
         return true
       })
     })
 
-    // Prüfe ob keine Ergebnisse gefunden wurden (nur wenn Filter aktiv sind)
-    const hasActiveFilters = searchQuery.trim() !== '' || Object.values(columnFilters).some(v => v.trim() !== '')
-    
-    if (filtered.length === 0 && hasActiveFilters && guests.length > 0) {
-      // Zeige Warnung und setze Filter zurück
-      if (!showNoResultsWarning) {
-        setShowNoResultsWarning(true)
-        setTimeout(() => {
-          setSearchQuery('')
-          setColumnFilters({})
-          setShowNoResultsWarning(false)
-        }, 2000) // Nach 2 Sekunden Filter zurücksetzen
-      }
-    } else {
-      setShowNoResultsWarning(false)
-    }
-
-    // Sortierung anwenden
     if (sortColumn) {
       filtered = [...filtered].sort((a, b) => {
         const valueA = getColumnValue(a, sortColumn, 0)
         const valueB = getColumnValue(b, sortColumn, 0)
-        
-        // Nummer-Spalte: Numerische Sortierung
         if (sortColumn === 'Nummer') {
           const numA = parseInt(valueA) || 0
           const numB = parseInt(valueB) || 0
           return sortDirection === 'asc' ? numA - numB : numB - numA
         }
-        
-        // Versuche numerische Sortierung
         const numA = parseFloat(valueA)
         const numB = parseFloat(valueB)
-        if (!isNaN(numA) && !isNaN(numB)) {
-          return sortDirection === 'asc' ? numA - numB : numB - numA
-        }
-        
-        // Text-Sortierung (case-insensitive)
-        const textA = valueA.toLowerCase()
-        const textB = valueB.toLowerCase()
-        
-        if (textA < textB) {
-          return sortDirection === 'asc' ? -1 : 1
-        }
-        if (textA > textB) {
-          return sortDirection === 'asc' ? 1 : -1
-        }
+        if (!isNaN(numA) && !isNaN(numB)) return sortDirection === 'asc' ? numA - numB : numB - numA
+        const textA = String(valueA).toLowerCase()
+        const textB = String(valueB).toLowerCase()
+        if (textA < textB) return sortDirection === 'asc' ? -1 : 1
+        if (textA > textB) return sortDirection === 'asc' ? 1 : -1
         return 0
       })
     }
 
-    setFilteredGuests(filtered)
-  }, [searchQuery, guests, columnFilters, showNoResultsWarning, sortColumn, sortDirection])
+    return filtered
+  }, [guests, searchQuery, columnFilters, sortColumn, sortDirection])
+
+  // "Keine Ergebnisse"-Warnung und nach 2s Filter zurücksetzen
+  useEffect(() => {
+    const hasActiveFilters = searchQuery.trim() !== '' || Object.values(columnFilters).some(v => String(v).trim() !== '')
+    if (filteredGuests.length === 0 && hasActiveFilters && guests.length > 0) {
+      setShowNoResultsWarning(true)
+      const t = setTimeout(() => {
+        setSearchQuery('')
+        setColumnFilters({})
+        setShowNoResultsWarning(false)
+      }, 2000)
+      return () => clearTimeout(t)
+    }
+    setShowNoResultsWarning(false)
+  }, [filteredGuests.length, guests.length, searchQuery, columnFilters])
 
   // Lade Gästeliste neu, wenn eine E-Mail gesendet wurde
   useEffect(() => {
@@ -788,7 +750,6 @@ export default function GuestsPage() {
     const id = overrideEventId ?? eventId
     if (!id) {
       setGuests([])
-      setFilteredGuests([])
       setLoading(false)
       return
     }
@@ -797,7 +758,6 @@ export default function GuestsPage() {
       if (response.ok) {
         const data = await response.json()
         setGuests(data)
-        setFilteredGuests(data)
         await loadInvitations(data.map((g: any) => g.id), id)
       }
     } catch (error) {
@@ -1344,9 +1304,8 @@ export default function GuestsPage() {
       })
 
       if (response.ok) {
-        // Entferne Gast aus der Liste
+        // Entferne Gast aus der Liste (filteredGuests leitet sich aus guests ab)
         setGuests(guests.filter(g => g.id !== guestId))
-        setFilteredGuests(filteredGuests.filter(g => g.id !== guestId))
         setEditingGuest(null)
         
         
@@ -1609,12 +1568,7 @@ export default function GuestsPage() {
               {allColumns
                 .filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
                 .map((column) => {
-                  // Prüfe ob es eine Boolean-Spalte ist
-                  const isBooleanCol = guests.length > 0 && guests.some(g => {
-                    const value = getColumnValue(g, column, 0)
-                    return isBooleanValue(value)
-                  })
-                  
+                  const isBooleanCol = booleanColumnsSet.has(column)
                   // Standard-Feld-Mappings (für direkte DB-Felder)
                   if (column === 'Name' || column === 'name') {
                     return (
