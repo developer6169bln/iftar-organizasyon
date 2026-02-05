@@ -131,28 +131,37 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// DELETE: Email-Template löschen
+// DELETE: Email-Template(s) löschen – ?id=... oder ?ids=id1,id2,id3
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
+    const idsParam = searchParams.get('ids')
 
-    if (!id) {
+    const toDeleteIds: string[] = []
+    if (idsParam) {
+      toDeleteIds.push(...idsParam.split(',').map((s) => s.trim()).filter(Boolean))
+    }
+    if (id) {
+      toDeleteIds.push(id)
+    }
+
+    if (toDeleteIds.length === 0) {
       return NextResponse.json(
-        { error: 'ID ist erforderlich' },
+        { error: 'ID oder ids (kommagetrennt) ist erforderlich' },
         { status: 400 }
       )
     }
 
-    await prisma.emailTemplate.delete({
-      where: { id },
+    await prisma.emailTemplate.deleteMany({
+      where: { id: { in: toDeleteIds } },
     })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, deleted: toDeleteIds.length })
   } catch (error) {
-    console.error('Fehler beim Löschen des Email-Templates:', error)
+    console.error('Fehler beim Löschen der Email-Templates:', error)
     return NextResponse.json(
-      { error: 'Fehler beim Löschen des Templates' },
+      { error: 'Fehler beim Löschen der Templates' },
       { status: 500 }
     )
   }

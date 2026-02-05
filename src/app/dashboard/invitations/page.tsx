@@ -99,6 +99,7 @@ export default function InvitationsPage() {
   const [listSortBy, setListSortBy] = useState<'bemerkungen' | null>(null)
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc')
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [templateForm, setTemplateForm] = useState({
     name: '',
     language: 'de',
@@ -571,7 +572,35 @@ export default function InvitationsPage() {
 
       if (response.ok) {
         await loadTemplates()
+        setSelectedTemplateIds((prev) => prev.filter((x) => x !== id))
         alert('Template gelöscht')
+      } else {
+        const error = await response.json()
+        alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error)
+      alert('Fehler beim Löschen')
+    }
+  }
+
+  const handleDeleteSelectedTemplates = async () => {
+    if (selectedTemplateIds.length === 0) {
+      alert('Bitte wählen Sie mindestens ein Template aus.')
+      return
+    }
+    if (!confirm(`Möchten Sie ${selectedTemplateIds.length} Template(s) wirklich löschen?`)) {
+      return
+    }
+    try {
+      const response = await fetch(
+        `/api/email-templates?ids=${selectedTemplateIds.map(encodeURIComponent).join(',')}`,
+        { method: 'DELETE' }
+      )
+      if (response.ok) {
+        await loadTemplates()
+        setSelectedTemplateIds([])
+        alert(`${selectedTemplateIds.length} Template(s) gelöscht`)
       } else {
         const error = await response.json()
         alert('Fehler: ' + (error.error || 'Unbekannter Fehler'))
@@ -2299,7 +2328,36 @@ export default function InvitationsPage() {
 
             {/* Liste der vorhandenen Templates */}
             <div>
-              <h3 className="mb-4 text-lg font-medium">Vorhandene Templates</h3>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-lg font-medium">Vorhandene Templates</h3>
+                {templates.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={templates.length > 0 && selectedTemplateIds.length === templates.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTemplateIds(templates.map((t: any) => t.id))
+                          } else {
+                            setSelectedTemplateIds([])
+                          }
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      Alle auswählen
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelectedTemplates}
+                      disabled={selectedTemplateIds.length === 0}
+                      className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Ausgewählte löschen ({selectedTemplateIds.length})
+                    </button>
+                  </div>
+                )}
+              </div>
               {templates.length === 0 ? (
                 <div className="rounded-lg border border-gray-200 p-4 text-center">
                   <p className="text-sm text-gray-500">Keine Templates vorhanden</p>
@@ -2312,11 +2370,24 @@ export default function InvitationsPage() {
                   {templates.map((template) => (
                     <div
                       key={template.id}
-                      className={`flex items-center justify-between rounded-lg border p-4 ${
+                      className={`flex items-center gap-3 rounded-lg border p-4 ${
                         template.isDefault ? 'border-green-500 bg-green-50' : 'border-gray-200'
                       }`}
                     >
-                      <div>
+                      <input
+                        type="checkbox"
+                        checked={selectedTemplateIds.includes(template.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedTemplateIds((prev) => [...prev, template.id])
+                          } else {
+                            setSelectedTemplateIds((prev) => prev.filter((id) => id !== template.id))
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        aria-label={`${template.name} auswählen`}
+                      />
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium">
                           {template.name}
                           {template.isDefault && (
@@ -2338,7 +2409,7 @@ export default function InvitationsPage() {
                           {template.language.toUpperCase()} - {template.subject}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex shrink-0 gap-2">
                         <button
                           onClick={() => handleEditTemplate(template)}
                           className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
