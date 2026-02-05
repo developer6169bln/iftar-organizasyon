@@ -2526,6 +2526,24 @@ export default function InvitationsPage() {
                   </>
                 ) : (
                   <>
+                    <div className="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                      <p className="mb-2 text-sm text-blue-800">
+                        <strong>Office 365 / Outlook:</strong> Mit einem Klick SMTP-Server, Port und STARTTLS voreinstellen.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setConfigForm({
+                          ...configForm,
+                          smtpHost: 'smtp.office365.com',
+                          smtpPort: 587,
+                          smtpUseStartTls: true,
+                        })}
+                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        Office 365 / Outlook übernehmen
+                      </button>
+                    </div>
+
                     <div>
                       <label className="mb-1 block text-sm font-medium text-gray-700">
                         SMTP Host *
@@ -2535,7 +2553,7 @@ export default function InvitationsPage() {
                         value={configForm.smtpHost}
                         onChange={(e) => setConfigForm({ ...configForm, smtpHost: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                        placeholder="smtp.example.com"
+                        placeholder="smtp.office365.com oder smtp.example.com"
                       />
                     </div>
 
