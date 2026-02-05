@@ -50,6 +50,31 @@ function getGuestStaatInstitution(guest: { organization?: string | null; additio
   return ''
 }
 
+/** Vorname aus guest.additionalData oder erstes Wort von guest.name (für Platzhalter {{VORNAME}}). */
+function getGuestVorname(guest: { name: string; additionalData?: string | null } | null): string {
+  if (!guest) return ''
+  if (guest.additionalData) {
+    try {
+      const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+      const keys = ['Vorname', 'firstName', 'first_name', 'First Name']
+      for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(ad, key) && ad[key] != null) {
+          const v = String(ad[key]).trim()
+          if (v !== '') return v
+        }
+      }
+      for (const [key, value] of Object.entries(ad)) {
+        const k = String(key).toLowerCase()
+        if ((k === 'vorname' || k === 'firstname' || k === 'first_name') && value != null && String(value).trim() !== '') return String(value).trim()
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const firstWord = String(guest.name).trim().split(/\s+/)[0]
+  return firstWord ?? ''
+}
+
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
   if (access instanceof NextResponse) return access
@@ -225,8 +250,10 @@ export async function POST(request: NextRequest) {
 
         // Personalisiere Template
         const staatInstitution = getGuestStaatInstitution(guest)
+        const vorname = getGuestVorname(guest)
         let personalizedBody = template.body
           .replace(/{{GUEST_NAME}}/g, guest.name)
+          .replace(/{{VORNAME}}/g, vorname)
           .replace(/{{EVENT_TITLE}}/g, event.title)
           .replace(/{{EVENT_DATE}}/g, new Date(event.date).toLocaleDateString('de-DE', {
             weekday: 'long',
@@ -251,6 +278,7 @@ export async function POST(request: NextRequest) {
 
         let personalizedSubject = template.subject
           .replace(/{{GUEST_NAME}}/g, guest.name)
+          .replace(/{{VORNAME}}/g, vorname)
           .replace(/{{EVENT_TITLE}}/g, event.title)
           .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
 

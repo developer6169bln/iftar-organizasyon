@@ -26,6 +26,31 @@ function getGuestStaatInstitution(guest: { organization?: string | null; additio
   return ''
 }
 
+/** Vorname aus guest.additionalData oder erstes Wort von guest.name (für Platzhalter {{VORNAME}}). */
+function getGuestVorname(guest: { name: string; additionalData?: string | null } | null): string {
+  if (!guest) return ''
+  if (guest.additionalData) {
+    try {
+      const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+      const keys = ['Vorname', 'firstName', 'first_name', 'First Name']
+      for (const key of keys) {
+        if (Object.prototype.hasOwnProperty.call(ad, key) && ad[key] != null) {
+          const v = String(ad[key]).trim()
+          if (v !== '') return v
+        }
+      }
+      for (const [key, value] of Object.entries(ad)) {
+        const k = String(key).toLowerCase()
+        if ((k === 'vorname' || k === 'firstname' || k === 'first_name') && value != null && String(value).trim() !== '') return String(value).trim()
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const firstWord = String(guest.name).trim().split(/\s+/)[0]
+  return firstWord ?? ''
+}
+
 /** GET: Personalisierte Mail-Vorschau für eine Einladung (optional mit templateId). */
 export async function GET(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
@@ -90,6 +115,7 @@ export async function GET(request: NextRequest) {
     const declineLink = `${baseUrl}/api/invitations/decline/${invitation.declineToken}`
 
     const staatInstitution = getGuestStaatInstitution(guest)
+    const vorname = getGuestVorname(guest)
     const eventDateStr = new Date(event.date).toLocaleDateString('de-DE', {
       weekday: 'long',
       year: 'numeric',
@@ -99,11 +125,13 @@ export async function GET(request: NextRequest) {
 
     let subject = template.subject
       .replace(/{{GUEST_NAME}}/g, guest.name)
+      .replace(/{{VORNAME}}/g, vorname)
       .replace(/{{EVENT_TITLE}}/g, event.title)
       .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
 
     let body = template.body
       .replace(/{{GUEST_NAME}}/g, guest.name)
+      .replace(/{{VORNAME}}/g, vorname)
       .replace(/{{EVENT_TITLE}}/g, event.title)
       .replace(/{{EVENT_DATE}}/g, eventDateStr)
       .replace(/{{EVENT_LOCATION}}/g, event.location)

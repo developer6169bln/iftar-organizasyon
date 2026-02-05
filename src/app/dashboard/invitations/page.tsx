@@ -2389,7 +2389,7 @@ export default function InvitationsPage() {
                     placeholder="z.B. Einladung zum Iftar-Essen - EVENT_TITLE"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Verfügbare Platzhalter: GUEST_NAME, EVENT_TITLE, STAAT_INSTITUTION
+                    Verfügbare Platzhalter: GUEST_NAME, VORNAME, EVENT_TITLE, STAAT_INSTITUTION
                   </p>
                 </div>
 
@@ -2405,7 +2405,7 @@ export default function InvitationsPage() {
                     placeholder="<p>Liebe/r GUEST_NAME,</p>..."
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Verfügbare Platzhalter im HTML-Body: GUEST_NAME, EVENT_TITLE, EVENT_DATE, EVENT_LOCATION, STAAT_INSTITUTION (Staat/Institution), ACCEPT_LINK, DECLINE_LINK
+                    Verfügbare Platzhalter im HTML-Body: GUEST_NAME, VORNAME, EVENT_TITLE, EVENT_DATE, EVENT_LOCATION, STAAT_INSTITUTION (Staat/Institution), ACCEPT_LINK, DECLINE_LINK
                   </p>
                 </div>
 

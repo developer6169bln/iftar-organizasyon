@@ -112,9 +112,10 @@ export async function POST(request: NextRequest) {
     const declineLink = `${baseUrl}/api/invitations/decline/${declineToken}`
     const trackingPixelUrl = `${baseUrl}/api/invitations/track/${trackingToken}`
 
-    // Personalisiere Template mit Test-Daten
+    // Personalisiere Template mit Test-Daten (VORNAME = „Test“ bei Test-Mail)
     let personalizedBody = template.body
       .replace(/{{GUEST_NAME}}/g, 'Test-Gast')
+      .replace(/{{VORNAME}}/g, 'Test')
       .replace(/{{EVENT_TITLE}}/g, event.title)
       .replace(/{{EVENT_DATE}}/g, new Date(event.date).toLocaleDateString('de-DE', {
         weekday: 'long',
@@ -138,6 +139,7 @@ export async function POST(request: NextRequest) {
 
     let personalizedSubject = template.subject
       .replace(/{{GUEST_NAME}}/g, 'Test-Gast')
+      .replace(/{{VORNAME}}/g, 'Test')
       .replace(/{{EVENT_TITLE}}/g, event.title)
       .replace(/{{STAAT_INSTITUTION}}/g, 'Beispiel-Institution')
 
