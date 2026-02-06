@@ -1767,6 +1767,9 @@ export default function InvitationsPage() {
                       />
                       <div className="mt-1 text-xs">Auswahl Einladung</div>
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Einladung E-Mail
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Gast
                     </th>
@@ -1790,9 +1793,6 @@ export default function InvitationsPage() {
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       VIP
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
-                      Einladung E-Mail
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       Einladung Post
@@ -1870,6 +1870,15 @@ export default function InvitationsPage() {
                           className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!invitation.sentAt}
+                          disabled
+                          className="rounded border-gray-300 text-gray-400"
+                          title={invitation.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {invitation.guest?.name}
                       </td>
@@ -1917,15 +1926,6 @@ export default function InvitationsPage() {
                           checked={invitation.guest?.isVip || false}
                           onChange={(e) => handleVipChange(invitation.guestId, e.target.checked)}
                           className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
-                        <input
-                          type="checkbox"
-                          checked={!!invitation.sentAt}
-                          disabled
-                          className="rounded border-gray-300 text-gray-400"
-                          title={invitation.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
                         />
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
