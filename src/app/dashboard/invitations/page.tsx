@@ -70,6 +70,13 @@ function getGuestStaatInstitution(guest: any): string {
   return ''
 }
 
+/** Anrede 2 aus guest.additionalData (Gästeliste-Spalte „Anrede 2“). */
+function getGuestAnrede2(guest: any): string {
+  if (!guest) return ''
+  const add = parseAdditionalData(guest)
+  return getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
+}
+
 /** Bemerkungen aus guest.notes oder additionalData. */
 function getGuestBemerkungen(guest: any): string {
   if (!guest) return ''
@@ -1767,6 +1774,9 @@ export default function InvitationsPage() {
                       Staat/Institution
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Anrede 2
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Email
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
@@ -1831,7 +1841,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={19} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={20} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -1865,6 +1875,9 @@ export default function InvitationsPage() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                         {getGuestStaatInstitution(invitation.guest)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                        {getGuestAnrede2(invitation.guest)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
                         {getGuestDisplayEmail(invitation.guest)}
@@ -2389,7 +2402,7 @@ export default function InvitationsPage() {
                     placeholder="z.B. Einladung zum Iftar-Essen - EVENT_TITLE"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Verfügbare Platzhalter: GUEST_NAME, VORNAME, EVENT_TITLE, STAAT_INSTITUTION
+                    Verfügbare Platzhalter: GUEST_NAME, VORNAME, ANREDE_2, EVENT_TITLE, STAAT_INSTITUTION
                   </p>
                 </div>
 
@@ -2405,7 +2418,7 @@ export default function InvitationsPage() {
                     placeholder="<p>Liebe/r GUEST_NAME,</p>..."
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Verfügbare Platzhalter im HTML-Body: GUEST_NAME, VORNAME, EVENT_TITLE, EVENT_DATE, EVENT_LOCATION, STAAT_INSTITUTION (Staat/Institution), ACCEPT_LINK, DECLINE_LINK
+                    Verfügbare Platzhalter im HTML-Body: GUEST_NAME, VORNAME, ANREDE_2 (Anrede 2 aus Gästeliste), EVENT_TITLE, EVENT_DATE, EVENT_LOCATION, STAAT_INSTITUTION, ACCEPT_LINK, DECLINE_LINK
                   </p>
                 </div>
 

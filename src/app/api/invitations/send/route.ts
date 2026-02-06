@@ -75,6 +75,24 @@ function getGuestVorname(guest: { name: string; additionalData?: string | null }
   return firstWord ?? ''
 }
 
+/** Anrede 2 aus guest.additionalData (Platzhalter {{ANREDE_2}}). */
+function getGuestAnrede2(guest: { additionalData?: string | null } | null): string {
+  if (!guest?.additionalData) return ''
+  try {
+    const ad = JSON.parse(guest.additionalData) as Record<string, unknown>
+    const keys = ['Anrede 2', 'Anrede2', 'Anrede_2']
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(ad, key) && ad[key] != null) {
+        const v = String(ad[key]).trim()
+        if (v !== '') return v
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return ''
+}
+
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'invitations')
   if (access instanceof NextResponse) return access
@@ -251,9 +269,11 @@ export async function POST(request: NextRequest) {
         // Personalisiere Template
         const staatInstitution = getGuestStaatInstitution(guest)
         const vorname = getGuestVorname(guest)
+        const anrede2 = getGuestAnrede2(guest)
         let personalizedBody = template.body
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{VORNAME}}/g, vorname)
+          .replace(/{{ANREDE_2}}/g, anrede2)
           .replace(/{{EVENT_TITLE}}/g, event.title)
           .replace(/{{EVENT_DATE}}/g, new Date(event.date).toLocaleDateString('de-DE', {
             weekday: 'long',
@@ -279,6 +299,7 @@ export async function POST(request: NextRequest) {
         let personalizedSubject = template.subject
           .replace(/{{GUEST_NAME}}/g, guest.name)
           .replace(/{{VORNAME}}/g, vorname)
+          .replace(/{{ANREDE_2}}/g, anrede2)
           .replace(/{{EVENT_TITLE}}/g, event.title)
           .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
 
