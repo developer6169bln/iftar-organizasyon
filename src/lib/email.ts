@@ -2,6 +2,19 @@ import nodemailer from 'nodemailer'
 import Mailjet from 'node-mailjet'
 import { prisma } from './prisma'
 
+/** Erzeugt die From-Adresse für SMTP (z. B. "Absender Name" <email@example.com>). */
+function getFromString(config: { email: string; senderName?: string | null }): string {
+  const name = (config.senderName || '').trim()
+  if (!name) return `"Iftar Organizasyon" <${config.email}>`
+  return `"${name.replace(/"/g, '')}" <${config.email}>`
+}
+
+/** Anzeigename des Absenders (für Mailjet From.Name). */
+function getSenderDisplayName(config: { senderName?: string | null }, defaultName: string): string {
+  const name = (config.senderName || '').trim()
+  return name || defaultName
+}
+
 export interface EmailConfigData {
   type: 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILJET'
   email: string
@@ -147,7 +160,7 @@ export async function getEmailTransporter() {
 
 // Mailjet-Versand per Send API v3.1
 async function sendViaMailjet(
-  config: { email: string; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
+  config: { email: string; senderName?: string | null; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
   to: string,
   subject: string,
   htmlBody: string,
@@ -158,11 +171,12 @@ async function sendViaMailjet(
   }
 
   const mailjet = Mailjet.apiConnect(config.mailjetApiKey, config.mailjetApiSecret)
+  const fromName = getSenderDisplayName(config, 'Iftar Organizasyon')
 
   const request = mailjet.post('send', { version: 'v3.1' }).request({
     Messages: [
       {
-        From: { Email: config.email, Name: 'Iftar Organizasyon' },
+        From: { Email: config.email, Name: fromName },
         To: [{ Email: to, Name: to }],
         Subject: subject,
         TextPart: textBody,
@@ -180,7 +194,7 @@ async function sendViaMailjet(
 
 /** Mailjet-Versand mit PDF-Anhang (Base64). */
 async function sendViaMailjetWithAttachment(
-  config: { email: string; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
+  config: { email: string; senderName?: string | null; mailjetApiKey?: string | null; mailjetApiSecret?: string | null },
   to: string,
   subject: string,
   htmlBody: string,
@@ -191,11 +205,12 @@ async function sendViaMailjetWithAttachment(
     throw new Error('Mailjet API Key und API Secret sind erforderlich')
   }
   const mailjet = Mailjet.apiConnect(config.mailjetApiKey, config.mailjetApiSecret)
+  const fromName = getSenderDisplayName(config, 'UID BERLIN EVENTS')
   const base64Content = attachment.content.toString('base64')
   const request = mailjet.post('send', { version: 'v3.1' }).request({
     Messages: [
       {
-        From: { Email: config.email, Name: 'UID BERLIN EVENTS' },
+        From: { Email: config.email, Name: fromName },
         To: [{ Email: to, Name: to }],
         Subject: subject,
         TextPart: textBody,
@@ -242,7 +257,7 @@ export async function sendEmailWithAttachment(
     throw new Error('Email-Transporter konnte nicht erstellt werden')
   }
   const mailOptions = {
-    from: `"UID BERLIN EVENTS" <${config.email}>`,
+    from: getFromString(config),
     to,
     subject,
     html: htmlBody,
@@ -281,7 +296,7 @@ export async function sendEmail(
   }
 
   const mailOptions = {
-    from: `"Iftar Organizasyon" <${config.email}>`,
+    from: getFromString(config),
     to,
     subject,
     html: htmlBody,
@@ -336,7 +351,7 @@ export async function sendInvitationEmail(
   }
 
   const mailOptions = {
-    from: `"Iftar Organizasyon" <${config.email}>`,
+    from: getFromString(config),
     to,
     subject,
     html: emailBody,

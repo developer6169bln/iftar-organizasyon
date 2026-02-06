@@ -120,6 +120,7 @@ export default function InvitationsPage() {
     name: '',
     type: 'GMAIL' as 'GMAIL' | 'ICLOUD' | 'IMAP' | 'MAILJET',
     email: '',
+    senderName: '',
     appPassword: '',
     password: '',
     smtpHost: '',
@@ -395,6 +396,7 @@ export default function InvitationsPage() {
           name: '',
           type: 'GMAIL',
           email: '',
+          senderName: '',
           appPassword: '',
           password: '',
           smtpHost: '',
@@ -425,6 +427,7 @@ export default function InvitationsPage() {
       name: config.name,
       type: config.type,
       email: config.email,
+      senderName: config.senderName || '',
       appPassword: '',
       password: '',
       smtpHost: config.smtpHost || '',
@@ -2642,6 +2645,22 @@ export default function InvitationsPage() {
                   />
                 </div>
 
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Absender (Name)
+                  </label>
+                  <input
+                    type="text"
+                    value={configForm.senderName}
+                    onChange={(e) => setConfigForm({ ...configForm, senderName: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    placeholder="z. B. Iftar Organizasyon oder Max Mustermann"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Anzeigename des Absenders in der E-Mail (optional). Ohne Angabe wird ein Standardname verwendet.
+                  </p>
+                </div>
+
                 {configForm.type === 'GMAIL' ? (
                   <>
                     <div>
@@ -2919,6 +2938,7 @@ export default function InvitationsPage() {
                         name: '',
                         type: 'GMAIL',
                         email: '',
+                        senderName: '',
                         appPassword: '',
                         password: '',
                         smtpHost: '',
