@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const eventDateRaw = body.eventDate
     const eventLocation = typeof body.eventLocation === 'string' ? body.eventLocation.trim() : ''
     const eventDescription = typeof body.eventDescription === 'string' ? body.eventDescription.trim() || null : null
+    const partnerUserIds = Array.isArray(body.partnerUserIds) ? body.partnerUserIds.filter((id: unknown) => typeof id === 'string' && id.trim() !== '').map((id: string) => id.trim()) : []
 
     if (!name) {
       return NextResponse.json({ error: 'Projektname ist erforderlich' }, { status: 400 })
@@ -158,6 +159,20 @@ export async function POST(request: NextRequest) {
     } catch (eventErr) {
       console.error('POST /api/projects Event create error:', eventErr)
       // Projekt wurde erstellt; Event fehlgeschlagen (z. B. Spalte projectId fehlt) – Projekt trotzdem zurückgeben
+    }
+
+    // Partner (weitere Hauptbenutzer) als Projektmitglieder mit Rolle PARTNER anlegen – gleiche Rechte wie Inhaber
+    for (const partnerId of partnerUserIds) {
+      if (partnerId === userId) continue
+      try {
+        await prisma.projectMember.upsert({
+          where: { projectId_userId: { projectId: project.id, userId: partnerId } },
+          create: { projectId: project.id, userId: partnerId, role: 'PARTNER' },
+          update: { role: 'PARTNER' },
+        })
+      } catch (partnerErr) {
+        console.error('POST /api/projects add partner error:', partnerErr)
+      }
     }
 
     return NextResponse.json(project, { status: 201 })

@@ -24,12 +24,16 @@ type UserRow = {
   email: string
   role: string
   editionId: string | null
+  mainUserCategoryId?: string | null
+  mainUserCategory?: { id: string; key: string; name: string } | null
   editionExpiresAt?: string | null
   edition?: { id: string; code: string; name: string } | null
   categoryPermissions?: { categoryId: string; allowed: boolean }[]
   pagePermissions?: { pageId: string; allowed: boolean }[]
   _count?: { ownedProjects: number }
 }
+
+type MainUserCategoryRow = { id: string; key: string; name: string; order: number }
 
 type EditionRow = {
   id: string
@@ -63,6 +67,7 @@ export default function AdminPage() {
     name: '',
     role: 'COORDINATOR' as string,
     editionId: '' as string | null,
+    mainUserCategoryId: '' as string | null,
     editionExpiresAt: '' as string,
     categoryOverrides: {} as Record<string, 'edition' | 'allow' | 'deny'>,
     pageOverrides: {} as Record<string, 'edition' | 'allow' | 'deny'>,
@@ -95,8 +100,10 @@ export default function AdminPage() {
     email: '',
     password: '',
     editionId: '' as string,
+    mainUserCategoryId: '' as string | null,
   })
   const [savingAddMainUser, setSavingAddMainUser] = useState(false)
+  const [mainUserCategories, setMainUserCategories] = useState<MainUserCategoryRow[]>([])
 
   useEffect(() => {
     const token =
@@ -167,6 +174,14 @@ export default function AdminPage() {
       .catch(() => setCategories([]))
   }, [isAdmin])
 
+  useEffect(() => {
+    if (!isAdmin) return
+    fetch('/api/main-user-categories', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => (Array.isArray(data) ? setMainUserCategories(data) : []))
+      .catch(() => setMainUserCategories([]))
+  }, [isAdmin])
+
   const openEditUser = (u: UserRow) => {
     setEditUser(u)
     const catOverrides: Record<string, 'edition' | 'allow' | 'deny'> = {}
@@ -183,6 +198,7 @@ export default function AdminPage() {
       name: u.name,
       role: u.role,
       editionId: u.editionId || '',
+      mainUserCategoryId: (u as UserRow).mainUserCategoryId ?? '',
       editionExpiresAt: u.editionExpiresAt ? u.editionExpiresAt.slice(0, 10) : '',
       categoryOverrides: catOverrides,
       pageOverrides,
@@ -234,6 +250,7 @@ export default function AdminPage() {
           name: editUserForm.name,
           role: editUserForm.role,
           editionId: editUserForm.editionId || null,
+          mainUserCategoryId: editUserForm.mainUserCategoryId || null,
           editionExpiresAt: editUserForm.editionExpiresAt ? editUserForm.editionExpiresAt : null,
           categoryPermissions,
           pagePermissions,
@@ -419,6 +436,7 @@ export default function AdminPage() {
                     <th className="py-2 font-medium text-gray-700">E-Mail</th>
                     <th className="py-2 font-medium text-gray-700">Rolle</th>
                     <th className="py-2 font-medium text-gray-700">Edition</th>
+                    <th className="py-2 font-medium text-gray-700">Kategorie</th>
                     <th className="py-2 font-medium text-gray-700">Gültig bis</th>
                     <th className="py-2 font-medium text-gray-700"></th>
                   </tr>
@@ -435,6 +453,7 @@ export default function AdminPage() {
                       <td className="py-2 text-gray-600">{u.email}</td>
                       <td className="py-2">{u.role}</td>
                       <td className="py-2">{u.edition?.name ?? '–'}</td>
+                      <td className="py-2 text-gray-600">{u.mainUserCategory?.name ?? '–'}</td>
                       <td className="py-2 text-gray-600">
                         {u.editionExpiresAt ? new Date(u.editionExpiresAt).toLocaleDateString('de-DE') : '–'}
                       </td>
@@ -543,13 +562,31 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </div>
+                {mainUserCategories.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Hauptbenutzer-Kategorie (optional)</label>
+                    <select
+                      value={addMainUserForm.mainUserCategoryId ?? ''}
+                      onChange={(e) => setAddMainUserForm((f) => ({ ...f, mainUserCategoryId: e.target.value || null }))}
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    >
+                      <option value="">– Keine –</option>
+                      {mainUserCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.key})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Gleiche Kategorie = gemeinsamer Zugriff auf alle Projekte der Kategorie.</p>
+                  </div>
+                )}
               </div>
               <div className="mt-6 flex gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     setShowAddMainUser(false)
-                    setAddMainUserForm({ name: '', email: '', password: '', editionId: '' })
+                    setAddMainUserForm({ name: '', email: '', password: '', editionId: '', mainUserCategoryId: '' })
                   }}
                   className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
                 >
@@ -571,13 +608,14 @@ export default function AdminPage() {
                           password: addMainUserForm.password,
                           role: 'COORDINATOR',
                           editionId: addMainUserForm.editionId || null,
+                          mainUserCategoryId: addMainUserForm.mainUserCategoryId || null,
                         }),
                       })
                       if (res.ok) {
                         const created = await res.json()
                         setUsers((prev) => [...prev, { ...created, _count: { ownedProjects: 0 } }])
                         setShowAddMainUser(false)
-                        setAddMainUserForm({ name: '', email: '', password: '', editionId: '' })
+                        setAddMainUserForm({ name: '', email: '', password: '', editionId: '', mainUserCategoryId: '' })
                       } else {
                         const err = await res.json()
                         alert(err.error || 'Anlegen fehlgeschlagen')
@@ -665,6 +703,29 @@ export default function AdminPage() {
                       ))}
                     </select>
                   </div>
+                  {mainUserCategories.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Hauptbenutzer-Kategorie</label>
+                      <select
+                        value={editUserForm.mainUserCategoryId ?? ''}
+                        onChange={(e) => {
+                          setEditUserForm((f) => ({
+                            ...f,
+                            mainUserCategoryId: e.target.value || null,
+                          }))
+                          scheduleAutoSaveUser()
+                        }}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                      >
+                        <option value="">– Keine –</option>
+                        {mainUserCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.key})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Edition gültig bis (optional)</label>
                     <input

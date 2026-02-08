@@ -57,6 +57,7 @@ export default function DashboardProjectsPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [addMemberUserId, setAddMemberUserId] = useState('')
+  const [addMemberRole, setAddMemberRole] = useState<'MEMBER' | 'PARTNER' | 'COORDINATOR'>('MEMBER')
   const [allUsers, setAllUsers] = useState<{ id: string; email: string; name: string }[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [registerUser, setRegisterUser] = useState({ name: '', email: '', password: '' })
@@ -64,6 +65,9 @@ export default function DashboardProjectsPage() {
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [editRole, setEditRole] = useState('MEMBER')
+  const [partnerUserIds, setPartnerUserIds] = useState<string[]>([])
+  const [availablePartners, setAvailablePartners] = useState<{ id: string; name: string; email: string }[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [editPageIds, setEditPageIds] = useState<string[]>([])
   const [editCategoryIds, setEditCategoryIds] = useState<string[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -84,7 +88,12 @@ export default function DashboardProjectsPage() {
         if (meRes.ok) {
           const me = await meRes.json()
           setIsAdmin(!!me.isAdmin)
+          if (me?.user?.id) setCurrentUserId(me.user.id)
         }
+        fetch('/api/users/available-partners', { credentials: 'include' })
+          .then((r) => (r.ok ? r.json() : []))
+          .then(setAvailablePartners)
+          .catch(() => {})
       } catch {
         setError('Projekte konnten nicht geladen werden')
       } finally {
@@ -110,13 +119,14 @@ export default function DashboardProjectsPage() {
       .then((r) => (r.ok ? r.json() : []))
       .then(setMembers)
       .finally(() => setLoadingMembers(false))
-    if (selectedProject.isOwner || isAdmin) {
+    const canManage = selectedProject?.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))
+    if (canManage) {
       fetch('/api/users', { credentials: 'include' })
         .then((r) => (r.ok ? r.json() : []))
         .then((users: { id: string; email: string; name: string }[]) => setAllUsers(users))
         .catch(() => {})
     }
-  }, [selectedProject?.id, selectedProject?.isOwner, isAdmin])
+  }, [selectedProject?.id, selectedProject?.isOwner, isAdmin, currentUserId, members])
 
   useEffect(() => {
     if (!editingMember) return
@@ -200,6 +210,7 @@ export default function DashboardProjectsPage() {
           eventDate: newEventDate || undefined,
           eventLocation: newEventLocation.trim(),
           eventDescription: newEventDescription.trim() || undefined,
+          partnerUserIds: partnerUserIds.length ? partnerUserIds : undefined,
         }),
         credentials: 'include',
       })
@@ -211,6 +222,7 @@ export default function DashboardProjectsPage() {
         setNewEventDate('')
         setNewEventLocation('')
         setNewEventDescription('')
+        setPartnerUserIds([])
         await loadProjectDetail(created.id)
       } else {
         const data = await res.json()
@@ -233,7 +245,7 @@ export default function DashboardProjectsPage() {
       const res = await fetch(`/api/projects/${selectedProject.id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: addMemberUserId.trim(), role: 'MEMBER' }),
+        body: JSON.stringify({ userId: addMemberUserId.trim(), role: addMemberRole || 'MEMBER' }),
         credentials: 'include',
       })
       if (res.ok) {
@@ -498,6 +510,25 @@ export default function DashboardProjectsPage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   />
                 </div>
+                {availablePartners.length > 0 && (
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-500">Partner (weitere Hauptbenutzer mit gleichen Rechten)</label>
+                    <p className="mb-2 text-xs text-gray-500">Diese Nutzer können das Projekt gemeinsam mit Ihnen verwalten (gleiche Rechte wie Inhaber).</p>
+                    <div className="max-h-32 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
+                      {availablePartners.map((u) => (
+                        <label key={u.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={partnerUserIds.includes(u.id)}
+                            onChange={(e) => setPartnerUserIds((prev) => (e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)))}
+                            className="rounded border-gray-300"
+                          />
+                          {u.name} ({u.email})
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -521,7 +552,7 @@ export default function DashboardProjectsPage() {
                       Events: {selectedProject._count?.events ?? 0} · Mitglieder: {selectedProject._count?.members ?? members.length}
                     </p>
                   </div>
-                  {(selectedProject.isOwner || isAdmin) && (
+                  {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
                     <button
                       type="button"
                       onClick={() => handleDeleteProject(selectedProject.id, selectedProject.name)}
@@ -533,7 +564,7 @@ export default function DashboardProjectsPage() {
                   )}
                 </div>
 
-                {(selectedProject.isOwner || isAdmin) && (
+                {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
                   <>
                     <h3 className="mb-2 text-sm font-medium text-gray-700">Neuen Benutzer registrieren und zum Projekt hinzufügen</h3>
                     <form onSubmit={handleRegisterAndAddMember} className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -587,6 +618,16 @@ export default function DashboardProjectsPage() {
                             </option>
                           ))}
                       </select>
+                      <select
+                        value={addMemberRole}
+                        onChange={(e) => setAddMemberRole(e.target.value)}
+                        className="w-48 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        title="Rolle des neuen Mitglieds"
+                      >
+                        <option value="MEMBER">Mitarbeiter</option>
+                        <option value="PARTNER">Partner</option>
+                        <option value="COORDINATOR">Koordinator</option>
+                      </select>
                       <button
                         type="submit"
                         disabled={!addMemberUserId}
@@ -598,7 +639,7 @@ export default function DashboardProjectsPage() {
                   </>
                 )}
 
-                {(selectedProject.isOwner || isAdmin) && (
+                {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
                   <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <h3 className="text-sm font-medium text-gray-700">Arbeitsbereiche (Kategorien) – Details</h3>
@@ -667,6 +708,15 @@ export default function DashboardProjectsPage() {
                   <p className="text-sm text-gray-500">Laden…</p>
                 ) : (
                   <ul className="space-y-2">
+                    {selectedProject.owner && (
+                      <li className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                        <div>
+                          <span className="font-medium">{selectedProject.owner.name}</span>
+                          <span className="ml-2 text-sm text-gray-500">{selectedProject.owner.email}</span>
+                          <span className="ml-2 text-xs font-medium text-gray-600">Inhaber</span>
+                        </div>
+                      </li>
+                    )}
                     {members.map((m) => (
                       <li
                         key={m.id}
@@ -675,9 +725,11 @@ export default function DashboardProjectsPage() {
                         <div>
                           <span className="font-medium">{m.user.name}</span>
                           <span className="ml-2 text-sm text-gray-500">{m.user.email}</span>
-                          <span className="ml-2 text-xs text-gray-400">({m.role})</span>
+                          <span className="ml-2 text-xs text-gray-400">
+                            {m.role === 'PARTNER' ? 'Partner' : m.role === 'COORDINATOR' ? 'Koordinator' : 'Mitarbeiter'}
+                          </span>
                         </div>
-                        {(selectedProject.isOwner || isAdmin) && (
+                        {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((me) => me.userId === currentUserId && me.role === 'PARTNER'))) && (
                           <div className="flex gap-2">
                             <button
                               type="button"
@@ -710,7 +762,7 @@ export default function DashboardProjectsPage() {
         </div>
 
         {/* Modal: Mitglied bearbeiten – Rolle & Berechtigungen (nur in diesem Projekt) */}
-        {editingMember && selectedProject && (selectedProject.isOwner || isAdmin) && (
+        {editingMember && selectedProject && (selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
               <h3 className="mb-4 text-lg font-semibold text-gray-900">
@@ -728,6 +780,7 @@ export default function DashboardProjectsPage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   >
                     <option value="MEMBER">Mitarbeiter (MEMBER)</option>
+                    <option value="PARTNER">Partner (PARTNER) – gleiche Rechte wie Inhaber</option>
                     <option value="COORDINATOR">Koordinator (COORDINATOR)</option>
                   </select>
                 </div>

@@ -25,10 +25,15 @@ export async function GET(
       where: { id: userId },
       select: { role: true },
     })
+    const memberAsPartner = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
+    })
     const isOwner = project.ownerId === userId
+    const isPartner = memberAsPartner?.role === 'PARTNER'
     const isAdmin = user?.role === 'ADMIN'
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Nur der Projektinhaber oder ein Admin darf Mitglieder einsehen' }, { status: 403 })
+    if (!isOwner && !isPartner && !isAdmin) {
+      return NextResponse.json({ error: 'Nur der Projektinhaber, ein Partner oder ein Admin darf Mitglieder einsehen' }, { status: 403 })
     }
 
     const members = await prisma.projectMember.findMany({
@@ -69,10 +74,15 @@ export async function POST(
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
     }
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    const memberAsPartner = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
+    })
     const isOwner = project.ownerId === userId
+    const isPartner = memberAsPartner?.role === 'PARTNER'
     const isAdmin = me?.role === 'ADMIN'
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Nur der Projektinhaber oder ein Admin darf Mitglieder hinzufügen' }, { status: 403 })
+    if (!isOwner && !isPartner && !isAdmin) {
+      return NextResponse.json({ error: 'Nur der Projektinhaber, ein Partner oder ein Admin darf Mitglieder hinzufügen' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -148,10 +158,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
     }
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    const memberAsPartner = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
+    })
     const isOwner = project.ownerId === userId
+    const isPartner = memberAsPartner?.role === 'PARTNER'
     const isAdmin = me?.role === 'ADMIN'
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Nur der Projektinhaber oder ein Admin darf Berechtigungen ändern' }, { status: 403 })
+    if (!isOwner && !isPartner && !isAdmin) {
+      return NextResponse.json({ error: 'Nur der Projektinhaber, ein Partner oder ein Admin darf Berechtigungen ändern' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -235,10 +250,15 @@ export async function DELETE(
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
     }
     const me = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+    const memberAsPartner = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
+    })
     const isOwner = project.ownerId === userId
+    const isPartner = memberAsPartner?.role === 'PARTNER'
     const isAdmin = me?.role === 'ADMIN'
-    if (!isOwner && !isAdmin) {
-      return NextResponse.json({ error: 'Nur der Projektinhaber oder ein Admin darf Mitglieder entfernen' }, { status: 403 })
+    if (!isOwner && !isPartner && !isAdmin) {
+      return NextResponse.json({ error: 'Nur der Projektinhaber, ein Partner oder ein Admin darf Mitglieder entfernen' }, { status: 403 })
     }
 
     await prisma.projectMember.deleteMany({

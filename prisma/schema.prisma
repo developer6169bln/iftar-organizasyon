@@ -103,19 +103,35 @@ model Subscription {
   @@map("subscriptions")
 }
 
+// Hauptbenutzer-Kategorien (Baskan, Sekreter, …) – später Berechtigungen pro Kategorie
+model MainUserCategory {
+  id        String   @id @default(cuid())
+  key       String   @unique // z.B. BASKAN, SEKRETER
+  name      String   // Anzeigename z.B. Baskan
+  order     Int      @default(0) // Sortierung
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@map("main_user_categories")
+}
+
 // Benutzer für die Anwendung
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  name              String
-  password          String
-  role              String   @default("COORDINATOR") // ADMIN | COORDINATOR – Admin sieht alles, verwaltet User/Editions
-  editionId         String?  // Free / Silver / Gold – welche Bereiche/Seiten nutzbar
-  editionExpiresAt  DateTime? // Ablauf bei bezahlten Editionen
-  createdAt         DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  name                 String
+  password             String
+  role                 String   @default("COORDINATOR") // ADMIN | COORDINATOR – Admin sieht alles, verwaltet User/Editions
+  editionId            String?  // Free / Silver / Gold – welche Bereiche/Seiten nutzbar
+  mainUserCategoryId   String?  // Hauptbenutzer-Kategorie (Baskan, Sekreter, …) – gleiche Kategorie = gemeinsamer Projektzugriff
+  editionExpiresAt     DateTime? // Ablauf bei bezahlten Editionen
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  edition                  Edition?                 @relation(fields: [editionId], references: [id], onDelete: SetNull)
+  mainUserCategory     MainUserCategory? @relation(fields: [mainUserCategoryId], references: [id], onDelete: SetNull)
+  edition              Edition?                 @relation(fields: [editionId], references: [id], onDelete: SetNull)
   assignedTasks            TaskAssignment[]
   tasks                    Task[] // Direkt zugewiesene Aufgaben
   tasksCompletedBy         Task[] @relation("TaskCompletedBy")

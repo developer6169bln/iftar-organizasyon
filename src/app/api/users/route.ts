@@ -10,6 +10,7 @@ const userSchema = z.object({
   password: z.string().min(6),
   role: z.string().optional(),
   editionId: z.string().nullable().optional(),
+  mainUserCategoryId: z.string().nullable().optional(),
 })
 
 const patchUserSchema = z.object({
@@ -17,6 +18,7 @@ const patchUserSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(['ADMIN', 'COORDINATOR']).optional(),
   editionId: z.string().nullable().optional(),
+  mainUserCategoryId: z.string().nullable().optional(),
   editionExpiresAt: z.string().nullable().optional(),
   categoryPermissions: z.array(z.object({ categoryId: z.string(), allowed: z.boolean() })).optional(),
   pagePermissions: z.array(z.object({ pageId: z.string(), allowed: z.boolean() })).optional(),
@@ -78,6 +80,8 @@ export async function GET(request: NextRequest) {
             email: true,
             role: true,
             editionId: true,
+            mainUserCategoryId: true,
+            mainUserCategory: { select: { id: true, key: true, name: true } },
             editionExpiresAt: true,
             createdAt: true,
             edition: { select: { id: true, code: true, name: true } },
@@ -184,6 +188,7 @@ export async function POST(request: NextRequest) {
     const validatedData = userSchema.parse(body)
     // Nur Admin darf Hauptbenutzer ernennen (editionId setzen). Hauptbenutzer legen nur Projektmitarbeiter an (ohne Edition).
     const editionId = isAdmin ? ((body.editionId as string) || null) : null
+    const mainUserCategoryId = isAdmin ? ((body.mainUserCategoryId as string) || null) : null
 
     // Prüfe ob E-Mail bereits existiert
     const existingUser = await prisma.user.findUnique({
@@ -206,6 +211,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         role: isAdmin ? ((validatedData.role as 'ADMIN' | 'COORDINATOR') || 'COORDINATOR') : 'COORDINATOR',
         editionId: editionId || undefined,
+        mainUserCategoryId: mainUserCategoryId || undefined,
       },
       select: {
         id: true,
@@ -213,6 +219,7 @@ export async function POST(request: NextRequest) {
         email: true,
         role: true,
         editionId: true,
+        mainUserCategoryId: true,
         createdAt: true,
       },
     })
@@ -280,6 +287,7 @@ export async function PATCH(request: NextRequest) {
     if (data.name !== undefined) updateData.name = data.name
     if (data.role !== undefined) updateData.role = data.role
     if (data.editionId !== undefined) updateData.editionId = data.editionId
+    if (data.mainUserCategoryId !== undefined) updateData.mainUserCategoryId = data.mainUserCategoryId
     if (data.editionExpiresAt !== undefined) {
       updateData.editionExpiresAt = data.editionExpiresAt ? new Date(data.editionExpiresAt) : null
     }

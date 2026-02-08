@@ -34,6 +34,7 @@ const userSelectWithoutProjects = {
   name: true,
   role: true,
   editionId: true,
+  mainUserCategoryId: true,
   editionExpiresAt: true,
   edition: {
     select: {
@@ -59,12 +60,13 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
     name: string
     role: string
     editionId: string | null
+    mainUserCategoryId: string | null
     editionExpiresAt: Date | null
     edition: { pages: { pageId: string }[]; categories: { categoryId: string }[] } | null
     pagePermissions: { pageId: string; allowed: boolean }[]
     categoryPermissions: { categoryId: string; allowed: boolean }[]
     ownedProjects?: { id: string }[]
-    projectMemberships?: { projectId: string; categoryPermissions: { categoryId: string; allowed: boolean }[]; pagePermissions: { pageId: string; allowed: boolean }[] }[]
+    projectMemberships?: { projectId: string; role: string; categoryPermissions: { categoryId: string; allowed: boolean }[]; pagePermissions: { pageId: string; allowed: boolean }[] }[]
   }
   let user: UserRow | null = null
 
@@ -77,6 +79,7 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
         projectMemberships: {
           select: {
             projectId: true,
+            role: true,
             categoryPermissions: { select: { categoryId: true, allowed: true } },
             pagePermissions: { select: { pageId: true, allowed: true } },
           },
@@ -172,7 +175,19 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
       }
     }
     if (membership) {
-      // Projektmitarbeiter: nur vergebene Kategorien/Seiten
+      // Partner: gleiche Rechte wie Projektinhaber (gemeinsame Verwaltung)
+      if (membership.role === 'PARTNER') {
+        const categories = await prisma.category.findMany({ select: { categoryId: true } })
+        return {
+          allowedPageIds: [...ALL_PAGE_IDS],
+          allowedCategoryIds: categories.map((c) => c.categoryId),
+          isAdmin: false,
+          user: userPayload,
+          projectId,
+          isProjectOwner: true,
+        }
+      }
+      // Projektmitarbeiter (MEMBER/COORDINATOR): nur vergebene Kategorien/Seiten
       const allowedPageIds = membership.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId)
       const allowedCategoryIds = membership.categoryPermissions.filter((c) => c.allowed).map((c) => c.categoryId)
       return {
@@ -182,6 +197,24 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
         user: userPayload,
         projectId,
         isProjectOwner: false,
+      }
+    }
+    // Gleiche Hauptbenutzer-Kategorie: Nutzer kann alle Projekte dieser Kategorie sehen und bearbeiten
+    if (user.mainUserCategoryId) {
+      const projectWithOwner = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { ownerId: true, owner: { select: { mainUserCategoryId: true } } },
+      })
+      if (projectWithOwner?.owner?.mainUserCategoryId && projectWithOwner.owner.mainUserCategoryId === user.mainUserCategoryId) {
+        const categories = await prisma.category.findMany({ select: { categoryId: true } })
+        return {
+          allowedPageIds: [...ALL_PAGE_IDS],
+          allowedCategoryIds: categories.map((c) => c.categoryId),
+          isAdmin: false,
+          user: userPayload,
+          projectId,
+          isProjectOwner: true,
+        }
       }
     }
     return { allowedPageIds: [], allowedCategoryIds: [], isAdmin: false, user: userPayload, projectId, isProjectOwner: false }
@@ -246,7 +279,7 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, mainUserCategoryId: true },
     })
     if (user?.role === 'ADMIN') {
       const all = await prisma.project.findMany({
@@ -279,6 +312,22 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
       }
     } catch {
       // Tabelle project_members fehlt evtl. → nur eigene Projekte anzeigen
+    }
+    // Projekte derselben Hauptbenutzer-Kategorie (jeder in der Kategorie sieht und bearbeitet alle Projekte der Kategorie)
+    if (user?.mainUserCategoryId) {
+      try {
+        const sameCategoryProjects = await prisma.project.findMany({
+          where: { owner: { mainUserCategoryId: user.mainUserCategoryId } },
+          select: { id: true, name: true, ownerId: true },
+        })
+        for (const p of sameCategoryProjects) {
+          if (!result.some((r) => r.id === p.id)) {
+            result.push({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: false })
+          }
+        }
+      } catch {
+        // main_user_categories / mainUserCategoryId fehlt evtl.
+      }
     }
     return result
   } catch {
