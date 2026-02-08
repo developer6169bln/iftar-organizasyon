@@ -216,8 +216,10 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
           isProjectOwner: true,
         }
       }
-      // Projektmitarbeiter (MEMBER/COORDINATOR): nur vergebene Kategorien/Seiten
-      const allowedPageIds = membership.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId)
+      // Projektmitarbeiter (MEMBER/COORDINATOR): vergebene Kategorien/Seiten + JotForm-Seiten in jedem Projekt
+      const allowedPageIds = [...membership.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId)]
+      if (!allowedPageIds.includes('etkinlik-formu')) allowedPageIds.push('etkinlik-formu')
+      if (!allowedPageIds.includes('etkinlik-raporu')) allowedPageIds.push('etkinlik-raporu')
       const allowedCategoryIds = membership.categoryPermissions.filter((c) => c.allowed).map((c) => c.categoryId)
       return {
         allowedPageIds,
