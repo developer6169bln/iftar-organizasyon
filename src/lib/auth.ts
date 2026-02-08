@@ -25,8 +25,20 @@ export async function createUser(email: string, name: string, password: string) 
   }
 }
 
+/** Holt User für Login – nur Felder, die garantiert existieren (ohne mainUserCategoryId), damit Login auch ohne Migration funktioniert. */
 export async function getUserByEmail(email: string) {
   return prisma.user.findUnique({
     where: { email },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      password: true,
+      role: true,
+      editionId: true,
+      editionExpiresAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   })
 }

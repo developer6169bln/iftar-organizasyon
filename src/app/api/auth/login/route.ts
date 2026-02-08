@@ -87,10 +87,14 @@ export async function POST(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 7, // 7 gün
     })
 
-    // Log login
-    await logLogin(user.id, user.email, request, {
-      description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
-    })
+    // Log login (nicht blockieren, falls Audit-Log fehlschlägt)
+    try {
+      await logLogin(user.id, user.email, request, {
+        description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
+      })
+    } catch (logErr) {
+      console.warn('Login-Audit-Log fehlgeschlagen:', logErr)
+    }
 
     return response
   } catch (error) {
@@ -129,9 +133,11 @@ export async function POST(request: NextRequest) {
             path: '/',
             maxAge: 60 * 60 * 24 * 7,
           })
-          await logLogin(user.id, user.email, request, {
-            description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
-          })
+          try {
+            await logLogin(user.id, user.email, request, {
+              description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
+            })
+          } catch (_) {}
           return response
         } catch (retryError) {
           console.error('Login nach Migration fehlgeschlagen:', retryError)
