@@ -307,7 +307,7 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, mainUserCategoryId: true },
     })
     if (user?.role === 'ADMIN') {
       const all = await prisma.project.findMany({
