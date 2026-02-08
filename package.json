@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma migrate deploy && next build",
+    "build": "prisma generate && next build",
     "build:with-migration": "prisma generate && prisma migrate deploy && next build",
     "start": "node scripts/start-with-migrate.js",
     "lint": "eslint",

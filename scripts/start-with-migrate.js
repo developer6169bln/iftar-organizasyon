@@ -91,8 +91,9 @@ async function main() {
     await sleep(2000)
   }
 
-  // Migration: kurz versuchen, dann App auf jeden Fall starten
-  const maxMigrateAttempts = parseInt(process.env.PRISMA_MIGRATE_ATTEMPTS || '3', 10)
+  // Migration beim Start (DB ist jetzt erreichbar)
+  const maxMigrateAttempts = parseInt(process.env.PRISMA_MIGRATE_ATTEMPTS || '5', 10)
+  const migrateSleepMs = parseInt(process.env.PRISMA_MIGRATE_SLEEP_MS || '3000', 10)
   for (let attempt = 1; attempt <= maxMigrateAttempts; attempt++) {
     try {
       console.log(`🔄 prisma migrate deploy (${attempt}/${maxMigrateAttempts})`)
@@ -105,7 +106,7 @@ async function main() {
         console.warn('⚠️ Starte App trotzdem – DB/Migration später prüfen.')
         break
       }
-      await sleep(2000)
+      await sleep(migrateSleepMs)
     }
   }
 
