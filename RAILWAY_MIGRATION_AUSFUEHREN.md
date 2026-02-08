@@ -1,7 +1,8 @@
 # 🗄️ Migrationen auf Railway ausführen
 
 ## Problem
-Registrierung schlägt fehl, weil Tabellen nicht existieren (Migrationen nicht ausgeführt).
+- Registrierung schlägt fehl, weil Tabellen nicht existieren (Migrationen nicht ausgeführt).
+- **Login gibt 500 oder 503** mit Meldung „Datenbank-Migration fehlt“ → gleiche Lösung: Migrationen ausführen.
 
 ## Lösung: Migrationen ausführen
 

@@ -77,7 +77,20 @@ export async function POST(request: NextRequest) {
     }
 
     console.error('Login error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Bilinmeyen hata'
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    // Prisma-Schema-Fehler (z. B. Migration nicht ausgeführt): klaren Hinweis zurückgeben
+    const isSchemaError =
+      /does not exist|mainUserCategoryId|main_user_categories|column.*not exist/i.test(errorMessage) ||
+      (error as { code?: string }).code === 'P2021'
+    if (isSchemaError) {
+      return NextResponse.json(
+        {
+          error: 'Datenbank-Migration fehlt. Bitte auf Railway ausführen: railway run npx prisma migrate deploy',
+          code: 'MIGRATION_REQUIRED',
+        },
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
       { error: 'Giriş sırasında bir hata oluştu', details: errorMessage },
       { status: 500 }
