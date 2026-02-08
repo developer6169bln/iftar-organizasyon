@@ -191,6 +191,9 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
           allowedCategoryIds = allowedCategoryIds.filter((id) => id !== perm.categoryId)
         }
       }
+      // Projekt-Inhaber darf Etkinlik Formu und Etkinlik Raporu immer sehen
+      if (!allowedPageIds.includes('etkinlik-formu')) allowedPageIds.push('etkinlik-formu')
+      if (!allowedPageIds.includes('etkinlik-raporu')) allowedPageIds.push('etkinlik-raporu')
       return {
         allowedPageIds,
         allowedCategoryIds,
