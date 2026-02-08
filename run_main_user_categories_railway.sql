@@ -1,17 +1,9 @@
 -- ============================================
 -- MANUELLE MIGRATION: Hauptbenutzer-Kategorien (main_user_categories)
+-- Datei: run_main_user_categories_railway.sql
 -- ============================================
--- Wenn der Login mit "Datenbank-Migration fehlt" abbricht:
---
--- Option A – In Railway (empfohlen):
---   WICHTIG: Den PostgreSQL-Service öffnen (die Datenbank), NICHT den Web-/Next.js-Service!
---   1. railway.app → dein Projekt → in der Liste den Dienst "PostgreSQL" anklicken (nicht "Web")
---   2. Tab "Query" oder "Data" → "New Query" / Query-Editor öffnen
---   3. Gesamten Inhalt DIESER Datei einfügen und ausführen (Run / Execute)
---   4. Prüfen: Datei check_main_user_categories.sql ausführen (zeigt, ob Tabelle existiert)
---
--- Option B – Lokal mit Railway CLI:
---   railway link && railway run npx prisma migrate deploy
+-- In Railway: PostgreSQL-Service → Query → gesamten Inhalt einfügen → Run
+-- Am Ende erscheint eine Zeile: status=OK, anzahl_kategorien=14
 -- ============================================
 
 -- 1. Tabelle anlegen (falls nicht vorhanden)
@@ -83,5 +75,5 @@ SELECT
   1
 WHERE NOT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE migration_name = '20260212120000_add_main_user_categories');
 
--- 7. Prüfung: Zeigt die angelegten Kategorien (sollte 14 Zeilen liefern)
+-- 7. Prüfung: Zeigt die angelegten Kategorien (sollte 1 Zeile mit anzahl_kategorien=14 liefern)
 SELECT 'OK' AS status, COUNT(*)::text AS anzahl_kategorien FROM main_user_categories;

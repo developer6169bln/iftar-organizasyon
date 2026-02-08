@@ -16,6 +16,8 @@ const PAGE_LABELS: Record<string, string> = {
   'media-upload': 'Media-Upload (Projekt/Event)',
   guests: 'Gästeliste',
   program_flow: 'Programmablauf',
+  'etkinlik-formu': 'Etkinlik Formu (JotForm)',
+  'etkinlik-raporu': 'Etkinlik Raporu (JotForm)',
 }
 
 type UserRow = {

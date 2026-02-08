@@ -14,6 +14,8 @@ export const ALL_PAGE_IDS = [
   'media-upload',
   'guests',
   'program_flow',
+  'etkinlik-formu',
+  'etkinlik-raporu',
 ] as const
 
 export type PageId = (typeof ALL_PAGE_IDS)[number]
@@ -370,6 +372,26 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
 
 export function canAccessPage(allowedPageIds: string[], pageId: string): boolean {
   return allowedPageIds.includes(pageId)
+}
+
+/** Ist der User Projekt-Inhaber (ownerId)? */
+export async function isProjectOwner(projectId: string, userId: string): Promise<boolean> {
+  const p = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { ownerId: true },
+  })
+  return p?.ownerId === userId
+}
+
+/** Darf der User Formulardaten an JotForm senden? (Projekt-Owner oder explizite Berechtigung) */
+export async function canSubmitToJotform(projectId: string, userId: string): Promise<boolean> {
+  const owner = await isProjectOwner(projectId, userId)
+  if (owner) return true
+  const perm = await prisma.projectMemberJotFormPermission.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { canSubmitToJotform: true },
+  })
+  return perm?.canSubmitToJotform === true
 }
 
 export function canAccessCategory(allowedCategoryIds: string[], categoryId: string): boolean {

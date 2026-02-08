@@ -6,6 +6,7 @@ import Link from 'next/link'
 const PAGE_IDS = [
   'guests', 'program_flow', 'invitations', 'checkin', 'reports',
   'tischplanung', 'vip-namensschilder', 'push-notifications',   'audit-logs', 'foto-video', 'media-upload',
+  'etkinlik-formu', 'etkinlik-raporu',
 ] as const
 
 const PAGE_LABELS: Record<string, string> = {
@@ -20,6 +21,8 @@ const PAGE_LABELS: Record<string, string> = {
   'audit-logs': 'Audit-Logs',
   'foto-video': 'Foto & Video',
   'media-upload': 'Media-Upload (Projekt/Event wählen)',
+  'etkinlik-formu': 'Etkinlik Formu (JotForm)',
+  'etkinlik-raporu': 'Etkinlik Raporu (JotForm)',
 }
 
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }
@@ -70,6 +73,7 @@ export default function DashboardProjectsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [editPageIds, setEditPageIds] = useState<string[]>([])
   const [editCategoryIds, setEditCategoryIds] = useState<string[]>([])
+  const [editCanSubmitToJotform, setEditCanSubmitToJotform] = useState(false)
   const [categories, setCategories] = useState<Category[]>([])
   const [savingMember, setSavingMember] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
@@ -134,6 +138,17 @@ export default function DashboardProjectsPage() {
     setEditPageIds(editingMember.pagePermissions.filter((p) => p.allowed).map((p) => p.pageId))
     setEditCategoryIds(editingMember.categoryPermissions.filter((c) => c.allowed).map((c) => c.categoryId))
   }, [editingMember])
+
+  useEffect(() => {
+    if (!editingMember || !selectedProject?.id) return
+    fetch(`/api/jotform/permissions?projectId=${encodeURIComponent(selectedProject.id)}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: { userId: string; canSubmitToJotform: boolean }[]) => {
+        const p = list.find((x) => x.userId === editingMember.userId)
+        setEditCanSubmitToJotform(p?.canSubmitToJotform ?? false)
+      })
+      .catch(() => setEditCanSubmitToJotform(false))
+  }, [editingMember, selectedProject?.id])
 
   useEffect(() => {
     if (!editingCategory) return
@@ -296,6 +311,16 @@ export default function DashboardProjectsPage() {
       if (res.ok) {
         const updated = await res.json()
         setMembers((prev) => prev.map((m) => (m.userId === editingMember.userId ? updated : m)))
+        await fetch('/api/jotform/permissions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            projectId: selectedProject.id,
+            userId: editingMember.userId,
+            canSubmitToJotform: editCanSubmitToJotform,
+          }),
+        }).catch(() => {})
         setEditingMember(null)
       } else {
         const data = await res.json()
@@ -816,6 +841,20 @@ export default function DashboardProjectsPage() {
                     ))}
                   </div>
                 </div>
+                {(selectedProject?.isOwner || isAdmin) && (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">JotForm</label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={editCanSubmitToJotform}
+                        onChange={(e) => setEditCanSubmitToJotform(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      Darf Formulardaten an JotForm senden (Etkinlik Formu / Etkinlik Raporu)
+                    </label>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2 border-t pt-4">
                   <button
                     type="button"

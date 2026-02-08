@@ -17,6 +17,8 @@ const PATH_TO_PAGE: Record<string, string> = {
   '/dashboard/foto-video': 'foto-video',
   '/dashboard/media-upload': 'media-upload',
   '/dashboard/program_flow': 'program_flow',
+  '/dashboard/etkinlik-formu': 'etkinlik-formu',
+  '/dashboard/etkinlik-raporu': 'etkinlik-raporu',
 }
 
 export default function DashboardGuard({ children }: { children: React.ReactNode }) {

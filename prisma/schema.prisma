@@ -145,6 +145,10 @@ model User {
   ownedProjects            Project[] // Hauptaccount: eigene Projekte
   projectMemberships       ProjectMember[] // Projektmitarbeiter in Projekten anderer
   responsibleProjectCategorySettings ProjectCategorySetting[] @relation("ProjectCategoryResponsibleUser")
+  importedJotFormForms     JotFormForm[]
+  jotFormSubmissionsEntered JotFormSubmission[] @relation("JotFormSubmissionEnteredBy")
+  jotFormSubmissionsSubmitted JotFormSubmission[] @relation("JotFormSubmissionSubmittedBy")
+  jotFormSubmitPermissions ProjectMemberJotFormPermission[]
 
   @@map("users")
 }
@@ -174,6 +178,9 @@ model Project {
   events  Event[]
   members ProjectMember[]
   categorySettings ProjectCategorySetting[]
+  jotFormForms     JotFormForm[]
+  jotFormSubmissions JotFormSubmission[]
+  memberJotFormPermissions ProjectMemberJotFormPermission[]
 
   @@map("projects")
 }
@@ -272,6 +279,7 @@ model Event {
   invitations   Invitation[]
   tablePlan     TablePlan?
   mediaItems    MediaItem[]
+  jotFormSubmissions JotFormSubmission[]
 
   @@map("events")
 }
@@ -662,4 +670,89 @@ model EventRegistration {
   @@index([eventSlug])
   @@index([createdAt])
   @@map("event_registrations")
+}
+
+// ========== JotForm-Integration: Etkinlik Formu & Etkinlik Raporu ==========
+// Formulardaten können in die App eingegeben werden; nur berechtigte User dürfen an JotForm senden.
+// Import der Felder aus JotForm-URL darf nur der Projekt-Inhaber.
+
+model JotFormForm {
+  id               String    @id @default(cuid())
+  projectId        String
+  formType         String    // ETKINLIK_FORMU | ETKINLIK_RAPORU
+  jotformFormId    String?   // JotForm Form-ID (aus URL)
+  jotformUrl       String?   // Gespeicherte JotForm-URL
+  importedAt       DateTime?
+  importedByUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  project    Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  importedBy User?              @relation(fields: [importedByUserId], references: [id], onDelete: SetNull)
+  fields     JotFormFormField[]
+
+  @@unique([projectId, formType])
+  @@index([projectId])
+  @@map("jotform_forms")
+}
+
+model JotFormFormField {
+  id               String   @id @default(cuid())
+  jotFormFormId    String
+  jotformQuestionId String  // Externe JotForm-Fragen-ID
+  label            String
+  type             String   // text, textarea, dropdown, etc.
+  order            Int      @default(0)
+  required         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  form JotFormForm @relation(fields: [jotFormFormId], references: [id], onDelete: Cascade)
+
+  @@unique([jotFormFormId, jotformQuestionId])
+  @@index([jotFormFormId])
+  @@map("jotform_form_fields")
+}
+
+// Eintrag: von jedem Projektmitglied ausfüllbar; nur Berechtigte dürfen an JotForm senden
+model JotFormSubmission {
+  id                  String    @id @default(cuid())
+  projectId           String
+  eventId             String?   // Optional: welchem Event zugeordnet
+  formType            String    // ETKINLIK_FORMU | ETKINLIK_RAPORU
+  enteredByUserId     String    // Wer hat die Daten eingegeben
+  submittedByUserId   String?   // Wer hat an JotForm gesendet (null = nur Entwurf)
+  submittedAt         DateTime?
+  jotformSubmissionId String?   // JotForm-Übermittlungs-ID nach dem Senden
+  data                String    // JSON: Feldname/Feld-ID -> Wert
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  event      Event?  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  enteredBy  User    @relation("JotFormSubmissionEnteredBy", fields: [enteredByUserId], references: [id], onDelete: Cascade)
+  submittedBy User?  @relation("JotFormSubmissionSubmittedBy", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([eventId])
+  @@index([formType])
+  @@index([submittedAt])
+  @@map("jotform_submissions")
+}
+
+// Nur diese User dürfen Formulardaten an JotForm senden (pro Projekt)
+model ProjectMemberJotFormPermission {
+  id                  String   @id @default(cuid())
+  projectId           String
+  userId              String
+  canSubmitToJotform  Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@map("project_member_jotform_permissions")
 }
