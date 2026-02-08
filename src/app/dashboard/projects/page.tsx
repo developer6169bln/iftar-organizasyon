@@ -620,7 +620,7 @@ export default function DashboardProjectsPage() {
                       </select>
                       <select
                         value={addMemberRole}
-                        onChange={(e) => setAddMemberRole(e.target.value)}
+                        onChange={(e) => setAddMemberRole(e.target.value as 'MEMBER' | 'PARTNER' | 'COORDINATOR')}
                         className="w-48 rounded-lg border border-gray-300 px-3 py-2 text-sm"
                         title="Rolle des neuen Mitglieds"
                       >
