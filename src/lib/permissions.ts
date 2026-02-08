@@ -27,14 +27,13 @@ export type AllowListResult = {
   isProjectOwner?: boolean
 }
 
-/** User-Query ohne Projekt-Relationen (Fallback wenn projects-Tabellen fehlen). */
+/** User-Query ohne Projekt-Relationen (Fallback wenn projects-Tabellen fehlen). mainUserCategoryId weggelassen, damit es ohne Migration funktioniert. */
 const userSelectWithoutProjects = {
   id: true,
   email: true,
   name: true,
   role: true,
   editionId: true,
-  mainUserCategoryId: true,
   editionExpiresAt: true,
   edition: {
     select: {
@@ -53,6 +52,27 @@ const userSelectWithoutProjects = {
  * Mit projectId: Wenn Owner des Projekts → Edition; wenn Projektmitarbeiter → nur vergebene Rechte; sonst leer.
  * Fallback: Wenn Projekt-Tabellen fehlen, wird ohne Projekt-Daten gearbeitet (Login bleibt möglich).
  */
+/** Minimaler User-Select ohne Relationen – Fallback wenn andere Abfragen fehlschlagen (z. B. fehlende Migration). */
+async function getAllowListFallback(userId: string): Promise<AllowListResult> {
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true, role: true, editionId: true, editionExpiresAt: true },
+    })
+    if (u) {
+      return {
+        allowedPageIds: [],
+        allowedCategoryIds: [],
+        isAdmin: u.role === 'ADMIN',
+        user: { id: u.id, email: u.email, name: u.name, role: u.role, editionId: u.editionId, editionExpiresAt: u.editionExpiresAt },
+      }
+    }
+  } catch (e) {
+    console.warn('getAllowListFallback error:', e)
+  }
+  return { allowedPageIds: [], allowedCategoryIds: [], isAdmin: false, user: null }
+}
+
 export async function getAllowListForUser(userId: string, projectId?: string | null): Promise<AllowListResult> {
   type UserRow = {
     id: string
@@ -60,7 +80,7 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
     name: string
     role: string
     editionId: string | null
-    mainUserCategoryId: string | null
+    mainUserCategoryId?: string | null
     editionExpiresAt: Date | null
     edition: { pages: { pageId: string }[]; categories: { categoryId: string }[] } | null
     pagePermissions: { pageId: string; allowed: boolean }[]
@@ -87,20 +107,24 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
       },
     }) as UserRow | null
   } catch {
-    // Fallback wenn projects/project_members Tabellen fehlen (z. B. Migration noch nicht ausgeführt)
-    const fallback = await prisma.user.findUnique({
-      where: { id: userId },
-      select: userSelectWithoutProjects,
-    })
-    if (fallback) {
-      user = { ...fallback, ownedProjects: [], projectMemberships: [] }
+    try {
+      const fallback = await prisma.user.findUnique({
+        where: { id: userId },
+        select: userSelectWithoutProjects,
+      })
+      if (fallback) {
+        user = { ...fallback, ownedProjects: [], projectMemberships: [] }
+      }
+    } catch {
+      return getAllowListFallback(userId)
     }
   }
 
   if (!user) {
-    return { allowedPageIds: [], allowedCategoryIds: [], isAdmin: false, user: null }
+    return getAllowListFallback(userId)
   }
 
+  try {
   const isAdmin = user.role === 'ADMIN'
   const userPayload = {
     id: user.id,
@@ -268,6 +292,10 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
     isAdmin: false,
     user: userPayload,
   }
+  } catch (e) {
+    console.warn('getAllowListForUser error', e)
+    return getAllowListFallback(userId)
+  }
 }
 
 /**
@@ -279,7 +307,7 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, mainUserCategoryId: true },
+      select: { role: true },
     })
     if (user?.role === 'ADMIN') {
       const all = await prisma.project.findMany({
