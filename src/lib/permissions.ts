@@ -305,9 +305,10 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
  */
 export async function getProjectsForUser(userId: string): Promise<{ id: string; name: string; ownerId: string; isOwner: boolean }[]> {
   try {
+    // User nur mit role laden, damit Abfrage auch ohne Spalte mainUserCategoryId funktioniert
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, mainUserCategoryId: true },
+      select: { role: true },
     })
     if (user?.role === 'ADMIN') {
       const all = await prisma.project.findMany({
@@ -341,11 +342,15 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
     } catch {
       // Tabelle project_members fehlt evtl. → nur eigene Projekte anzeigen
     }
-    // Projekte derselben Hauptbenutzer-Kategorie (jeder in der Kategorie sieht und bearbeitet alle Projekte der Kategorie)
-    if (user?.mainUserCategoryId) {
-      try {
+    // Projekte derselben Hauptbenutzer-Kategorie (optional; schlägt fehl, wenn Spalte/Tabelle fehlt)
+    try {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { mainUserCategoryId: true },
+      })
+      if (u?.mainUserCategoryId) {
         const sameCategoryProjects = await prisma.project.findMany({
-          where: { owner: { mainUserCategoryId: user.mainUserCategoryId } },
+          where: { owner: { mainUserCategoryId: u.mainUserCategoryId } },
           select: { id: true, name: true, ownerId: true },
         })
         for (const p of sameCategoryProjects) {
@@ -353,9 +358,9 @@ export async function getProjectsForUser(userId: string): Promise<{ id: string; 
             result.push({ id: p.id, name: p.name, ownerId: p.ownerId, isOwner: false })
           }
         }
-      } catch {
-        // main_user_categories / mainUserCategoryId fehlt evtl.
       }
+    } catch {
+      // mainUserCategoryId / main_user_categories fehlt evtl. → Kategorie-Projekte weglassen
     }
     return result
   } catch {
