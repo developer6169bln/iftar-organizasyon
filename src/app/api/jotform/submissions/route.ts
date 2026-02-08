@@ -34,7 +34,7 @@ const createSchema = z.object({
   projectId: z.string(),
   eventId: z.string().optional(),
   formType: z.enum(FORM_TYPES),
-  data: z.record(z.unknown()),
+  data: z.record(z.string(), z.unknown()),
   submitToJotform: z.boolean().optional(), // true = an JotForm senden (nur wenn berechtigt)
 })
 
