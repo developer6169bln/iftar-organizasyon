@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { execSync } from 'child_process'
 import { z } from 'zod'
 import { getUserByEmail, verifyPassword } from '@/lib/auth'
 import { SignJWT } from 'jose'
 import { logLogin } from '@/lib/auditLog'
+
+function runMigrateDeploy(): boolean {
+  try {
+    execSync('npx prisma migrate deploy', {
+      env: process.env,
+      timeout: 60000,
+      stdio: 'pipe',
+    })
+    return true
+  } catch {
+    return false
+  }
+}
 
 const loginSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi giriniz'),
@@ -12,10 +26,21 @@ const loginSchema = z.object({
 const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key-change-in-production')
 
 export async function POST(request: NextRequest) {
+  let validatedData: z.infer<typeof loginSchema>
   try {
     const body = await request.json()
-    const validatedData = loginSchema.parse(body)
+    validatedData = loginSchema.parse(body)
+  } catch (parseError) {
+    if (parseError instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: parseError.issues[0]?.message || 'Validierungsfehler' },
+        { status: 400 }
+      )
+    }
+    throw parseError
+  }
 
+  try {
     // Kullanıcıyı bul
     const user = await getUserByEmail(validatedData.email)
     if (!user) {
@@ -69,13 +94,6 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: error.issues[0]?.message || 'Validierungsfehler' },
-        { status: 400 }
-      )
-    }
-
     console.error('Login error:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
     // Prisma-Schema-Fehler (z. B. Migration nicht ausgeführt): klaren Hinweis zurückgeben
@@ -83,6 +101,42 @@ export async function POST(request: NextRequest) {
       /does not exist|mainUserCategoryId|main_user_categories|column.*not exist/i.test(errorMessage) ||
       (error as { code?: string }).code === 'P2021'
     if (isSchemaError) {
+      // Einmal automatisch Migration ausführen und Login erneut versuchen
+      console.log('Login: Schema-Fehler erkannt – führe prisma migrate deploy aus…')
+      if (runMigrateDeploy()) {
+        try {
+          const user = await getUserByEmail(validatedData.email)
+          if (!user) {
+            return NextResponse.json({ error: 'E-posta veya şifre hatalı' }, { status: 401 })
+          }
+          if (!(await verifyPassword(validatedData.password, user.password))) {
+            return NextResponse.json({ error: 'E-posta veya şifre hatalı' }, { status: 401 })
+          }
+          const token = await new SignJWT({ userId: user.id, email: user.email })
+            .setProtectedHeader({ alg: 'HS256' })
+            .setIssuedAt()
+            .setExpirationTime('7d')
+            .sign(secret)
+          const { password: _, ...userWithoutPassword } = user
+          const response = NextResponse.json(
+            { message: 'Giriş başarılı', user: userWithoutPassword, token },
+            { status: 200 }
+          )
+          response.cookies.set('auth-token', token, {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 60 * 60 * 24 * 7,
+          })
+          await logLogin(user.id, user.email, request, {
+            description: `Benutzer ${user.email} hat sich erfolgreich eingeloggt`,
+          })
+          return response
+        } catch (retryError) {
+          console.error('Login nach Migration fehlgeschlagen:', retryError)
+        }
+      }
       return NextResponse.json(
         {
           error: 'Datenbank-Migration fehlt. Bitte auf Railway ausführen: railway run npx prisma migrate deploy',
