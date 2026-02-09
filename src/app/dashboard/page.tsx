@@ -747,6 +747,44 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
+          {(isAdmin || allowedPageIds.includes('etkinlik-formu')) && (
+          <Link
+            href="/dashboard/etkinlik-formu"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-600 text-2xl text-white">
+                📋
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Etkinlik Formu (JotForm)</h3>
+                <p className="text-sm text-gray-600">
+                  Formular pro Projekt ausfüllen und speichern; berechtigte Nutzer können an JotForm senden
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
+          {(isAdmin || allowedPageIds.includes('etkinlik-raporu')) && (
+          <Link
+            href="/dashboard/etkinlik-raporu"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal-600 text-2xl text-white">
+                📄
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Etkinlik Raporu (JotForm)</h3>
+                <p className="text-sm text-gray-600">
+                  Bericht pro Projekt ausfüllen und speichern; berechtigte Nutzer können an JotForm senden
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
           {/* Admin-Bereich für Hauptnutzer: immer sichtbar (Projekte & Mitarbeiter) */}
           <Link
             href="/dashboard/projects"
