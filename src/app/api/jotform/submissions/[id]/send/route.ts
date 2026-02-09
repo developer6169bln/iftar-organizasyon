@@ -51,8 +51,13 @@ export async function POST(
   const submitUrl = `https://submit.jotform.com/submit/${form.jotformFormId}`
   const body = new URLSearchParams()
   for (const [key, value] of Object.entries(formData)) {
-    if (value != null && typeof value === 'string') body.append(key, value)
-    else if (value != null) body.append(key, String(value))
+    if (value == null) continue
+    const str = typeof value === 'string' ? value : String(value)
+    if (str.includes(',')) {
+      for (const v of str.split(',').map((s) => s.trim()).filter(Boolean)) body.append(key, v)
+    } else {
+      body.append(key, str)
+    }
   }
 
   let jotformSubmissionId: string | null = null

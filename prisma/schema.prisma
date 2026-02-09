@@ -699,11 +699,12 @@ model JotFormForm {
 model JotFormFormField {
   id               String   @id @default(cuid())
   jotFormFormId    String
-  jotformQuestionId String  // Externe JotForm-Fragen-ID
+  jotformQuestionId String  // Externe JotForm-Fragen-ID (bei Radio/Checkbox oft name[] oder name)
   label            String
-  type             String   // text, textarea, dropdown, etc.
+  type             String   // text, textarea, dropdown, radio, checkbox
   order            Int      @default(0)
   required         Boolean  @default(false)
+  options          Json?    // [{ value: string, label: string }] für dropdown, radio, checkbox
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

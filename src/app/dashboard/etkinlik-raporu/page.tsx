@@ -11,7 +11,7 @@ function formatSentDate(iso: string | null) {
 
 export default function EtkinlikRaporuPage() {
   const [projectId, setProjectId] = useState<string | null>(null)
-  const [form, setForm] = useState<{ id: string; formType: string; fields: { id: string; label: string; type: string; required: boolean; jotformQuestionId?: string }[] } | null>(null)
+  const [form, setForm] = useState<{ id: string; formType: string; fields: { id: string; label: string; type: string; required: boolean; jotformQuestionId?: string; options?: { value: string; label: string }[] }[] } | null>(null)
   const [submissions, setSubmissions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [canSubmit, setCanSubmit] = useState(false)
@@ -168,26 +168,83 @@ export default function EtkinlikRaporuPage() {
         <p className="mb-3 text-xs text-gray-500">Daten werden nur in diesem Projekt gespeichert. Senden an JotForm kann später ein berechtigter Nutzer auslösen.</p>
         {(form?.fields?.length ?? 0) > 0 ? (
           <div className="space-y-2">
-            {form!.fields.map((field: any) => (
-              <div key={field.id}>
-                <label className="block text-xs font-medium text-gray-600">{field.label}{field.required ? ' *' : ''}</label>
-                {field.type === 'textarea' ? (
-                  <textarea
-                    value={newEntry[field.jotformQuestionId ?? field.id] ?? ''}
-                    onChange={(e) => setNewEntry((prev) => ({ ...prev, [field.jotformQuestionId ?? field.id]: e.target.value }))}
-                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                    rows={3}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    value={newEntry[field.jotformQuestionId ?? field.id] ?? ''}
-                    onChange={(e) => setNewEntry((prev) => ({ ...prev, [field.jotformQuestionId ?? field.id]: e.target.value }))}
-                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                  />
-                )}
-              </div>
-            ))}
+            {form!.fields.map((field: any) => {
+              const key = field.jotformQuestionId ?? field.id
+              const value = newEntry[key] ?? ''
+              const options = Array.isArray(field.options) ? field.options : []
+              return (
+                <div key={field.id}>
+                  <label className="block text-xs font-medium text-gray-600">{field.label}{field.required ? ' *' : ''}</label>
+                  {field.type === 'textarea' ? (
+                    <textarea
+                      value={value}
+                      onChange={(e) => setNewEntry((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      rows={3}
+                    />
+                  ) : field.type === 'dropdown' && options.length > 0 ? (
+                    <select
+                      value={value}
+                      onChange={(e) => setNewEntry((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">— Bitte wählen —</option>
+                      {options.map((o: { value: string; label: string }) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  ) : field.type === 'radio' && options.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {options.map((o: { value: string; label: string }) => (
+                        <label key={o.value} className="inline-flex items-center gap-1.5 text-sm">
+                          <input
+                            type="radio"
+                            name={key}
+                            value={o.value}
+                            checked={value === o.value}
+                            onChange={() => setNewEntry((prev) => ({ ...prev, [key]: o.value }))}
+                            className="rounded border-gray-300"
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : field.type === 'checkbox' && options.length > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-3">
+                      {options.map((o: { value: string; label: string }) => (
+                        <label key={o.value} className="inline-flex items-center gap-1.5 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={value === o.value || (typeof value === 'string' && value.split(',').includes(o.value))}
+                            onChange={(e) => {
+                              const current = (value || '').split(',').filter(Boolean)
+                              const next = e.target.checked ? [...current, o.value] : current.filter((v: string) => v !== o.value)
+                              setNewEntry((prev) => ({ ...prev, [key]: next.join(',') }))
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : field.type === 'date' || field.type === 'datetime-local' || field.type === 'time' ? (
+                    <input
+                      type={field.type}
+                      value={value}
+                      onChange={(e) => setNewEntry((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => setNewEntry((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  )}
+                </div>
+              )
+            })}
           </div>
         ) : (
           <div>
