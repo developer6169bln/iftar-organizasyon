@@ -138,7 +138,7 @@ export default function EtkinlikFormuPage() {
       </p>
 
       <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h2 className="mb-2 font-medium">JotForm-Import (nur Projekt-Inhaber)</h2>
+          <h2 className="mb-2 font-medium">JotForm-Import (Projekt-Inhaber oder Admin)</h2>
           <p className="mb-2 text-xs text-gray-500">JotForm-URL eingeben und Felder importieren. Danach können Teammitglieder das Formular ausfüllen.</p>
           <div className="flex gap-2">
             <input

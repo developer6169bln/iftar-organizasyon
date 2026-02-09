@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserIdFromRequest } from '@/lib/auditLog'
-import { isProjectOwner } from '@/lib/permissions'
+import { isProjectOwner, getProjectsForUser } from '@/lib/permissions'
 import { z } from 'zod'
 
 const FORM_TYPES = ['ETKINLIK_FORMU', 'ETKINLIK_RAPORU'] as const
@@ -25,7 +25,7 @@ const importSchema = z.object({
 })
 
 /**
- * Felder von JotForm importieren. Nur Projekt-Inhaber.
+ * Felder von JotForm importieren. Projekt-Inhaber oder Admin (App-Inhaber).
  * Setze JOTFORM_API_KEY in den Umgebungsvariablen.
  */
 export async function POST(request: NextRequest) {
@@ -44,9 +44,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'projectId, formType und jotformUrl (gültige URL) erforderlich' }, { status: 400 })
   }
   const { projectId, formType, jotformUrl } = parsed.data
+  const projects = await getProjectsForUser(userId)
+  if (!projects.some((p) => p.id === projectId)) {
+    return NextResponse.json({ error: 'Kein Zugriff auf dieses Projekt' }, { status: 403 })
+  }
   const owner = await isProjectOwner(projectId, userId)
-  if (!owner) {
-    return NextResponse.json({ error: 'Nur der Projekt-Inhaber darf Felder aus JotForm importieren' }, { status: 403 })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  const isAdmin = user?.role === 'ADMIN'
+  if (!owner && !isAdmin) {
+    return NextResponse.json({ error: 'Nur der Projekt-Inhaber oder der Admin (App-Inhaber) darf Felder aus JotForm importieren' }, { status: 403 })
   }
   const formId = getJotformFormIdFromUrl(jotformUrl)
   if (!formId) {
