@@ -232,6 +232,8 @@ export default function EtkinlikRaporuPage() {
                       type={field.type}
                       value={value}
                       onChange={(e) => setNewEntry((prev) => ({ ...prev, [key]: e.target.value }))}
+                      placeholder={field.type === 'date' ? 'DD/MM/YY' : undefined}
+                      title={field.type === 'date' ? 'Tag/Monat/Jahr (DD/MM/YY)' : undefined}
                       className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                     />
                   ) : (

@@ -21,6 +21,20 @@ function getJotformFormIdFromUrl(url: string): string | null {
 type FieldOption = { value: string; label: string }
 type ParsedField = { name: string; type: string; label: string; required: boolean; options?: FieldOption[] }
 
+/** Feld „website“ nicht importieren (oft Honeypot/Spam). */
+function isWebsiteField(name: string, label: string): boolean {
+  const n = name.toLowerCase().trim()
+  const l = label.toLowerCase().trim()
+  return n === 'website' || l === 'website' || n.includes('website') && l.includes('website')
+}
+
+/** TypA (unter Bölge) als „Sube“ anzeigen. */
+function normalizeFieldLabel(label: string): string {
+  const t = label.trim().replace(/\s+/g, ' ')
+  if (/^Typ\s*A$/i.test(t)) return 'Sube'
+  return label
+}
+
 /** Optionen aus <option value="x">y</option> oder <option>y</option> innerhalb eines HTML-Blocks */
 function parseSelectOptions(selectBlock: string): FieldOption[] {
   const options: FieldOption[] = []
@@ -80,12 +94,13 @@ async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl:
   while ((m = selectBlockRegex.exec(html)) !== null) {
     const name = m[1].trim()
     if (name.startsWith('_') || name === 'formID' || name === 'formID[]') continue
-    seenNames.add(name)
     const fullSelect = m[0]
     const inner = m[2] ?? ''
     const required = /\s+required\s/i.test(fullSelect)
     const labelMatch = fullSelect.match(/\s+aria-label=["']([^"']+)["']/i)
     const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    if (isWebsiteField(name, label)) continue
+    seenNames.add(name)
     const options = parseSelectOptions(inner)
     fields.push({ name, type: 'dropdown', label, required, options: options.length > 0 ? options : undefined })
   }
@@ -113,11 +128,12 @@ async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl:
   }
   for (const [name, options] of radioNameToOptions) {
     if (seenNames.has(name)) continue
-    seenNames.add(name)
     const firstInput = html.match(new RegExp(`<input[^>]*type=["']radio["'][^>]*name=["']${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'i'))?.[0] ?? ''
     const required = /\s+required\s/i.test(firstInput)
     const labelMatch = firstInput.match(/\s+aria-label=["']([^"']+)["']/i)
     const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    if (isWebsiteField(name, label)) continue
+    seenNames.add(name)
     fields.push({ name, type: 'radio', label, required, options: options.length > 0 ? options : undefined })
   }
 
@@ -144,11 +160,12 @@ async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl:
   }
   for (const [name, options] of checkboxNameToOptions) {
     if (seenNames.has(name)) continue
-    seenNames.add(name)
     const firstInput = html.match(new RegExp(`<input[^>]*type=["']checkbox["'][^>]*name=["']${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'i'))?.[0] ?? ''
     const required = /\s+required\s/i.test(firstInput)
     const labelMatch = firstInput.match(/\s+aria-label=["']([^"']+)["']/i)
     const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    if (isWebsiteField(name, label)) continue
+    seenNames.add(name)
     fields.push({ name, type: 'checkbox', label, required, options: options.length > 0 ? options : undefined })
   }
 
@@ -163,11 +180,13 @@ async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl:
     let type = (typeMatch?.[1] || 'text').toLowerCase()
     if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'radio' || type === 'checkbox') continue
     if (dateTypeMap[type]) type = dateTypeMap[type]
-    else if (type === 'text' && (/\bdate\b|calendar|jotform-date|form-date|birthday/i.test(fullTag) || /dd[\s/.-]mm|mm[\s/.-]dd|yyyy|datum/i.test(fullTag))) type = 'date'
-    seenNames.add(name)
+    else if (type === 'text' && (/\bdate\b|calendar|jotform-date|form-date|birthday/i.test(fullTag) || /dd[\s/.-]mm|mm[\s/.-]dd|yyyy|datum|tarih/i.test(fullTag))) type = 'date'
     const required = /\s+required\s/i.test(fullTag) || /required=["']/i.test(fullTag)
     const labelMatch = fullTag.match(/\s+aria-label=["']([^"']+)["']/i) || fullTag.match(/\s+title=["']([^"']+)["']/i)
-    const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    let label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    if (isWebsiteField(name, label)) continue
+    if (/tarih/i.test(label) || /tarih/i.test(name)) type = 'date'
+    seenNames.add(name)
     fields.push({ name, type, label, required })
   }
 
@@ -176,11 +195,12 @@ async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl:
   while ((m = textareaRegex.exec(html)) !== null) {
     const name = m[1].trim()
     if (seenNames.has(name)) continue
-    seenNames.add(name)
     const fullTag = m[0]
     const required = /\s+required\s/i.test(fullTag)
     const labelMatch = fullTag.match(/\s+aria-label=["']([^"']+)["']/i)
     const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    if (isWebsiteField(name, label)) continue
+    seenNames.add(name)
     fields.push({ name, type: 'textarea', label, required })
   }
 
@@ -257,11 +277,12 @@ export async function POST(request: NextRequest) {
   await prisma.jotFormFormField.deleteMany({ where: { jotFormFormId: form.id } })
   let order = 0
   for (const f of fields) {
+    const label = normalizeFieldLabel(f.label)
     await prisma.jotFormFormField.create({
       data: {
         jotFormFormId: form.id,
         jotformQuestionId: f.name,
-        label: f.label,
+        label,
         type: f.type,
         order: order++,
         required: f.required,
