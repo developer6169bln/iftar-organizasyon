@@ -388,8 +388,10 @@ export async function isProjectOwner(projectId: string, userId: string): Promise
   return p?.ownerId === userId
 }
 
-/** Darf der User Formulardaten an JotForm senden? (Projekt-Owner oder explizite Berechtigung) */
+/** Darf der User Formulardaten an JotForm senden? (Admin, Projekt-Owner/Hauptbenutzer oder explizite Berechtigung) */
 export async function canSubmitToJotform(projectId: string, userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role === 'ADMIN') return true
   const owner = await isProjectOwner(projectId, userId)
   if (owner) return true
   const perm = await prisma.projectMemberJotFormPermission.findUnique({

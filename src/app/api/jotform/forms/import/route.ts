@@ -18,6 +18,86 @@ function getJotformFormIdFromUrl(url: string): string | null {
   }
 }
 
+/** Öffentliche JotForm-Seite abrufen und Formular-Felder aus dem HTML auslesen (ohne API). */
+async function fetchFormFieldsFromHtml(jotformUrl: string): Promise<{ submitUrl: string; fields: { name: string; type: string; label: string; required: boolean }[] }> {
+  const res = await fetch(jotformUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml',
+    },
+    redirect: 'follow',
+  })
+  if (!res.ok) {
+    throw new Error(`Formular-Seite nicht erreichbar: ${res.status}`)
+  }
+  const html = await res.text()
+
+  // Form-Action-URL (JotForm Submit-Endpoint)
+  const formActionMatch = html.match(/<form[^>]*\s+action=["']([^"']+)["']/i) || html.match(/form\.action\s*=\s*["']([^"']+)["']/i)
+  const formId = getJotformFormIdFromUrl(jotformUrl)
+  const submitUrl = formActionMatch?.[1]?.trim() || (formId ? `https://submit.jotform.com/submit/${formId}` : '')
+
+  if (!submitUrl) {
+    throw new Error('Submit-URL des Formulars konnte nicht ermittelt werden')
+  }
+
+  const fields: { name: string; type: string; label: string; required: boolean }[] = []
+  const seenNames = new Set<string>()
+
+  // Input-Felder: name, type; Label aus vorherigem <label> oder name
+  const inputRegex = /<input[^>]*\s+name=["']([^"']+)["'][^>]*>/gi
+  let m: RegExpExecArray | null
+  while ((m = inputRegex.exec(html)) !== null) {
+    const fullTag = m[0]
+    const name = m[1].trim()
+    if (seenNames.has(name) || name.startsWith('_') || name === 'formID' || name === 'formID[]') continue
+    seenNames.add(name)
+    const typeMatch = fullTag.match(/\s+type=["']([^"']+)["']/i)
+    let type = (typeMatch?.[1] || 'text').toLowerCase()
+    if (type === 'hidden' || type === 'submit' || type === 'button') continue
+    if (type === 'radio' || type === 'checkbox') type = 'text'
+    const required = /\s+required\s/i.test(fullTag) || /required=["']/i.test(fullTag)
+    const labelMatch = fullTag.match(/\s+aria-label=["']([^"']+)["']/i) || fullTag.match(/\s+title=["']([^"']+)["']/i)
+    const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    fields.push({ name, type, label, required })
+  }
+
+  // Textareas
+  const textareaRegex = /<textarea[^>]*\s+name=["']([^"']+)["'][^>]*>/gi
+  while ((m = textareaRegex.exec(html)) !== null) {
+    const name = m[1].trim()
+    if (seenNames.has(name)) continue
+    seenNames.add(name)
+    const fullTag = m[0]
+    const required = /\s+required\s/i.test(fullTag)
+    const labelMatch = fullTag.match(/\s+aria-label=["']([^"']+)["']/i)
+    const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    fields.push({ name, type: 'textarea', label, required })
+  }
+
+  // Selects
+  const selectRegex = /<select[^>]*\s+name=["']([^"']+)["'][^>]*>/gi
+  while ((m = selectRegex.exec(html)) !== null) {
+    const name = m[1].trim()
+    if (seenNames.has(name)) continue
+    seenNames.add(name)
+    const fullTag = m[0]
+    const required = /\s+required\s/i.test(fullTag)
+    const labelMatch = fullTag.match(/\s+aria-label=["']([^"']+)["']/i)
+    const label = labelMatch?.[1]?.trim() || name.replace(/^q\d+_?/, '').replace(/[_-]/g, ' ') || name
+    fields.push({ name, type: 'dropdown', label, required })
+  }
+
+  // Sort: typische JotForm-Namen q1, q2, ... sortieren
+  fields.sort((a, b) => {
+    const aNum = parseInt(a.name.replace(/\D/g, ''), 10) || 0
+    const bNum = parseInt(b.name.replace(/\D/g, ''), 10) || 0
+    return aNum - bNum || a.name.localeCompare(b.name)
+  })
+
+  return { submitUrl, fields }
+}
+
 const importSchema = z.object({
   projectId: z.string(),
   formType: z.enum(FORM_TYPES),
@@ -25,8 +105,9 @@ const importSchema = z.object({
 })
 
 /**
- * Felder von JotForm importieren. Projekt-Inhaber oder Admin (App-Inhaber).
- * Setze JOTFORM_API_KEY in den Umgebungsvariablen.
+ * Felder aus öffentlicher JotForm-URL importieren (ohne API).
+ * Liest die Formular-Seite aus und erstellt daraus die Eingabefelder.
+ * Projekt-Inhaber oder Admin.
  */
 export async function POST(request: NextRequest) {
   const { userId } = await getUserIdFromRequest(request)
@@ -58,46 +139,36 @@ export async function POST(request: NextRequest) {
   if (!formId) {
     return NextResponse.json({ error: 'Aus der JotForm-URL konnte keine Form-ID ermittelt werden' }, { status: 400 })
   }
-  const apiKey = process.env.JOTFORM_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'JotForm API ist nicht konfiguriert (JOTFORM_API_KEY fehlt)' }, { status: 503 })
-  }
-  let questions: Record<string, { text?: string; type?: string; order?: string; required?: string }>
+
+  let fields: { name: string; type: string; label: string; required: boolean }[]
   try {
-    const res = await fetch(`https://api.jotform.com/form/${formId}/questions?apiKey=${apiKey}`)
-    if (!res.ok) {
-      const t = await res.text()
-      return NextResponse.json({ error: 'JotForm API Fehler: ' + (t || res.statusText) }, { status: 502 })
-    }
-    const data = await res.json()
-    if (data.responseCode !== 200 || !data.content) {
-      return NextResponse.json({ error: 'JotForm: Keine Fragen gefunden' }, { status: 404 })
-    }
-    questions = data.content
+    const parsedForm = await fetchFormFieldsFromHtml(jotformUrl)
+    fields = parsedForm.fields
   } catch (e) {
-    console.error('JotForm import error:', e)
-    return NextResponse.json({ error: 'JotForm API nicht erreichbar' }, { status: 502 })
+    const msg = e instanceof Error ? e.message : 'Formular konnte nicht gelesen werden'
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
+
+  if (fields.length === 0) {
+    return NextResponse.json({ error: 'Im Formular wurden keine Felder gefunden. Bitte prüfen Sie die URL (öffentliches JotForm-Formular).' }, { status: 404 })
+  }
+
   const form = await prisma.jotFormForm.upsert({
     where: { projectId_formType: { projectId, formType } },
     create: { projectId, formType, jotformFormId: formId, jotformUrl, importedAt: new Date(), importedByUserId: userId },
     update: { jotformFormId: formId, jotformUrl, importedAt: new Date(), importedByUserId: userId },
   })
   await prisma.jotFormFormField.deleteMany({ where: { jotFormFormId: form.id } })
-  const entries = Object.entries(questions).filter(([, q]) => q && typeof q === 'object' && (q.text || q.type))
   let order = 0
-  for (const [qid, q] of entries) {
-    const text = (q.text ?? '').trim() || `Frage ${qid}`
-    const type = (q.type ?? 'text').toString()
-    const required = q.required === 'Yes' || q.required === '1'
+  for (const f of fields) {
     await prisma.jotFormFormField.create({
       data: {
         jotFormFormId: form.id,
-        jotformQuestionId: qid,
-        label: text,
-        type,
+        jotformQuestionId: f.name,
+        label: f.label,
+        type: f.type,
         order: order++,
-        required,
+        required: f.required,
       },
     })
   }
