@@ -39,12 +39,18 @@ function slotOverlapsReservation(
   return slotStart.getTime() < resEnd && slotEnd.getTime() > resStart
 }
 
+function slotToLocal(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function RoomCalendar({
   roomReservations,
-  onSelectSlot,
+  selectedSlots,
+  onToggleSlot,
 }: {
   roomReservations: Reservation[]
-  onSelectSlot: (startIso: string, endIso: string) => void
+  selectedSlots: { start: string; end: string }[]
+  onToggleSlot: (startIso: string, endIso: string) => void
 }) {
   const days: Date[] = []
   const startDay = new Date()
@@ -56,9 +62,14 @@ function RoomCalendar({
   }
   const hours = Array.from({ length: 14 }, (_, i) => i + 8) // 8–21
 
+  const isSlotSelected = (slotStart: Date, slotEnd: Date) =>
+    selectedSlots.some((s) => s.start === slotToLocal(slotStart) && s.end === slotToLocal(slotEnd))
+
   return (
     <div>
-      <p className="mb-2 text-xs text-gray-600">Gebuchte Zeiten sind markiert und nicht wählbar. Klicken Sie auf eine freie Stunde.</p>
+      <p className="mb-2 text-xs text-gray-600">
+        Gebuchte Zeiten sind rot. Klicken Sie auf freie Stunden, um mehrere Blöcke zu wählen (nochmal klicken zum Abwählen).
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -81,6 +92,7 @@ function RoomCalendar({
                   const slotEnd = new Date(slotStart)
                   slotEnd.setHours(slotEnd.getHours() + 1, 0, 0, 0)
                   const busy = roomReservations.some((r) => slotOverlapsReservation(slotStart, slotEnd, r))
+                  const selected = !busy && isSlotSelected(slotStart, slotEnd)
                   return (
                     <td key={day.toISOString() + hour} className="border border-gray-300 p-0">
                       <button
@@ -88,14 +100,12 @@ function RoomCalendar({
                         disabled={busy}
                         onClick={() => {
                           if (busy) return
-                          const toLocal = (d: Date) =>
-                            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-                          onSelectSlot(toLocal(slotStart), toLocal(slotEnd))
+                          onToggleSlot(slotToLocal(slotStart), slotToLocal(slotEnd))
                         }}
-                        className={`block w-full py-2 text-center ${busy ? 'cursor-not-allowed bg-red-100 text-gray-500' : 'bg-white hover:bg-sky-50'}`}
-                        title={busy ? 'Belegt' : `${slotStart.toLocaleString('de-DE')} wählen`}
+                        className={`block w-full py-2 text-center ${busy ? 'cursor-not-allowed bg-red-100 text-gray-500' : selected ? 'bg-green-200 text-green-800' : 'bg-white hover:bg-sky-50'}`}
+                        title={busy ? 'Belegt' : selected ? 'Klick zum Abwählen' : `${slotStart.toLocaleString('de-DE')} wählen`}
                       >
-                        {busy ? '–' : '✓'}
+                        {busy ? '–' : selected ? '✓' : '+'}
                       </button>
                     </td>
                   )
@@ -137,8 +147,20 @@ export default function RoomReservationsPage() {
   const [mainUsers, setMainUsers] = useState<MainUser[]>([])
   const [roomReservationsForCalendar, setRoomReservationsForCalendar] = useState<Reservation[]>([])
   const [showStartCalendar, setShowStartCalendar] = useState(false)
+  const [reservationSlots, setReservationSlots] = useState<{ start: string; end: string }[]>([])
   const [savingReservation, setSavingReservation] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  const toggleCalendarSlot = (start: string, end: string) => {
+    setReservationSlots((prev) => {
+      const i = prev.findIndex((s) => s.start === start && s.end === end)
+      if (i >= 0) return prev.filter((_, j) => j !== i)
+      return [...prev, { start, end }].sort((a, b) => a.start.localeCompare(b.start))
+    })
+  }
+  const removeReservationSlot = (index: number) => {
+    setReservationSlots((prev) => prev.filter((_, i) => i !== index))
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -194,6 +216,10 @@ export default function RoomReservationsPage() {
       if (e) setReservationTitle(e.title)
     }
   }, [eventIdParam, events])
+
+  useEffect(() => {
+    setReservationSlots([])
+  }, [reservationRoomId])
 
   useEffect(() => {
     if (!reservationRoomId) {
@@ -278,45 +304,55 @@ export default function RoomReservationsPage() {
   }
 
   const submitReservation = async () => {
-    if (!reservationRoomId || !reservationTitle.trim() || !reservationStart) {
-      alert('Bitte Raum, Titel und Startzeit angeben.')
+    const slotsToSave =
+      reservationSlots.length > 0
+        ? reservationSlots
+        : reservationStart
+          ? [{ start: reservationStart, end: reservationEnd || reservationStart }]
+          : []
+    if (!reservationRoomId || !reservationTitle.trim() || slotsToSave.length === 0) {
+      alert('Bitte Raum, Titel und mindestens einen Zeitblock angeben (Kalender oder Start/Ende).')
       return
     }
     setSavingReservation(true)
     try {
-      const res = await fetch('/api/room-reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          roomId: reservationRoomId,
-          projectId: reservationProjectId || undefined,
-          eventId: reservationEventId || undefined,
-          responsibleUserId: reservationResponsibleUserId || undefined,
-          eventLeaderId: reservationEventLeaderId || undefined,
-          title: reservationTitle.trim(),
-          startAt: reservationStart,
-          endAt: reservationEnd || undefined,
-          notes: reservationNotes.trim() || undefined,
-        }),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        setReservations((prev) => [created, ...prev].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()))
-        setShowReservationForm(false)
-        setReservationRoomId('')
-        setReservationTitle('')
-        setReservationStart('')
-        setReservationEnd('')
-        setReservationNotes('')
-        setReservationProjectId('')
-        setReservationEventId('')
-        setReservationResponsibleUserId('')
-        setReservationEventLeaderId('')
-      } else {
-        const err = await res.json()
-        alert(err.error || 'Fehler')
+      const created: Reservation[] = []
+      for (const slot of slotsToSave) {
+        const res = await fetch('/api/room-reservations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            roomId: reservationRoomId,
+            projectId: reservationProjectId || undefined,
+            eventId: reservationEventId || undefined,
+            responsibleUserId: reservationResponsibleUserId || undefined,
+            eventLeaderId: reservationEventLeaderId || undefined,
+            title: reservationTitle.trim(),
+            startAt: slot.start,
+            endAt: slot.end || undefined,
+            notes: reservationNotes.trim() || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          alert(err.error || 'Fehler beim Speichern')
+          return
+        }
+        created.push(await res.json())
       }
+      setReservations((prev) => [...created, ...prev].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()))
+      setShowReservationForm(false)
+      setReservationRoomId('')
+      setReservationTitle('')
+      setReservationStart('')
+      setReservationEnd('')
+      setReservationSlots([])
+      setReservationNotes('')
+      setReservationProjectId('')
+      setReservationEventId('')
+      setReservationResponsibleUserId('')
+      setReservationEventLeaderId('')
     } finally {
       setSavingReservation(false)
     }
@@ -527,14 +563,36 @@ export default function RoomReservationsPage() {
                     {!reservationRoomId ? (
                       <p className="text-sm text-gray-500">Bitte zuerst einen Raum wählen, dann werden bestehende Buchungen angezeigt.</p>
                     ) : (
-                      <RoomCalendar
-                        roomReservations={roomReservationsForCalendar}
-                        onSelectSlot={(start, end) => {
-                          setReservationStart(start)
-                          if (!reservationEnd) setReservationEnd(end)
-                          setShowStartCalendar(false)
-                        }}
-                      />
+                      <>
+                        <RoomCalendar
+                          roomReservations={roomReservationsForCalendar}
+                          selectedSlots={reservationSlots}
+                          onToggleSlot={toggleCalendarSlot}
+                        />
+                        {reservationSlots.length > 0 && (
+                          <div className="mt-3">
+                            <p className="mb-1 text-xs font-medium text-gray-600">
+                              Gewählte Blöcke ({reservationSlots.length}):
+                            </p>
+                            <ul className="space-y-1 text-xs">
+                              {reservationSlots.map((slot, i) => (
+                                <li key={i} className="flex items-center justify-between rounded bg-white px-2 py-1">
+                                  <span>
+                                    {formatDateTime(slot.start)} – {formatDateTime(slot.end)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeReservationSlot(i)}
+                                    className="text-red-600 hover:underline"
+                                  >
+                                    Entfernen
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -556,11 +614,25 @@ export default function RoomReservationsPage() {
                 disabled={savingReservation}
                 className="rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                {savingReservation ? 'Speichern…' : 'Reservierung speichern'}
+                {savingReservation
+                  ? 'Speichern…'
+                  : reservationSlots.length > 1
+                    ? `${reservationSlots.length} Reservierungen speichern`
+                    : reservationSlots.length === 1 || reservationStart
+                      ? 'Reservierung speichern'
+                      : 'Reservierung speichern'}
               </button>
               <button
                 type="button"
-                onClick={() => { setShowReservationForm(false); setReservationProjectId(''); setReservationEventId(''); setReservationResponsibleUserId(''); setReservationEventLeaderId(''); setShowStartCalendar(false); }}
+                onClick={() => {
+                  setShowReservationForm(false)
+                  setReservationProjectId('')
+                  setReservationEventId('')
+                  setReservationResponsibleUserId('')
+                  setReservationEventLeaderId('')
+                  setShowStartCalendar(false)
+                  setReservationSlots([])
+                }}
                 className="rounded border border-gray-300 px-4 py-2 text-sm"
               >
                 Abbrechen
