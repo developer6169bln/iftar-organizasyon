@@ -18,19 +18,103 @@ export async function GET(request: NextRequest) {
     if (from) where.startAt.gte = new Date(from)
     if (to) where.startAt.lte = new Date(to)
   }
-  const list = await prisma.roomReservation.findMany({
-    where,
-    orderBy: { startAt: 'asc' },
-    include: {
-      room: { select: { id: true, name: true } },
-      project: { select: { id: true, name: true } },
-      event: { select: { id: true, title: true, date: true } },
-      reservedBy: { select: { id: true, name: true, email: true } },
-      responsibleUser: { select: { id: true, name: true, email: true } },
-      eventLeader: { select: { id: true, name: true, email: true } },
-    },
-  })
-  return NextResponse.json(list)
+
+  try {
+    const list = await prisma.roomReservation.findMany({
+      where,
+      orderBy: { startAt: 'asc' },
+      include: {
+        room: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
+        event: { select: { id: true, title: true, date: true } },
+        reservedBy: { select: { id: true, name: true, email: true } },
+        responsibleUser: { select: { id: true, name: true, email: true } },
+        eventLeader: { select: { id: true, name: true, email: true } },
+      },
+    })
+    return NextResponse.json(list)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (!msg.includes('responsibleUserId') && !msg.includes('eventLeaderId') && !msg.includes('does not exist') && !msg.includes('room_reservations')) {
+      throw e
+    }
+    try {
+      const list = await listReservationsFallback(where)
+      return NextResponse.json(list)
+    } catch {
+      return NextResponse.json([])
+    }
+  }
+}
+
+/** Fallback wenn DB nur Basis-Migration hat (ohne responsibleUserId/eventLeaderId). */
+async function listReservationsFallback(where: { roomId?: string; startAt?: { gte?: Date; lte?: Date } }) {
+  const conditions: string[] = []
+  const params: unknown[] = []
+  let i = 0
+  if (where.roomId) {
+    i++; conditions.push(`r."roomId" = $${i}`); params.push(where.roomId)
+  }
+  if (where.startAt?.gte) {
+    i++; conditions.push(`r."startAt" >= $${i}`); params.push(where.startAt.gte)
+  }
+  if (where.startAt?.lte) {
+    i++; conditions.push(`r."startAt" <= $${i}`); params.push(where.startAt.lte)
+  }
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      id: string
+      roomId: string
+      projectId: string | null
+      eventId: string | null
+      reservedByUserId: string
+      title: string
+      startAt: Date
+      endAt: Date | null
+      notes: string | null
+      room_id: string
+      room_name: string
+      project_id: string | null
+      project_name: string | null
+      event_id: string | null
+      event_title: string | null
+      event_date: string | null
+      reservedBy_id: string
+      reservedBy_name: string | null
+      reservedBy_email: string
+    }>
+  >(
+    `SELECT r.id, r."roomId", r."projectId", r."eventId", r."reservedByUserId", r.title, r."startAt", r."endAt", r.notes,
+       ro.id AS room_id, ro.name AS room_name,
+       p.id AS project_id, p.name AS project_name,
+       e.id AS event_id, e.title AS event_title, e.date AS event_date,
+       u.id AS reservedBy_id, u.name AS reservedBy_name, u.email AS reservedBy_email
+     FROM room_reservations r
+     JOIN rooms ro ON ro.id = r."roomId"
+     LEFT JOIN projects p ON p.id = r."projectId"
+     LEFT JOIN events e ON e.id = r."eventId"
+     JOIN users u ON u.id = r."reservedByUserId"
+     ${whereClause}
+     ORDER BY r."startAt" ASC`,
+    ...params
+  )
+  return rows.map((row) => ({
+    id: row.id,
+    roomId: row.roomId,
+    projectId: row.projectId,
+    eventId: row.eventId,
+    title: row.title,
+    startAt: row.startAt,
+    endAt: row.endAt,
+    notes: row.notes,
+    room: { id: row.room_id, name: row.room_name },
+    project: row.project_id ? { id: row.project_id, name: row.project_name } : null,
+    event: row.event_id ? { id: row.event_id, title: row.event_title, date: row.event_date } : null,
+    reservedBy: { id: row.reservedBy_id, name: row.reservedBy_name, email: row.reservedBy_email },
+    responsibleUser: null,
+    eventLeader: null,
+  }))
 }
 
 const createSchema = z.object({
