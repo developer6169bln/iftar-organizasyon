@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { getUserIdFromRequest } from '@/lib/auditLog'
 import { requirePageAccess, getProjectsForUser } from '@/lib/permissions'
 import { z } from 'zod'
 
@@ -201,12 +201,101 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(reservation)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    const hint = (msg.includes('responsibleUserId') || msg.includes('eventLeaderId') || msg.includes('does not exist'))
-      ? ' Bitte Datenbank-Migration ausführen (z. B. npx prisma migrate deploy).'
-      : ''
+    if (msg.includes('responsibleUserId') || msg.includes('eventLeaderId') || msg.includes('does not exist')) {
+      try {
+        const reservation = await createReservationFallback(baseData)
+        return NextResponse.json(reservation)
+      } catch (e2: unknown) {
+        return NextResponse.json(
+          { error: e2 instanceof Error ? e2.message : 'Reservierung konnte nicht gespeichert werden.' },
+          { status: 500 }
+        )
+      }
+    }
     return NextResponse.json(
-      { error: `Reservierung konnte nicht gespeichert werden: ${msg}${hint}` },
+      { error: `Reservierung konnte nicht gespeichert werden: ${msg}` },
       { status: 500 }
     )
+  }
+}
+
+/** Fallback: Reservierung per Raw-INSERT anlegen (wenn Spalten responsibleUserId/eventLeaderId fehlen). */
+async function createReservationFallback(data: {
+  roomId: string
+  projectId: string | null
+  eventId: string | null
+  reservedByUserId: string
+  title: string
+  startAt: Date
+  endAt: Date | null
+  notes: string | null
+}) {
+  const id = randomUUID()
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO room_reservations (id, "roomId", "projectId", "eventId", "reservedByUserId", title, "startAt", "endAt", notes, "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+    id,
+    data.roomId,
+    data.projectId,
+    data.eventId,
+    data.reservedByUserId,
+    data.title,
+    data.startAt,
+    data.endAt,
+    data.notes
+  )
+  const rows = await prisma.$queryRawUnsafe<
+    Array<{
+      id: string
+      roomId: string
+      projectId: string | null
+      eventId: string | null
+      reservedByUserId: string
+      title: string
+      startAt: Date
+      endAt: Date | null
+      notes: string | null
+      room_id: string
+      room_name: string
+      project_id: string | null
+      project_name: string | null
+      event_id: string | null
+      event_title: string | null
+      event_date: string | null
+      reservedBy_id: string
+      reservedBy_name: string | null
+      reservedBy_email: string
+    }>
+  >(
+    `SELECT r.id, r."roomId", r."projectId", r."eventId", r."reservedByUserId", r.title, r."startAt", r."endAt", r.notes,
+       ro.id AS room_id, ro.name AS room_name,
+       p.id AS project_id, p.name AS project_name,
+       e.id AS event_id, e.title AS event_title, e.date AS event_date,
+       u.id AS reservedBy_id, u.name AS reservedBy_name, u.email AS reservedBy_email
+     FROM room_reservations r
+     JOIN rooms ro ON ro.id = r."roomId"
+     LEFT JOIN projects p ON p.id = r."projectId"
+     LEFT JOIN events e ON e.id = r."eventId"
+     JOIN users u ON u.id = r."reservedByUserId"
+     WHERE r.id = $1`,
+    id
+  )
+  const row = rows[0]
+  if (!row) throw new Error('Reservierung konnte nach Insert nicht gelesen werden.')
+  return {
+    id: row.id,
+    roomId: row.roomId,
+    projectId: row.projectId,
+    eventId: row.eventId,
+    title: row.title,
+    startAt: row.startAt,
+    endAt: row.endAt,
+    notes: row.notes,
+    room: { id: row.room_id, name: row.room_name },
+    project: row.project_id ? { id: row.project_id, name: row.project_name } : null,
+    event: row.event_id ? { id: row.event_id, title: row.event_title, date: row.event_date } : null,
+    reservedBy: { id: row.reservedBy_id, name: row.reservedBy_name, email: row.reservedBy_email },
+    responsibleUser: null,
+    eventLeader: null,
   }
 }
