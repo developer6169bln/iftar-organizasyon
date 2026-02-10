@@ -82,27 +82,47 @@ export async function POST(request: NextRequest) {
   }
   const start = new Date(startAt)
   const end = endAt ? new Date(endAt) : null
-  const reservation = await prisma.roomReservation.create({
-    data: {
-      roomId,
-      projectId: projectId || null,
-      eventId: eventId || null,
-      reservedByUserId: access.userId,
-      responsibleUserId: responsibleUserId || null,
-      eventLeaderId: eventLeaderId || null,
-      title: title.trim(),
-      startAt: start,
-      endAt: end,
-      notes: notes?.trim() || null,
-    },
-    include: {
-      room: { select: { id: true, name: true } },
-      project: { select: { id: true, name: true } },
-      event: { select: { id: true, title: true, date: true } },
-      reservedBy: { select: { id: true, name: true, email: true } },
-      responsibleUser: { select: { id: true, name: true, email: true } },
-      eventLeader: { select: { id: true, name: true, email: true } },
-    },
-  })
-  return NextResponse.json(reservation)
+  if (Number.isNaN(start.getTime())) {
+    return NextResponse.json({ error: 'Ungültiges Startdatum' }, { status: 400 })
+  }
+
+  const baseData = {
+    roomId,
+    projectId: projectId || null,
+    eventId: eventId || null,
+    reservedByUserId: access.userId,
+    title: title.trim(),
+    startAt: start,
+    endAt: end,
+    notes: notes?.trim() || null,
+  }
+  const includeRelations = {
+    room: { select: { id: true, name: true } },
+    project: { select: { id: true, name: true } },
+    event: { select: { id: true, title: true, date: true } },
+    reservedBy: { select: { id: true, name: true, email: true } },
+    responsibleUser: { select: { id: true, name: true, email: true } },
+    eventLeader: { select: { id: true, name: true, email: true } },
+  }
+
+  try {
+    const reservation = await prisma.roomReservation.create({
+      data: {
+        ...baseData,
+        responsibleUserId: responsibleUserId || null,
+        eventLeaderId: eventLeaderId || null,
+      },
+      include: includeRelations,
+    })
+    return NextResponse.json(reservation)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const hint = (msg.includes('responsibleUserId') || msg.includes('eventLeaderId') || msg.includes('does not exist'))
+      ? ' Bitte Datenbank-Migration ausführen (z. B. npx prisma migrate deploy).'
+      : ''
+    return NextResponse.json(
+      { error: `Reservierung konnte nicht gespeichert werden: ${msg}${hint}` },
+      { status: 500 }
+    )
+  }
 }

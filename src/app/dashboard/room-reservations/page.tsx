@@ -138,9 +138,11 @@ export default function RoomReservationsPage() {
   const [roomReservationsForCalendar, setRoomReservationsForCalendar] = useState<Reservation[]>([])
   const [showStartCalendar, setShowStartCalendar] = useState(false)
   const [savingReservation, setSavingReservation] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
+      setLoadError(null)
       const [roomsRes, resRes, meRes, mainRes] = await Promise.all([
         fetch('/api/rooms', { credentials: 'include' }),
         fetch('/api/room-reservations', { credentials: 'include' }),
@@ -148,7 +150,12 @@ export default function RoomReservationsPage() {
         fetch('/api/users/main-users', { credentials: 'include' }),
       ])
       if (roomsRes.ok) setRooms(await roomsRes.json())
-      if (resRes.ok) setReservations(await resRes.json())
+      if (resRes.ok) {
+        setReservations(await resRes.json())
+      } else {
+        const err = await resRes.json().catch(() => ({}))
+        setLoadError(err?.error || 'Reservierungen konnten nicht geladen werden.')
+      }
       if (meRes.ok) {
         const me = await meRes.json()
         setIsAdmin(!!me.isAdmin)
@@ -329,6 +336,12 @@ export default function RoomReservationsPage() {
       <p className="mb-6 text-sm text-gray-600">
         Reservierungen können manuell angelegt werden oder aus dem Projektbereich („Raum reservieren“). Admin und Hauptbenutzer können Reservierungen erstellen; nur der Admin verwaltet die Räume.
       </p>
+
+      {loadError && (
+        <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {loadError} Bitte ggf. Datenbank-Migration ausführen (npx prisma migrate deploy).
+        </div>
+      )}
 
       {isAdmin && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
