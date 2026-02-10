@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       project: { select: { id: true, name: true } },
       event: { select: { id: true, title: true, date: true } },
       reservedBy: { select: { id: true, name: true, email: true } },
+      responsibleUser: { select: { id: true, name: true, email: true } },
+      eventLeader: { select: { id: true, name: true, email: true } },
     },
   })
   return NextResponse.json(list)
@@ -35,6 +37,8 @@ const createSchema = z.object({
   roomId: z.string(),
   projectId: z.string().optional(),
   eventId: z.string().optional(),
+  responsibleUserId: z.string().optional(),
+  eventLeaderId: z.string().optional(),
   title: z.string().min(1),
   startAt: z.string(),
   endAt: z.string().optional(),
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'roomId, title und startAt erforderlich' }, { status: 400 })
   }
-  const { roomId, projectId, eventId, title, startAt, endAt, notes } = parsed.data
+  const { roomId, projectId, eventId, responsibleUserId, eventLeaderId, title, startAt, endAt, notes } = parsed.data
   const room = await prisma.room.findUnique({ where: { id: roomId } })
   if (!room) return NextResponse.json({ error: 'Raum nicht gefunden' }, { status: 404 })
   if (projectId && !isAdmin) {
@@ -84,6 +88,8 @@ export async function POST(request: NextRequest) {
       projectId: projectId || null,
       eventId: eventId || null,
       reservedByUserId: access.userId,
+      responsibleUserId: responsibleUserId || null,
+      eventLeaderId: eventLeaderId || null,
       title: title.trim(),
       startAt: start,
       endAt: end,
@@ -94,6 +100,8 @@ export async function POST(request: NextRequest) {
       project: { select: { id: true, name: true } },
       event: { select: { id: true, title: true, date: true } },
       reservedBy: { select: { id: true, name: true, email: true } },
+      responsibleUser: { select: { id: true, name: true, email: true } },
+      eventLeader: { select: { id: true, name: true, email: true } },
     },
   })
   return NextResponse.json(reservation)

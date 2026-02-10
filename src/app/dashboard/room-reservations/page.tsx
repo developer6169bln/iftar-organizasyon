@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
 type Room = { id: string; name: string; description?: string | null; _count?: { reservations: number } }
+type MainUser = { id: string; name: string | null; email: string }
 type Reservation = {
   id: string
   roomId: string
@@ -12,6 +13,8 @@ type Reservation = {
   project?: { id: string; name: string } | null
   event?: { id: string; title: string; date: string } | null
   reservedBy: { id: string; name: string; email: string }
+  responsibleUser?: { id: string; name: string | null; email: string } | null
+  eventLeader?: { id: string; name: string | null; email: string } | null
   title: string
   startAt: string
   endAt: string | null
@@ -23,6 +26,87 @@ function formatDate(d: string) {
 }
 function formatDateTime(d: string) {
   return new Date(d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+/** Prüft, ob [slotStart, slotEnd) eine bestehende Reservierung schneidet. */
+function slotOverlapsReservation(
+  slotStart: Date,
+  slotEnd: Date,
+  r: Reservation
+) {
+  const resStart = new Date(r.startAt).getTime()
+  const resEnd = r.endAt ? new Date(r.endAt).getTime() : resStart + 60 * 60 * 1000
+  return slotStart.getTime() < resEnd && slotEnd.getTime() > resStart
+}
+
+function RoomCalendar({
+  roomReservations,
+  onSelectSlot,
+}: {
+  roomReservations: Reservation[]
+  onSelectSlot: (startIso: string, endIso: string) => void
+}) {
+  const days: Date[] = []
+  const startDay = new Date()
+  startDay.setHours(0, 0, 0, 0)
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(startDay)
+    d.setDate(d.getDate() + i)
+    days.push(d)
+  }
+  const hours = Array.from({ length: 14 }, (_, i) => i + 8) // 8–21
+
+  return (
+    <div>
+      <p className="mb-2 text-xs text-gray-600">Gebuchte Zeiten sind markiert und nicht wählbar. Klicken Sie auf eine freie Stunde.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              <th className="border border-gray-300 bg-gray-100 p-1 font-medium">Uhrzeit</th>
+              {days.map((d) => (
+                <th key={d.toISOString()} className="border border-gray-300 bg-gray-100 p-1 font-medium">
+                  {d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {hours.map((hour) => (
+              <tr key={hour}>
+                <td className="border border-gray-300 bg-gray-50 p-1">{hour}:00</td>
+                {days.map((day) => {
+                  const slotStart = new Date(day)
+                  slotStart.setHours(hour, 0, 0, 0)
+                  const slotEnd = new Date(slotStart)
+                  slotEnd.setHours(slotEnd.getHours() + 1, 0, 0, 0)
+                  const busy = roomReservations.some((r) => slotOverlapsReservation(slotStart, slotEnd, r))
+                  return (
+                    <td key={day.toISOString() + hour} className="border border-gray-300 p-0">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (busy) return
+                          const toLocal = (d: Date) =>
+                            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+                          onSelectSlot(toLocal(slotStart), toLocal(slotEnd))
+                        }}
+                        className={`block w-full py-2 text-center ${busy ? 'cursor-not-allowed bg-red-100 text-gray-500' : 'bg-white hover:bg-sky-50'}`}
+                        title={busy ? 'Belegt' : `${slotStart.toLocaleString('de-DE')} wählen`}
+                      >
+                        {busy ? '–' : '✓'}
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export default function RoomReservationsPage() {
@@ -48,14 +132,20 @@ export default function RoomReservationsPage() {
   const [reservationNotes, setReservationNotes] = useState('')
   const [reservationProjectId, setReservationProjectId] = useState('')
   const [reservationEventId, setReservationEventId] = useState('')
+  const [reservationResponsibleUserId, setReservationResponsibleUserId] = useState('')
+  const [reservationEventLeaderId, setReservationEventLeaderId] = useState('')
+  const [mainUsers, setMainUsers] = useState<MainUser[]>([])
+  const [roomReservationsForCalendar, setRoomReservationsForCalendar] = useState<Reservation[]>([])
+  const [showStartCalendar, setShowStartCalendar] = useState(false)
   const [savingReservation, setSavingReservation] = useState(false)
 
   useEffect(() => {
     const load = async () => {
-      const [roomsRes, resRes, meRes] = await Promise.all([
+      const [roomsRes, resRes, meRes, mainRes] = await Promise.all([
         fetch('/api/rooms', { credentials: 'include' }),
         fetch('/api/room-reservations', { credentials: 'include' }),
         fetch('/api/me', { credentials: 'include' }),
+        fetch('/api/users/main-users', { credentials: 'include' }),
       ])
       if (roomsRes.ok) setRooms(await roomsRes.json())
       if (resRes.ok) setReservations(await resRes.json())
@@ -63,6 +153,10 @@ export default function RoomReservationsPage() {
         const me = await meRes.json()
         setIsAdmin(!!me.isAdmin)
         if (me.projects?.length) setProjects(me.projects)
+      }
+      if (mainRes.ok) {
+        const list = await mainRes.json()
+        setMainUsers(Array.isArray(list) ? list : [])
       }
       setLoading(false)
     }
@@ -93,6 +187,22 @@ export default function RoomReservationsPage() {
       if (e) setReservationTitle(e.title)
     }
   }, [eventIdParam, events])
+
+  useEffect(() => {
+    if (!reservationRoomId) {
+      setRoomReservationsForCalendar([])
+      return
+    }
+    const from = new Date()
+    from.setHours(0, 0, 0, 0)
+    from.setDate(from.getDate() - 30)
+    const to = new Date()
+    to.setHours(0, 0, 0, 0)
+    to.setDate(to.getDate() + 60)
+    fetch(`/api/room-reservations?roomId=${reservationRoomId}&from=${from.toISOString()}&to=${to.toISOString()}`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setRoomReservationsForCalendar(Array.isArray(list) ? list : []))
+  }, [reservationRoomId])
 
   useEffect(() => {
     if (projectIdParam) {
@@ -175,6 +285,8 @@ export default function RoomReservationsPage() {
           roomId: reservationRoomId,
           projectId: reservationProjectId || undefined,
           eventId: reservationEventId || undefined,
+          responsibleUserId: reservationResponsibleUserId || undefined,
+          eventLeaderId: reservationEventLeaderId || undefined,
           title: reservationTitle.trim(),
           startAt: reservationStart,
           endAt: reservationEnd || undefined,
@@ -192,6 +304,8 @@ export default function RoomReservationsPage() {
         setReservationNotes('')
         setReservationProjectId('')
         setReservationEventId('')
+        setReservationResponsibleUserId('')
+        setReservationEventLeaderId('')
       } else {
         const err = await res.json()
         alert(err.error || 'Fehler')
@@ -308,15 +422,6 @@ export default function RoomReservationsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600">Start *</label>
-                <input
-                  type="datetime-local"
-                  value={reservationStart}
-                  onChange={(e) => setReservationStart(e.target.value)}
-                  className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                />
-              </div>
-              <div>
                 <label className="block text-xs font-medium text-gray-600">Ende (optional)</label>
                 <input
                   type="datetime-local"
@@ -357,6 +462,70 @@ export default function RoomReservationsPage() {
                   </div>
                 </>
               )}
+              {mainUsers.length > 0 && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600">Verantwortlicher Hauptnutzer</label>
+                    <select
+                      value={reservationResponsibleUserId}
+                      onChange={(e) => setReservationResponsibleUserId(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">— wählen —</option>
+                      {mainUsers.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600">Leiter der Veranstaltung</label>
+                    <select
+                      value={reservationEventLeaderId}
+                      onChange={(e) => setReservationEventLeaderId(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    >
+                      <option value="">— wählen —</option>
+                      {mainUsers.map((u) => (
+                        <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-600">Start *</label>
+                <div className="mt-0.5 flex gap-2">
+                  <input
+                    type="datetime-local"
+                    value={reservationStart}
+                    onChange={(e) => setReservationStart(e.target.value)}
+                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowStartCalendar((v) => !v)}
+                    className="rounded border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm hover:bg-gray-100"
+                  >
+                    {showStartCalendar ? 'Kalender schließen' : 'Kalender öffnen'}
+                  </button>
+                </div>
+                {showStartCalendar && (
+                  <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    {!reservationRoomId ? (
+                      <p className="text-sm text-gray-500">Bitte zuerst einen Raum wählen, dann werden bestehende Buchungen angezeigt.</p>
+                    ) : (
+                      <RoomCalendar
+                        roomReservations={roomReservationsForCalendar}
+                        onSelectSlot={(start, end) => {
+                          setReservationStart(start)
+                          if (!reservationEnd) setReservationEnd(end)
+                          setShowStartCalendar(false)
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-600">Notizen</label>
                 <input
@@ -378,7 +547,7 @@ export default function RoomReservationsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowReservationForm(false); setReservationProjectId(''); setReservationEventId(''); }}
+                onClick={() => { setShowReservationForm(false); setReservationProjectId(''); setReservationEventId(''); setReservationResponsibleUserId(''); setReservationEventLeaderId(''); setShowStartCalendar(false); }}
                 className="rounded border border-gray-300 px-4 py-2 text-sm"
               >
                 Abbrechen
@@ -402,6 +571,8 @@ export default function RoomReservationsPage() {
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Start</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Ende</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Projekt / Event</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">Verantwortlicher</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">Leiter</th>
                   <th className="px-3 py-2 text-left font-medium text-gray-700">Reserviert von</th>
                 </tr>
               </thead>
@@ -416,6 +587,8 @@ export default function RoomReservationsPage() {
                       {r.project ? r.project.name : '–'}
                       {r.event && <span className="text-gray-500"> / {r.event.title}</span>}
                     </td>
+                    <td className="px-3 py-2">{r.responsibleUser ? (r.responsibleUser.name || r.responsibleUser.email) : '–'}</td>
+                    <td className="px-3 py-2">{r.eventLeader ? (r.eventLeader.name || r.eventLeader.email) : '–'}</td>
                     <td className="px-3 py-2">{r.reservedBy.name}</td>
                   </tr>
                 ))}

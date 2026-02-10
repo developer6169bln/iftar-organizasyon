@@ -150,6 +150,8 @@ model User {
   jotFormSubmissionsSubmitted JotFormSubmission[] @relation("JotFormSubmissionSubmittedBy")
   jotFormSubmitPermissions ProjectMemberJotFormPermission[]
   roomReservations         RoomReservation[]
+  roomReservationsResponsible RoomReservation[] @relation("RoomReservationResponsible")
+  roomReservationsEventLeader RoomReservation[] @relation("RoomReservationEventLeader")
 
   @@map("users")
 }
@@ -776,22 +778,26 @@ model Room {
 }
 
 model RoomReservation {
-  id               String    @id @default(cuid())
-  roomId           String
-  projectId        String?   // gesetzt wenn Reservierung aus Projekt erstellt
-  eventId          String?   // optional: Event des Projekts
-  reservedByUserId String
-  title            String    // Anzeigename (manuell oder Projektname/Eventtitel)
-  startAt          DateTime
-  endAt            DateTime?
-  notes            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                   String    @id @default(cuid())
+  roomId               String
+  projectId             String?
+  eventId               String?
+  reservedByUserId      String
+  responsibleUserId     String?   // Verantwortlicher Hauptnutzer
+  eventLeaderId        String?   // Leiter der Veranstaltung
+  title                 String
+  startAt               DateTime
+  endAt                 DateTime?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  event     Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  reservedBy User    @relation(fields: [reservedByUserId], references: [id], onDelete: Cascade)
+  room          Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  event         Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  reservedBy    User     @relation(fields: [reservedByUserId], references: [id], onDelete: Cascade)
+  responsibleUser User?  @relation("RoomReservationResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  eventLeader   User?    @relation("RoomReservationEventLeader", fields: [eventLeaderId], references: [id], onDelete: SetNull)
 
   @@index([roomId])
   @@index([startAt])
