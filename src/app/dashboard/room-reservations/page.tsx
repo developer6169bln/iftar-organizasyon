@@ -470,15 +470,6 @@ export default function RoomReservationsPage() {
                   className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600">Ende (optional)</label>
-                <input
-                  type="datetime-local"
-                  value={reservationEnd}
-                  onChange={(e) => setReservationEnd(e.target.value)}
-                  className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-                />
-              </div>
               {projects.length > 0 && (
                 <>
                   <div>
@@ -541,22 +532,35 @@ export default function RoomReservationsPage() {
                   </div>
                 </>
               )}
-              <div>
-                <label className="block text-xs font-medium text-gray-600">Start *</label>
-                <div className="mt-0.5 flex gap-2">
-                  <input
-                    type="datetime-local"
-                    value={reservationStart}
-                    onChange={(e) => setReservationStart(e.target.value)}
-                    className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowStartCalendar((v) => !v)}
-                    className="rounded border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm hover:bg-gray-100"
-                  >
-                    {showStartCalendar ? 'Kalender schließen' : 'Kalender öffnen'}
-                  </button>
+              <div className="sm:col-span-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600">Start *</label>
+                    <div className="mt-0.5 flex gap-2">
+                      <input
+                        type="datetime-local"
+                        value={reservationStart}
+                        onChange={(e) => setReservationStart(e.target.value)}
+                        className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowStartCalendar((v) => !v)}
+                        className="rounded border border-gray-300 bg-gray-50 px-3 py-1.5 text-sm hover:bg-gray-100"
+                      >
+                        {showStartCalendar ? 'Kalender schließen' : 'Kalender öffnen'}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600">Ende (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={reservationEnd}
+                      onChange={(e) => setReservationEnd(e.target.value)}
+                      className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    />
+                  </div>
                 </div>
                 {showStartCalendar && (
                   <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
