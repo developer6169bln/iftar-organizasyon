@@ -16,6 +16,7 @@ export const ALL_PAGE_IDS = [
   'program_flow',
   'etkinlik-formu',
   'etkinlik-raporu',
+  'room-reservations',
 ] as const
 
 export type PageId = (typeof ALL_PAGE_IDS)[number]
@@ -293,6 +294,7 @@ export async function getAllowListForUser(userId: string, projectId?: string | n
       allowedCategoryIds = allowedCategoryIds.filter((id) => id !== perm.categoryId)
     }
   }
+  if (!allowedPageIds.includes('room-reservations')) allowedPageIds.push('room-reservations')
   return {
     allowedPageIds,
     allowedCategoryIds,

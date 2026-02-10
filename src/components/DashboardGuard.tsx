@@ -19,6 +19,7 @@ const PATH_TO_PAGE: Record<string, string> = {
   '/dashboard/program_flow': 'program_flow',
   '/dashboard/etkinlik-formu': 'etkinlik-formu',
   '/dashboard/etkinlik-raporu': 'etkinlik-raporu',
+  '/dashboard/room-reservations': 'room-reservations',
 }
 
 export default function DashboardGuard({ children }: { children: React.ReactNode }) {

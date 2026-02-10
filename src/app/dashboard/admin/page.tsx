@@ -18,6 +18,7 @@ const PAGE_LABELS: Record<string, string> = {
   program_flow: 'Programmablauf',
   'etkinlik-formu': 'Etkinlik Formu (JotForm)',
   'etkinlik-raporu': 'Etkinlik Raporu (JotForm)',
+  'room-reservations': 'Raum-Reservierungen',
 }
 
 type UserRow = {

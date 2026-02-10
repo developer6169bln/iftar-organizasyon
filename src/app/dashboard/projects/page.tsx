@@ -7,6 +7,7 @@ const PAGE_IDS = [
   'guests', 'program_flow', 'invitations', 'checkin', 'reports',
   'tischplanung', 'vip-namensschilder', 'push-notifications',   'audit-logs', 'foto-video', 'media-upload',
   'etkinlik-formu', 'etkinlik-raporu',
+  'room-reservations',
 ] as const
 
 const PAGE_LABELS: Record<string, string> = {
@@ -23,6 +24,7 @@ const PAGE_LABELS: Record<string, string> = {
   'media-upload': 'Media-Upload (Projekt/Event wählen)',
   'etkinlik-formu': 'Etkinlik Formu (JotForm)',
   'etkinlik-raporu': 'Etkinlik Raporu (JotForm)',
+  'room-reservations': 'Raum-Reservierungen',
 }
 
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }
@@ -576,6 +578,12 @@ export default function DashboardProjectsPage() {
                     <p className="mt-1 text-sm text-gray-600">
                       Events: {selectedProject._count?.events ?? 0} · Mitglieder: {selectedProject._count?.members ?? members.length}
                     </p>
+                    <Link
+                      href={`/dashboard/room-reservations?projectId=${encodeURIComponent(selectedProject.id)}`}
+                      className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700"
+                    >
+                      🏠 Raum für dieses Projekt reservieren
+                    </Link>
                   </div>
                   {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
                     <button

@@ -785,6 +785,25 @@ export default function DashboardPage() {
             </div>
           </Link>
           )}
+          {(isAdmin || allowedPageIds.includes('room-reservations')) && (
+          <Link
+            href="/dashboard/room-reservations"
+            className="rounded-xl bg-white p-6 shadow-md transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-sky-600 text-2xl text-white">
+                🏠
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">Raum-Reservierungen</h3>
+                <p className="text-sm text-gray-600">
+                  Räume verwalten (Admin), Reservierungen anlegen und aktuelle Buchungen einsehen
+                </p>
+              </div>
+              <div className="text-indigo-600">→</div>
+            </div>
+          </Link>
+          )}
           {/* Admin-Bereich für Hauptnutzer: immer sichtbar (Projekte & Mitarbeiter) */}
           <Link
             href="/dashboard/projects"
