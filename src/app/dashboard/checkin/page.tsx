@@ -463,13 +463,16 @@ export default function EingangskontrollePage() {
                       Tisch-Nummer
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      GAST
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                      STAAT/INSTITUTION
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                       Kategorie
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
                       VIP
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                      Staat/Institution
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                       Vorname
@@ -500,6 +503,12 @@ export default function EingangskontrollePage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {row.tischNummer || '-'}
                       </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                        {row.name || '-'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
+                        {row.staatInstitution || '-'}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {row.kategorie || '-'}
                       </td>
@@ -513,9 +522,6 @@ export default function EingangskontrollePage() {
                             -
                           </span>
                         )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
-                        {row.staatInstitution || '-'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
                         {row.vorname || '-'}

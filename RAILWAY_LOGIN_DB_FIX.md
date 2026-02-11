@@ -1,21 +1,35 @@
 # Login / DB „Can't reach database server at postgres.railway.internal“
 
-Wenn der Login mit **„Can't reach database server at postgres.railway.internal“** fehlschlägt, kann die App die interne DB-URL von Railway nicht erreichen. Lösung: **öffentliche DB-URL** verwenden.
+Wenn der Login mit **„Can't reach database server at postgres.railway.internal“** fehlschlägt, erreicht die App die interne DB-URL von Railway nicht. Lösung: **öffentliche DB-URL** als `DATABASE_PUBLIC_URL` im **App-Service** setzen.
 
-## Schnellfix (einmalig in Railway)
+## Fix in Railway (einmalig)
 
-1. **Railway-Dashboard** → dein Projekt → **PostgreSQL-Service** (Datenbank) öffnen.
-2. Tab **Variables** (oder **Connect**) öffnen.
-3. Die Variable **`DATABASE_PUBLIC_URL`** (oder „Public connection string“) **kopieren**.
-4. **App-Service** (nicht die DB) öffnen → **Variables**.
-5. Neue Variable anlegen:
-   - **Name:** `DATABASE_PUBLIC_URL`
-   - **Wert:** den soeben kopierten Connection-String (beginnt z. B. mit `postgresql://postgres:...@...railway.app:...`)
-6. **Deploy** des App-Services erneut auslösen (Redeploy).
+### 1. Öffentliche URL aus dem Postgres-Service holen
 
-Die App nutzt dann beim Start automatisch die öffentliche URL, wenn die interne URL (`postgres.railway.internal`) genutzt wird. Login und DB-Verbindung sollten wieder funktionieren.
+1. **Railway-Dashboard** → dein Projekt → **PostgreSQL-Service** (die Datenbank) anklicken.
+2. Tab **Variables** oder **Connect** öffnen.
+3. Dort die **öffentliche** Verbindungs-URL finden:
+   - Entweder heißt die Variable **`DATABASE_PUBLIC_URL`** – den **Wert** komplett kopieren (beginnt mit `postgresql://postgres:...@...`).
+   - Oder unter **Connect** / **Public Network** den angezeigten Connection-String kopieren.
 
-## Hinweis
+### 2. Beim App-Service eintragen
 
-- `DATABASE_URL` (intern) bleibt unverändert; die App überschreibt sie intern mit `DATABASE_PUBLIC_URL`, sobald diese gesetzt ist.
-- Die öffentliche URL ist von außen erreichbar; Zugriff wird über Railway abgesichert.
+1. Im selben Projekt den **App-Service** (deine Next.js-App) anklicken – **nicht** den Postgres-Service.
+2. Tab **Variables** öffnen.
+3. **Neue Variable** anlegen:
+   - **Name:** `DATABASE_PUBLIC_URL` (genau so)
+   - **Wert:** die in Schritt 1 kopierte URL einfügen.
+4. Speichern.
+
+**Alternative (Referenz):** Wenn Railway es anbietet, kannst du statt eines festen Werts eine **Referenz** auf den Postgres-Service setzen (z. B. Variable aus Postgres-Service auswählen). Dann muss der Name im App-Service `DATABASE_PUBLIC_URL` sein.
+
+### 3. App neu starten
+
+- Beim App-Service **Redeploy** auslösen (z. B. **Deploy** → **Redeploy** oder neuen Commit deployen).
+
+Danach nutzt die App beim Start die öffentliche URL und der Login sollte wieder funktionieren.
+
+## Was passiert technisch
+
+- Die App prüft beim Start: Enthält `DATABASE_URL` `railway.internal` und ist `DATABASE_PUBLIC_URL` gesetzt, wird intern `DATABASE_URL` durch `DATABASE_PUBLIC_URL` ersetzt.
+- Migration und Laufzeit nutzen dann die öffentliche DB-URL; die Meldung „Can't reach database server at postgres.railway.internal“ verschwindet.

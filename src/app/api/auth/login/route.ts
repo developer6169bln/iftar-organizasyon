@@ -172,11 +172,17 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error('Login 500:', errorMessage)
-    const hint = errorMessage.replace(/postgresql:\/\/[^@]+@/i, 'postgresql://***@').slice(0, 200)
+    const isRailwayInternal =
+      /Can't reach database server|railway\.internal/i.test(errorMessage)
+    const hint = isRailwayInternal
+      ? 'Datenbank nicht erreichbar. In Railway: Beim App-Service unter Variables "DATABASE_PUBLIC_URL" anlegen und auf die öffentliche URL des Postgres-Services setzen (im Postgres-Service unter Variables/Connect kopieren). Dann Redeploy.'
+      : errorMessage.replace(/postgresql:\/\/[^@]+@/i, 'postgresql://***@').slice(0, 200)
     return NextResponse.json(
       {
-        error: 'Anmeldung fehlgeschlagen. Bitte später erneut versuchen oder Admin kontaktieren.',
-        code: 'LOGIN_ERROR',
+        error: isRailwayInternal
+          ? 'Datenbank von dieser App nicht erreichbar. Bitte DATABASE_PUBLIC_URL in Railway setzen (siehe Hinweis).'
+          : 'Anmeldung fehlgeschlagen. Bitte später erneut versuchen oder Admin kontaktieren.',
+        code: isRailwayInternal ? 'DB_UNREACHABLE' : 'LOGIN_ERROR',
         hint,
       },
       { status: 500 }
