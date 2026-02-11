@@ -1,0 +1,17 @@
+# Reduziert Build-Kontext für Railway/Nixpacks (schnellerer Upload, weniger Timeout)
+node_modules
+.next
+out
+.git
+.gitignore
+.env*
+*.md
+.DS_Store
+coverage
+*.log
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+prisma/*.db
+prisma/*.db-journal
+*.code-workspace
