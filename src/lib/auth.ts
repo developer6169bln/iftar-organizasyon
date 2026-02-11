@@ -25,20 +25,45 @@ export async function createUser(email: string, name: string, password: string) 
   }
 }
 
-/** Holt User für Login – nur Felder, die garantiert existieren (ohne mainUserCategoryId), damit Login auch ohne Migration funktioniert. */
+/** Holt User für Login. Bei Schema-Fehler (fehlende Spalten) Fallback per Raw-Query mit Basis-Spalten. */
 export async function getUserByEmail(email: string) {
-  return prisma.user.findUnique({
-    where: { email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      password: true,
-      role: true,
-      editionId: true,
-      editionExpiresAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  })
+  try {
+    return await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        password: true,
+        role: true,
+        editionId: true,
+        editionExpiresAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    const isSchemaError =
+      /editionId|editionExpiresAt|mainUserCategoryId|does not exist|column.*not exist/i.test(msg) ||
+      (e as { code?: string }).code === 'P2021'
+    if (!isSchemaError) throw e
+
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ id: string; email: string; name: string; password: string; role: string; createdAt: Date; updatedAt: Date }>
+    >('SELECT id, email, name, password, role, "createdAt", "updatedAt" FROM users WHERE email = $1 LIMIT 1', email)
+    const row = rows[0]
+    if (!row) return null
+    return {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      password: row.password,
+      role: row.role,
+      editionId: null,
+      editionExpiresAt: null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }
+  }
 }
