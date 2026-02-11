@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 
 interface EingangGuestRow {
   id: string
@@ -66,6 +67,7 @@ export default function EingangskontrollePage() {
   const [togglingAnwesendId, setTogglingAnwesendId] = useState<string | null>(null)
   const [publicLink, setPublicLink] = useState<string>('')
   const [showPublicLink, setShowPublicLink] = useState(false)
+  const [exportPdfLoading, setExportPdfLoading] = useState(false)
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -336,6 +338,79 @@ export default function EingangskontrollePage() {
     }
   }
 
+  const handleExportExcel = () => {
+    if (filteredRows.length === 0) {
+      alert('Keine Daten zum Exportieren.')
+      return
+    }
+    const exportData = filteredRows.map((row) => ({
+      'Tisch-Nummer': row.tischNummer || '',
+      GAST: row.name || '',
+      'STAAT/INSTITUTION': row.staatInstitution || '',
+      Kategorie: row.kategorie || '',
+      VIP: row.isVip ? 'Ja' : 'Nein',
+      Vorname: row.vorname || '',
+      Name: row.nachname || '',
+      'Anrede 1': row.anrede1 || '',
+      'Anrede 2': row.anrede2 || '',
+      'Anrede 3': row.anrede3 || '',
+      Anwesend: row.anwesend ? 'Ja' : 'Nein',
+      Notizen: row.notizen || '',
+    }))
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    XLSX.utils.book_append_sheet(wb, ws, 'Zusagen')
+    const fileName = `Zusagen_${new Date().toISOString().split('T')[0]}.xlsx`
+    XLSX.writeFile(wb, fileName)
+  }
+
+  const handleExportPdf = async () => {
+    if (filteredRows.length === 0) {
+      alert('Keine Daten zum Exportieren.')
+      return
+    }
+    setExportPdfLoading(true)
+    try {
+      const res = await fetch('/api/checkin/export-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows: filteredRows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            vorname: r.vorname,
+            nachname: r.nachname,
+            tischNummer: r.tischNummer,
+            kategorie: r.kategorie,
+            isVip: r.isVip,
+            staatInstitution: r.staatInstitution,
+            anrede1: r.anrede1,
+            anrede2: r.anrede2,
+            anrede3: r.anrede3,
+            notizen: r.notizen,
+            anwesend: r.anwesend,
+          })),
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'PDF-Export fehlgeschlagen')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Zusagen_${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'PDF-Export fehlgeschlagen')
+    } finally {
+      setExportPdfLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
@@ -405,9 +480,9 @@ export default function EingangskontrollePage() {
         </div>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
             <h2 className="text-xl font-semibold">Liste der Gäste mit Zusage</h2>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
                 <input
                   type="text"
@@ -438,6 +513,24 @@ export default function EingangskontrollePage() {
                   Zurücksetzen
                 </button>
               )}
+              <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={filteredRows.length === 0}
+                  className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Export Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  disabled={filteredRows.length === 0 || exportPdfLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {exportPdfLoading ? '… Exportiere' : 'Export PDF'}
+                </button>
+              </div>
             </div>
           </div>
 
