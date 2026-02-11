@@ -59,9 +59,9 @@ async function main() {
     return
   }
 
-  // Railway: Wenn interne URL oft nicht erreichbar ist, öffentliche URL nutzen (von Postgres-Service)
-  if (process.env.DATABASE_PUBLIC_URL && process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway.internal')) {
-    console.log('🔄 Nutze DATABASE_PUBLIC_URL (öffentliche DB-URL)')
+  // Railway: Öffentliche URL hat Vorrang (vermeidet "Can't reach postgres.railway.internal")
+  if (process.env.DATABASE_PUBLIC_URL) {
+    console.log('🔄 Nutze DATABASE_PUBLIC_URL für DB-Verbindung')
     process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
   }
 
