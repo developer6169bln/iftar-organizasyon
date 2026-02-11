@@ -147,9 +147,14 @@ export default function EingangskontrollePage() {
       const mapped: EingangGuestRow[] = guestsWithZusage.map((g: any) => {
         const add = parseAdditionalData(g.additionalData)
         const fullName: string = g.name || ''
-        const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
-        const vorname = nameParts[0] || ''
-        const nachname = nameParts.slice(1).join(' ') || fullName
+        // Vorname/Nachname aus additionalData (z. B. Import/Sheets), sonst aus vollem Namen splitten
+        let vorname = getFromAdditional(add, ['Vorname', 'vorname', 'Vorname ', 'FirstName'])
+        let nachname = getFromAdditional(add, ['Nachname', 'nachname', 'Name', 'LastName', 'Familienname'])
+        if (!vorname && !nachname) {
+          const nameParts = fullName.split(' ').filter((p: string) => p.trim() !== '')
+          vorname = nameParts[0] || ''
+          nachname = nameParts.slice(1).join(' ') || ''
+        }
         const tischNummer =
           g.tableNumber != null
             ? String(g.tableNumber)
