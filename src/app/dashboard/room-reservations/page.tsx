@@ -21,11 +21,63 @@ type Reservation = {
   notes: string | null
 }
 
+const ROOM_COLORS = [
+  '#3b82f6', '#22c55e', '#eab308', '#ef4444', '#a855f7', '#ec4899', '#06b6d4', '#f97316',
+  '#84cc16', '#6366f1', '#14b8a6', '#e11d48',
+]
+
+function getRoomColor(roomId: string): string {
+  let n = 0
+  for (let i = 0; i < roomId.length; i++) n = (n * 31 + roomId.charCodeAt(i)) >>> 0
+  return ROOM_COLORS[n % ROOM_COLORS.length]
+}
+
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 function formatDateTime(d: string) {
   return new Date(d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function ReservationTooltip({
+  reservation,
+  x,
+  y,
+}: {
+  reservation: Reservation
+  x: number
+  y: number
+}) {
+  return (
+    <div
+      className="fixed z-50 max-w-xs rounded-lg border border-gray-200 bg-white p-3 text-left shadow-lg"
+      style={{ left: x + 12, top: y + 8 }}
+    >
+      <div className="text-xs font-medium text-gray-900">{reservation.title}</div>
+      <div className="mt-1 text-xs text-gray-600">
+        <span className="font-medium">{reservation.room.name}</span>
+      </div>
+      <div className="mt-1 text-xs text-gray-500">
+        {formatDateTime(reservation.startAt)} – {reservation.endAt ? formatDateTime(reservation.endAt) : '–'}
+      </div>
+      {reservation.project && (
+        <div className="mt-0.5 text-xs text-gray-500">Projekt: {reservation.project.name}</div>
+      )}
+      {reservation.event && (
+        <div className="text-xs text-gray-500">Event: {reservation.event.title}</div>
+      )}
+      {reservation.responsibleUser && (
+        <div className="text-xs text-gray-500">Verantwortlich: {reservation.responsibleUser.name || reservation.responsibleUser.email}</div>
+      )}
+      {reservation.eventLeader && (
+        <div className="text-xs text-gray-500">Leiter: {reservation.eventLeader.name || reservation.eventLeader.email}</div>
+      )}
+      <div className="mt-0.5 text-xs text-gray-400">Reserviert von: {reservation.reservedBy.name}</div>
+      {reservation.notes && (
+        <div className="mt-1 border-t border-gray-100 pt-1 text-xs text-gray-500">{reservation.notes}</div>
+      )}
+    </div>
+  )
 }
 
 /** Prüft, ob [slotStart, slotEnd) eine bestehende Reservierung schneidet. */
@@ -119,6 +171,127 @@ function RoomCalendar({
   )
 }
 
+/** Kalenderansicht: Räume als Zeilen, Tage als Spalten, Reservierungen als farbige Blöcke. */
+function ReservationsCalendarView({
+  reservations,
+  onHoverReservation,
+}: {
+  reservations: Reservation[]
+  onHoverReservation: (r: Reservation | null, e?: React.MouseEvent) => void
+}) {
+  const startDay = new Date()
+  startDay.setHours(0, 0, 0, 0)
+  const days: Date[] = []
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(startDay)
+    d.setDate(d.getDate() + i)
+    days.push(d)
+  }
+  const dayStart = days[0].getTime()
+  const dayEnd = days[days.length - 1].getTime() + 24 * 60 * 60 * 1000
+  const inRange = reservations.filter((r) => {
+    const t = new Date(r.startAt).getTime()
+    return t >= dayStart && t < dayEnd
+  })
+  const roomIds = Array.from(new Set(inRange.map((r) => r.roomId)))
+  const hourMin = 8
+  const hourMax = 22
+  const hoursCount = hourMax - hourMin
+
+  const getBlockStyle = (r: Reservation) => {
+    const start = new Date(r.startAt).getTime()
+    const end = r.endAt ? new Date(r.endAt).getTime() : start + 60 * 60 * 1000
+    const dayIdx = Math.floor((start - dayStart) / (24 * 60 * 60 * 1000))
+    if (dayIdx < 0 || dayIdx >= days.length) return null
+    const dayStartMs = dayStart + dayIdx * 24 * 60 * 60 * 1000
+    const cellStart = dayStartMs + hourMin * 60 * 60 * 1000
+    const cellEnd = dayStartMs + hourMax * 60 * 60 * 1000
+    const top = ((Math.max(start, cellStart) - cellStart) / (cellEnd - cellStart)) * 100
+    const bottom = ((Math.min(end, cellEnd) - cellStart) / (cellEnd - cellStart)) * 100
+    const height = Math.max(8, bottom - top)
+    return { top: `${top}%`, height: `${height}%` }
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className="sticky left-0 z-10 w-24 border border-gray-300 bg-gray-100 p-1 font-medium">Raum</th>
+            {days.map((d) => (
+              <th key={d.toISOString()} className="min-w-[4rem] border border-gray-300 bg-gray-100 p-1 font-medium">
+                {d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {roomIds.length === 0 && (
+            <tr>
+              <td colSpan={days.length + 1} className="border border-gray-200 px-2 py-4 text-center text-gray-500">
+                Keine Reservierungen in den nächsten 14 Tagen
+              </td>
+            </tr>
+          )}
+          {roomIds.map((rid) => {
+            const roomName = inRange.find((r) => r.roomId === rid)?.room.name ?? rid
+            const roomRes = inRange.filter((r) => r.roomId === rid)
+            return (
+              <tr key={rid}>
+                <td
+                  className="sticky left-0 z-10 border border-gray-300 bg-gray-50 p-1 font-medium"
+                  style={{ borderLeftWidth: 4, borderLeftColor: getRoomColor(rid) }}
+                >
+                  {roomName}
+                </td>
+                {days.map((day) => {
+                  const dayStartMs = day.getTime()
+                  const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000
+                  const cellRes = roomRes.filter((r) => {
+                    const s = new Date(r.startAt).getTime()
+                    const e = r.endAt ? new Date(r.endAt).getTime() : s + 60 * 60 * 1000
+                    return s < dayEndMs && e > dayStartMs
+                  })
+                  return (
+                    <td
+                      key={day.toISOString()}
+                      className="relative h-24 min-w-[4rem] border border-gray-200 bg-white align-top p-0"
+                    >
+                      <div className="relative h-full w-full">
+                        {cellRes.map((r) => {
+                          const style = getBlockStyle(r)
+                          if (!style) return null
+                          return (
+                            <div
+                              key={r.id}
+                              className="absolute left-0.5 right-0.5 rounded px-0.5 py-px text-[10px] font-medium text-white shadow-sm overflow-hidden truncate"
+                              style={{
+                                ...style,
+                                backgroundColor: getRoomColor(r.roomId),
+                                opacity: 0.95,
+                              }}
+                              onMouseEnter={(e) => onHoverReservation(r, e)}
+                              onMouseMove={(e) => onHoverReservation(r, e)}
+                              onMouseLeave={() => onHoverReservation(null)}
+                              title={r.title}
+                            >
+                              {r.title}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function RoomReservationsPage() {
   const searchParams = useSearchParams()
   const projectIdParam = searchParams.get('projectId')
@@ -150,6 +323,13 @@ export default function RoomReservationsPage() {
   const [reservationSlots, setReservationSlots] = useState<{ start: string; end: string }[]>([])
   const [savingReservation, setSavingReservation] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [hoveredReservation, setHoveredReservation] = useState<Reservation | null>(null)
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+
+  const handleHoverReservation = (r: Reservation | null, e?: React.MouseEvent) => {
+    setHoveredReservation(r)
+    if (e) setTooltipPos({ x: e.clientX, y: e.clientY })
+  }
 
   const toggleCalendarSlot = (start: string, end: string) => {
     setReservationSlots((prev) => {
@@ -651,41 +831,66 @@ export default function RoomReservationsPage() {
         {reservations.length === 0 ? (
           <p className="text-sm text-gray-500">Noch keine Reservierungen.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Raum</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Titel</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Start</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Ende</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Projekt / Event</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Verantwortlicher</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Leiter</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">Reserviert von</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {reservations.map((r) => (
-                  <tr key={r.id} className="bg-white">
-                    <td className="px-3 py-2">{r.room.name}</td>
-                    <td className="px-3 py-2">{r.title}</td>
-                    <td className="px-3 py-2">{formatDateTime(r.startAt)}</td>
-                    <td className="px-3 py-2">{r.endAt ? formatDateTime(r.endAt) : '–'}</td>
-                    <td className="px-3 py-2">
-                      {r.project ? r.project.name : '–'}
-                      {r.event && <span className="text-gray-500"> / {r.event.title}</span>}
-                    </td>
-                    <td className="px-3 py-2">{r.responsibleUser ? (r.responsibleUser.name || r.responsibleUser.email) : '–'}</td>
-                    <td className="px-3 py-2">{r.eventLeader ? (r.eventLeader.name || r.eventLeader.email) : '–'}</td>
-                    <td className="px-3 py-2">{r.reservedBy.name}</td>
+          <>
+            <p className="mb-2 text-xs text-gray-500">Kalender (farbig nach Raum). Fahren Sie mit der Maus über einen Block oder eine Zeile für Details.</p>
+            <div className="mb-4 rounded-lg border border-gray-200 bg-white p-2">
+              <ReservationsCalendarView
+                reservations={reservations}
+                onHoverReservation={handleHoverReservation}
+              />
+            </div>
+            <h3 className="mb-2 text-sm font-medium text-gray-700">Liste</h3>
+            <div className="overflow-x-auto rounded-lg border border-gray-200">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Raum</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Titel</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Start</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Ende</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Projekt / Event</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Verantwortlicher</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Leiter</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Reserviert von</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {reservations.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="bg-white hover:bg-gray-50"
+                      style={{ borderLeftWidth: 4, borderLeftColor: getRoomColor(r.roomId) }}
+                      onMouseEnter={(e) => handleHoverReservation(r, e)}
+                      onMouseMove={(e) => { if (hoveredReservation?.id === r.id) setTooltipPos({ x: e.clientX, y: e.clientY }) }}
+                      onMouseLeave={(e) => handleHoverReservation(null, e)}
+                    >
+                      <td className="px-3 py-2">{r.room.name}</td>
+                      <td className="px-3 py-2">{r.title}</td>
+                      <td className="px-3 py-2">{formatDateTime(r.startAt)}</td>
+                      <td className="px-3 py-2">{r.endAt ? formatDateTime(r.endAt) : '–'}</td>
+                      <td className="px-3 py-2">
+                        {r.project ? r.project.name : '–'}
+                        {r.event && <span className="text-gray-500"> / {r.event.title}</span>}
+                      </td>
+                      <td className="px-3 py-2">{r.responsibleUser ? (r.responsibleUser.name || r.responsibleUser.email) : '–'}</td>
+                      <td className="px-3 py-2">{r.eventLeader ? (r.eventLeader.name || r.eventLeader.email) : '–'}</td>
+                      <td className="px-3 py-2">{r.reservedBy.name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
+
+      {hoveredReservation && (
+        <ReservationTooltip
+          reservation={hoveredReservation}
+          x={tooltipPos.x}
+          y={tooltipPos.y}
+        />
+      )}
 
       <Link href="/dashboard" className="mt-6 inline-block text-indigo-600 hover:underline">← Zum Dashboard</Link>
     </div>
