@@ -25,11 +25,36 @@ export async function DELETE(
   }
 
   const { id } = await params
-  const reservation = await prisma.roomReservation.findUnique({ where: { id } })
-  if (!reservation) {
-    return NextResponse.json({ error: 'Reservierung nicht gefunden' }, { status: 404 })
-  }
 
-  await prisma.roomReservation.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
+  try {
+    await prisma.roomReservation.delete({ where: { id } })
+    return NextResponse.json({ ok: true })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+
+    // Wenn die Tabelle/Spalten im Zielsystem noch nicht migriert sind, per Raw-DELETE versuchen
+    if (msg.includes('responsibleUserId') || msg.includes('eventLeaderId') || msg.includes('does not exist') || msg.includes('room_reservations')) {
+      try {
+        await prisma.$executeRawUnsafe('DELETE FROM "room_reservations" WHERE id = $1', id)
+        return NextResponse.json({ ok: true })
+      } catch (e2: unknown) {
+        const msg2 = e2 instanceof Error ? e2.message : String(e2)
+        return NextResponse.json(
+          {
+            error: `Reservierung konnte nicht gelöscht werden (Migration fehlt?): ${msg2}. Bitte Datenbank-Migration ausführen (z. B. npx prisma migrate deploy).`,
+          },
+          { status: 500 }
+        )
+      }
+    }
+
+    if (msg.includes('Record to delete does not exist')) {
+      return NextResponse.json({ error: 'Reservierung nicht gefunden' }, { status: 404 })
+    }
+
+    return NextResponse.json(
+      { error: `Reservierung konnte nicht gelöscht werden: ${msg}` },
+      { status: 500 }
+    )
+  }
 }
