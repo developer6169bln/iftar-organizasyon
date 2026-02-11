@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Benutzer nicht gefunden' }, { status: 404 })
     }
 
+    const canManageRoomReservations =
+      !!isAdmin || projects.some((p: { isOwner?: boolean }) => p.isOwner) || (user?.editionId != null)
+
     return NextResponse.json({
       user,
       allowedPageIds: allowedPageIds ?? [],
@@ -37,6 +40,7 @@ export async function GET(request: NextRequest) {
       projects,
       projectId: projectId || null,
       isProjectOwner: isProjectOwner ?? null,
+      canManageRoomReservations: !!canManageRoomReservations,
     })
   } catch (error) {
     console.error('GET /api/me error:', error)

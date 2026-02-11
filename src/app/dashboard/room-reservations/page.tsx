@@ -338,6 +338,7 @@ export default function RoomReservationsPage() {
   const [events, setEvents] = useState<{ id: string; title: string; date: string; projectId: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canManageRoomReservations, setCanManageRoomReservations] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [newRoomDesc, setNewRoomDesc] = useState('')
   const [addingRoom, setAddingRoom] = useState(false)
@@ -397,6 +398,7 @@ export default function RoomReservationsPage() {
       if (meRes.ok) {
         const me = await meRes.json()
         setIsAdmin(!!me.isAdmin)
+        setCanManageRoomReservations(!!me.canManageRoomReservations)
         if (me.projects?.length) setProjects(me.projects)
       }
       if (mainRes.ok) {
@@ -510,6 +512,21 @@ export default function RoomReservationsPage() {
       if (res.ok) {
         setRooms((prev) => prev.filter((r) => r.id !== id))
         setReservations((prev) => prev.filter((r) => r.roomId !== id))
+      } else {
+        const err = await res.json()
+        alert(err.error || 'Fehler')
+      }
+    } catch {
+      alert('Fehler')
+    }
+  }
+
+  const deleteReservation = async (id: string) => {
+    if (!confirm('Reservierung wirklich löschen? Das Datum wird freigegeben.')) return
+    try {
+      const res = await fetch(`/api/room-reservations/${id}`, { method: 'DELETE', credentials: 'include' })
+      if (res.ok) {
+        setReservations((prev) => prev.filter((r) => r.id !== id))
       } else {
         const err = await res.json()
         alert(err.error || 'Fehler')
@@ -873,6 +890,7 @@ export default function RoomReservationsPage() {
               />
             </div>
             <h3 className="mb-2 text-sm font-medium text-gray-700">Liste</h3>
+            <p className="mb-2 text-xs text-gray-500">Reservierungen löschen (Datum freigeben) können nur Admin und Hauptbenutzer.</p>
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50">
@@ -885,6 +903,9 @@ export default function RoomReservationsPage() {
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Verantwortlicher</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Leiter</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Reserviert von</th>
+                    {canManageRoomReservations && (
+                      <th className="px-3 py-2 text-left font-medium text-gray-700">Aktionen</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -908,6 +929,18 @@ export default function RoomReservationsPage() {
                       <td className="px-3 py-2">{r.responsibleUser ? (r.responsibleUser.name || r.responsibleUser.email) : '–'}</td>
                       <td className="px-3 py-2">{r.eventLeader ? (r.eventLeader.name || r.eventLeader.email) : '–'}</td>
                       <td className="px-3 py-2">{r.reservedBy.name}</td>
+                      {canManageRoomReservations && (
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); deleteReservation(r.id) }}
+                            className="text-red-600 hover:underline text-sm"
+                            title="Reservierung löschen (Datum freigeben)"
+                          >
+                            Löschen
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
