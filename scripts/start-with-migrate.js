@@ -59,7 +59,13 @@ async function main() {
     return
   }
 
-  const dbUrl = process.env.DATABASE_URL
+  // Railway: Wenn interne URL oft nicht erreichbar ist, öffentliche URL nutzen (von Postgres-Service)
+  if (process.env.DATABASE_PUBLIC_URL && process.env.DATABASE_URL && process.env.DATABASE_URL.includes('railway.internal')) {
+    console.log('🔄 Nutze DATABASE_PUBLIC_URL (öffentliche DB-URL)')
+    process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
+  }
+
+  let dbUrl = process.env.DATABASE_URL
   if (!dbUrl) {
     console.warn('⚠️ DATABASE_URL fehlt – starte App ohne Migration.')
     await run(binNext, nextArgs)
@@ -78,17 +84,38 @@ async function main() {
     return
   }
 
-  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '15000', 10) // 15s – Railway braucht schnellen Start
+  const maxWaitMs = parseInt(process.env.DB_WAIT_TIMEOUT_MS || '15000', 10)
   const started = Date.now()
+  let dbReachable = false
 
   console.log(`⏳ Warte auf DB TCP: ${host}:${dbPort} (max ${maxWaitMs}ms)`)
   while (Date.now() - started < maxWaitMs) {
     const ok = await canConnect(host, dbPort, 2000)
     if (ok) {
       console.log('✅ DB erreichbar')
+      dbReachable = true
       break
     }
     await sleep(2000)
+  }
+
+  // Fallback: Interne Railway-URL nicht erreichbar → öffentliche URL nutzen (DATABASE_PUBLIC_URL)
+  if (!dbReachable && host && host.includes('railway.internal') && process.env.DATABASE_PUBLIC_URL) {
+    console.log('⚠️ Interne DB nicht erreichbar – wechsle auf DATABASE_PUBLIC_URL')
+    process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL
+    dbUrl = process.env.DATABASE_URL
+    try {
+      const u2 = new URL(dbUrl)
+      host = u2.hostname
+      dbPort = u2.port ? parseInt(u2.port, 10) : 5432
+      const ok = await canConnect(host, dbPort, 5000)
+      if (ok) {
+        console.log('✅ DB über öffentliche URL erreichbar')
+        dbReachable = true
+      }
+    } catch (e2) {
+      console.warn('⚠️ DATABASE_PUBLIC_URL auch nicht erreichbar:', e2?.message || e2)
+    }
   }
 
   // Migration beim Start (DB ist jetzt erreichbar)
