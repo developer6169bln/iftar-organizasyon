@@ -26,7 +26,8 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.error || 'Giriş başarısız')
+        const msg = data.error || 'Giriş başarısız'
+        setError(data.hint ? `${msg} (${data.hint})` : msg)
         setLoading(false)
         return
       }

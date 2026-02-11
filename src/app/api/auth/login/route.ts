@@ -124,10 +124,16 @@ export async function POST(request: NextRequest) {
       if (runMigrateDeploy()) {
         try {
           const user = await getUserByEmail(validatedData.email)
-          if (!user) {
+          if (!user || !user.password) {
             return NextResponse.json({ error: 'E-posta veya şifre hatalı' }, { status: 401 })
           }
-          if (!(await verifyPassword(validatedData.password, user.password))) {
+          let ok = false
+          try {
+            ok = await verifyPassword(validatedData.password, user.password)
+          } catch {
+            ok = false
+          }
+          if (!ok) {
             return NextResponse.json({ error: 'E-posta veya şifre hatalı' }, { status: 401 })
           }
           const token = await new SignJWT({ userId: user.id, email: user.email })
@@ -166,10 +172,12 @@ export async function POST(request: NextRequest) {
       )
     }
     console.error('Login 500:', errorMessage)
+    const hint = errorMessage.replace(/postgresql:\/\/[^@]+@/i, 'postgresql://***@').slice(0, 200)
     return NextResponse.json(
       {
         error: 'Anmeldung fehlgeschlagen. Bitte später erneut versuchen oder Admin kontaktieren.',
         code: 'LOGIN_ERROR',
+        hint,
       },
       { status: 500 }
     )
