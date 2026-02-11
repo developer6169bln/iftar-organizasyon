@@ -37,11 +37,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    throw parseError
+    return NextResponse.json(
+      { error: 'Ungültige Anfrage (kein JSON oder fehlerhaft)' },
+      { status: 400 }
+    )
   }
 
   try {
-    // Kullanıcıyı bul
     const user = await getUserByEmail(validatedData.email)
     if (!user) {
       return NextResponse.json(
@@ -50,8 +52,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Şifreyi doğrula
-    const isValidPassword = await verifyPassword(validatedData.password, user.password)
+    if (!user.password || typeof user.password !== 'string') {
+      return NextResponse.json(
+        { error: 'E-posta veya şifre hatalı' },
+        { status: 401 }
+      )
+    }
+
+    let isValidPassword: boolean
+    try {
+      isValidPassword = await verifyPassword(validatedData.password, user.password)
+    } catch {
+      isValidPassword = false
+    }
     if (!isValidPassword) {
       return NextResponse.json(
         { error: 'E-posta veya şifre hatalı' },
@@ -102,8 +115,9 @@ export async function POST(request: NextRequest) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     // Prisma-Schema-Fehler (z. B. Migration nicht ausgeführt): klaren Hinweis zurückgeben
     const isSchemaError =
-      /does not exist|mainUserCategoryId|main_user_categories|column.*not exist/i.test(errorMessage) ||
-      (error as { code?: string }).code === 'P2021'
+      /does not exist|mainUserCategoryId|main_user_categories|column.*not exist|relation.*does not exist/i.test(errorMessage) ||
+      (error as { code?: string }).code === 'P2021' ||
+      (error as { code?: string }).code === 'P2010'
     if (isSchemaError) {
       // Einmal automatisch Migration ausführen und Login erneut versuchen
       console.log('Login: Schema-Fehler erkannt – führe prisma migrate deploy aus…')
@@ -151,8 +165,12 @@ export async function POST(request: NextRequest) {
         { status: 503 }
       )
     }
+    console.error('Login 500:', errorMessage)
     return NextResponse.json(
-      { error: 'Giriş sırasında bir hata oluştu', details: errorMessage },
+      {
+        error: 'Anmeldung fehlgeschlagen. Bitte später erneut versuchen oder Admin kontaktieren.',
+        code: 'LOGIN_ERROR',
+      },
       { status: 500 }
     )
   }
