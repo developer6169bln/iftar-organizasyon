@@ -95,6 +95,46 @@ function slotToLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** Kombiniert aufeinanderfolgende 30-Min-Blöcke zu einem Block (Start = erster Start, Ende = letztes Ende). */
+function mergeConsecutiveSlots(slots: { start: string; end: string }[]): { start: string; end: string }[] {
+  if (slots.length === 0) return []
+  const sorted = [...slots].sort((a, b) => a.start.localeCompare(b.start))
+  const merged: { start: string; end: string }[] = [{ start: sorted[0].start, end: sorted[0].end }]
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1]
+    if (sorted[i].start === prev.end) {
+      prev.end = sorted[i].end
+    } else {
+      merged.push({ start: sorted[i].start, end: sorted[i].end })
+    }
+  }
+  return merged
+}
+
+/** Zeitraster: 06:00 bis 03:00 (nächster Tag), alle 30 Minuten = 42 Slots. */
+const SLOT_LABELS: string[] = []
+for (let h = 6; h < 24; h++) {
+  SLOT_LABELS.push(`${String(h).padStart(2, '0')}:00`, `${String(h).padStart(2, '0')}:30`)
+}
+for (let h = 0; h <= 2; h++) {
+  SLOT_LABELS.push(`${String(h).padStart(2, '0')}:00`, `${String(h).padStart(2, '0')}:30`)
+}
+// Letzter Slot endet 03:00, also 42 Zeilen: 06:00..23:30 (36), 00:00..02:30 (6)
+const SLOT_COUNT = 42
+
+function getSlotStartEnd(day: Date, rowIdx: number): { start: Date; end: Date } {
+  const start = new Date(day)
+  start.setHours(0, 0, 0, 0)
+  if (rowIdx < 36) {
+    start.setHours(6 + Math.floor(rowIdx / 2), (rowIdx % 2) * 30, 0, 0)
+  } else {
+    start.setDate(start.getDate() + 1)
+    start.setHours(Math.floor((rowIdx - 36) / 2), ((rowIdx - 36) % 2) * 30, 0, 0)
+  }
+  const end = new Date(start.getTime() + 30 * 60 * 1000)
+  return { start, end }
+}
+
 function RoomCalendar({
   roomReservations,
   selectedSlots,
@@ -112,7 +152,6 @@ function RoomCalendar({
     d.setDate(d.getDate() + i)
     days.push(d)
   }
-  const hours = Array.from({ length: 14 }, (_, i) => i + 8) // 8–21
 
   const isSlotSelected = (slotStart: Date, slotEnd: Date) =>
     selectedSlots.some((s) => s.start === slotToLocal(slotStart) && s.end === slotToLocal(slotEnd))
@@ -120,33 +159,30 @@ function RoomCalendar({
   return (
     <div>
       <p className="mb-2 text-xs text-gray-600">
-        Gebuchte Zeiten sind rot. Klicken Sie auf freie Stunden, um mehrere Blöcke zu wählen (nochmal klicken zum Abwählen).
+        Intervall 30 Min. Zeiten 06:00–03:00. Gebuchte Zeiten rot. Mehrere Blöcke hintereinander werden zu einer Reservierung zusammengefasst.
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="border border-gray-300 bg-gray-100 p-1 font-medium">Uhrzeit</th>
+              <th className="sticky top-0 z-10 border border-gray-300 bg-gray-100 p-1 font-medium">Uhrzeit</th>
               {days.map((d) => (
-                <th key={d.toISOString()} className="border border-gray-300 bg-gray-100 p-1 font-medium">
+                <th key={d.toISOString()} className="sticky top-0 z-10 border border-gray-300 bg-gray-100 p-1 font-medium">
                   {d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {hours.map((hour) => (
-              <tr key={hour}>
-                <td className="border border-gray-300 bg-gray-50 p-1">{hour}:00</td>
+            {Array.from({ length: SLOT_COUNT }, (_, rowIdx) => (
+              <tr key={rowIdx}>
+                <td className="sticky left-0 z-10 border border-gray-300 bg-gray-50 p-0.5 font-medium">{SLOT_LABELS[rowIdx]}</td>
                 {days.map((day) => {
-                  const slotStart = new Date(day)
-                  slotStart.setHours(hour, 0, 0, 0)
-                  const slotEnd = new Date(slotStart)
-                  slotEnd.setHours(slotEnd.getHours() + 1, 0, 0, 0)
+                  const { start: slotStart, end: slotEnd } = getSlotStartEnd(day, rowIdx)
                   const busy = roomReservations.some((r) => slotOverlapsReservation(slotStart, slotEnd, r))
                   const selected = !busy && isSlotSelected(slotStart, slotEnd)
                   return (
-                    <td key={day.toISOString() + hour} className="border border-gray-300 p-0">
+                    <td key={day.toISOString() + rowIdx} className="border border-gray-300 p-0">
                       <button
                         type="button"
                         disabled={busy}
@@ -154,7 +190,7 @@ function RoomCalendar({
                           if (busy) return
                           onToggleSlot(slotToLocal(slotStart), slotToLocal(slotEnd))
                         }}
-                        className={`block w-full py-2 text-center ${busy ? 'cursor-not-allowed bg-red-100 text-gray-500' : selected ? 'bg-green-200 text-green-800' : 'bg-white hover:bg-sky-50'}`}
+                        className={`block w-full py-1 text-center ${busy ? 'cursor-not-allowed bg-red-100 text-gray-500' : selected ? 'bg-green-200 text-green-800' : 'bg-white hover:bg-sky-50'}`}
                         title={busy ? 'Belegt' : selected ? 'Klick zum Abwählen' : `${slotStart.toLocaleString('de-DE')} wählen`}
                       >
                         {busy ? '–' : selected ? '✓' : '+'}
@@ -194,9 +230,8 @@ function ReservationsCalendarView({
     return t >= dayStart && t < dayEnd
   })
   const roomIds = Array.from(new Set(inRange.map((r) => r.roomId)))
-  const hourMin = 8
-  const hourMax = 22
-  const hoursCount = hourMax - hourMin
+  const hourMin = 6
+  const hourMax = 27
 
   const getBlockStyle = (r: Reservation) => {
     const start = new Date(r.startAt).getTime()
@@ -246,11 +281,12 @@ function ReservationsCalendarView({
                 </td>
                 {days.map((day) => {
                   const dayStartMs = day.getTime()
-                  const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000
+                  const cellStartMs = dayStartMs + hourMin * 60 * 60 * 1000
+                  const cellEndMs = dayStartMs + hourMax * 60 * 60 * 1000
                   const cellRes = roomRes.filter((r) => {
                     const s = new Date(r.startAt).getTime()
                     const e = r.endAt ? new Date(r.endAt).getTime() : s + 60 * 60 * 1000
-                    return s < dayEndMs && e > dayStartMs
+                    return s < cellEndMs && e > cellStartMs
                   })
                   return (
                     <td
@@ -484,12 +520,13 @@ export default function RoomReservationsPage() {
   }
 
   const submitReservation = async () => {
-    const slotsToSave =
+    const rawSlots =
       reservationSlots.length > 0
         ? reservationSlots
         : reservationStart
           ? [{ start: reservationStart, end: reservationEnd || reservationStart }]
           : []
+    const slotsToSave = reservationSlots.length > 0 ? mergeConsecutiveSlots(rawSlots) : rawSlots
     if (!reservationRoomId || !reservationTitle.trim() || slotsToSave.length === 0) {
       alert('Bitte Raum, Titel und mindestens einen Zeitblock angeben (Kalender oder Start/Ende).')
       return
@@ -756,21 +793,14 @@ export default function RoomReservationsPage() {
                         {reservationSlots.length > 0 && (
                           <div className="mt-3">
                             <p className="mb-1 text-xs font-medium text-gray-600">
-                              Gewählte Blöcke ({reservationSlots.length}):
+                              Gewählte Zeiten (zusammengefasst: {mergeConsecutiveSlots(reservationSlots).length} Reservierung/en)
                             </p>
                             <ul className="space-y-1 text-xs">
-                              {reservationSlots.map((slot, i) => (
+                              {mergeConsecutiveSlots(reservationSlots).map((slot, i) => (
                                 <li key={i} className="flex items-center justify-between rounded bg-white px-2 py-1">
                                   <span>
                                     {formatDateTime(slot.start)} – {formatDateTime(slot.end)}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeReservationSlot(i)}
-                                    className="text-red-600 hover:underline"
-                                  >
-                                    Entfernen
-                                  </button>
                                 </li>
                               ))}
                             </ul>
@@ -800,9 +830,12 @@ export default function RoomReservationsPage() {
               >
                 {savingReservation
                   ? 'Speichern…'
-                  : reservationSlots.length > 1
-                    ? `${reservationSlots.length} Reservierungen speichern`
-                    : reservationSlots.length === 1 || reservationStart
+                  : reservationSlots.length > 0
+                    ? (() => {
+                        const n = mergeConsecutiveSlots(reservationSlots).length
+                        return n > 1 ? `${n} Reservierungen speichern` : 'Reservierung speichern'
+                      })()
+                    : reservationStart
                       ? 'Reservierung speichern'
                       : 'Reservierung speichern'}
               </button>
