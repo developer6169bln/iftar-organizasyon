@@ -160,32 +160,37 @@ export default function EingangskontrollePage() {
             ? String(g.tableNumber)
             : getFromAdditional(add, ['Tisch-Nummer', 'Tischnummer', 'Tisch'])
         const kategorie = getFromAdditional(add, ['Kategorie', 'Kategorie ', 'KATEGORIE'])
+        // Staat/Institution: zuerst guest.organization, dann additionalData mit vielen Schreibweisen
         let staatInstitution = ''
-        if (g.organization && String(g.organization).trim() !== '') {
+        if (g.organization != null && String(g.organization).trim() !== '') {
           staatInstitution = String(g.organization).trim()
-        } else {
-          staatInstitution =
-            getFromAdditional(add, [
-              'Staat/Institution',
-              'Staat / Institution',
-              'StaatInstitution',
-              'Staat_Institution',
-              'Institution',
-              'Staat',
-            ]) ||
-            (() => {
-              for (const [key, value] of Object.entries(add)) {
-                const k = key.toLowerCase()
-                if (
-                  (k.includes('staat') || k.includes('institution')) &&
-                  value != null &&
-                  String(value).trim() !== ''
-                )
-                  return String(value).trim()
-                return ''
-              }
-              return ''
-            })()
+        }
+        if (!staatInstitution) {
+          staatInstitution = getFromAdditional(add, [
+            'Staat/Institution',
+            'Staat / Institution',
+            'Staat/ Institution',
+            'Staat /Institution',
+            'StaatInstitution',
+            'Staat_Institution',
+            'Institution',
+            'Staat',
+            'Organisation',
+            'Organization',
+          ])
+        }
+        if (!staatInstitution) {
+          for (const [key, value] of Object.entries(add)) {
+            const k = key.toLowerCase()
+            if (
+              (k.includes('staat') || k.includes('institution') || k.includes('organisation') || k.includes('organization')) &&
+              value != null &&
+              String(value).trim() !== ''
+            ) {
+              staatInstitution = String(value).trim()
+              break
+            }
+          }
         }
         const anrede1 = getFromAdditional(add, ['Anrede 1', 'Anrede1', 'Anrede_1'])
         const anrede2 = getFromAdditional(add, ['Anrede 2', 'Anrede2', 'Anrede_2'])
