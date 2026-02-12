@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendInvitationEmail } from '@/lib/email'
+
+/** Verzögerung zwischen E-Mails (ms), um Rate-Limits von Mailjet/Gmail zu vermeiden */
+const EMAIL_DELAY_MS = 250
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 import { getBaseUrlForInvitationEmails, isLocalhostUrl } from '@/lib/appUrl'
 import { getUserIdFromRequest } from '@/lib/auditLog'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
@@ -348,6 +352,9 @@ export async function POST(request: NextRequest) {
           success: true,
           invitationId: invitation.id,
         })
+
+        // Kurze Pause zwischen E-Mails, um Rate-Limits (Mailjet, Gmail) zu vermeiden
+        await sleep(EMAIL_DELAY_MS)
       } catch (error) {
         console.error(`Fehler beim Senden an ${guest.name}:`, error)
         

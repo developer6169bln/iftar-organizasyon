@@ -1064,6 +1064,9 @@ export default function InvitationsPage() {
     }
   }
 
+  const SEND_BATCH_SIZE = 25
+  const BATCH_DELAY_MS = 2000
+
   const handleSendInvitations = async () => {
     if (selectedGuests.length === 0) {
       alert('Bitte wählen Sie mindestens einen Gast aus')
@@ -1082,31 +1085,66 @@ export default function InvitationsPage() {
 
     setSending(true)
     try {
-      const response = await fetch('/api/invitations/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          guestIds: selectedGuests,
-          templateId: selectedTemplate || null,
-          language: selectedLanguage,
-          eventId,
-        }),
-      })
+      const batches: string[][] = []
+      for (let i = 0; i < selectedGuests.length; i += SEND_BATCH_SIZE) {
+        batches.push(selectedGuests.slice(i, i + SEND_BATCH_SIZE))
+      }
 
-      const result = await response.json()
-      
-      if (response.ok) {
-        alert(`Einladungen gesendet: ${result.successful} erfolgreich, ${result.failed} fehlgeschlagen`)
+      let totalSuccessful = 0
+      let totalFailed = 0
+      let lastError = ''
+
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i]
+        const response = await fetch('/api/invitations/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            guestIds: batch,
+            templateId: selectedTemplate || null,
+            language: selectedLanguage,
+            eventId,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (response.ok) {
+          totalSuccessful += result.successful ?? 0
+          totalFailed += result.failed ?? 0
+          if (result.results?.some((r: any) => !r.success)) {
+            lastError = result.results.find((r: any) => !r.success)?.error || ''
+          }
+        } else {
+          totalFailed += batch.length
+          lastError = result.error || 'Unbekannter Fehler'
+          if (batches.length > 1) {
+            const proceed = window.confirm(
+              `Fehler bei Batch ${i + 1}/${batches.length}: ${lastError}\n\nWeiter mit dem nächsten Batch?`
+            )
+            if (!proceed) break
+          } else {
+            alert('Fehler: ' + lastError)
+            break
+          }
+        }
+
+        if (i < batches.length - 1) {
+          await new Promise((r) => setTimeout(r, BATCH_DELAY_MS))
+        }
+      }
+
+      if (totalSuccessful > 0 || totalFailed > 0) {
+        alert(
+          `Einladungen gesendet: ${totalSuccessful} erfolgreich, ${totalFailed} fehlgeschlagen` +
+            (lastError && totalFailed > 0 ? `\n\nLetzter Fehler: ${lastError}` : '')
+        )
         setSelectedGuests([])
         await loadInvitations(eventId)
-        
-        // Benachrichtige Gästeliste über Update
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('email-sent-update', Date.now().toString())
           window.dispatchEvent(new Event('email-sent'))
         }
-      } else {
-        alert('Fehler: ' + result.error)
       }
     } catch (error) {
       console.error('Fehler beim Senden:', error)
