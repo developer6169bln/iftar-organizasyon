@@ -23,6 +23,22 @@ function firstNonEmpty(row: Record<string, unknown>, keys: string[]): string | n
   return null
 }
 
+/** Sucht in row nach Spalten, deren Header zum Muster passen (z. B. /vorname/i) */
+function firstNonEmptyByHeaderPattern(
+  row: Record<string, unknown>,
+  headers: string[],
+  pattern: RegExp
+): string | null {
+  for (const h of headers) {
+    if (!pattern.test(h)) continue
+    const val = row[h]
+    if (val === null || val === undefined) continue
+    const s = String(val).trim()
+    if (s) return s
+  }
+  return null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -106,7 +122,16 @@ export async function POST(request: NextRequest) {
           try {
             const add = JSON.parse(g.additionalData) as Record<string, unknown>
             v = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
-            n = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
+            n = String(add['Nachname'] ?? add['nachname'] ?? '').trim()
+            if (!v && !n) {
+              for (const [key, val] of Object.entries(add)) {
+                const k = key.toLowerCase()
+                if ((k.includes('vorname') || k === 'firstname') && val != null && String(val).trim())
+                  v = String(val).trim()
+                if ((k.includes('nachname') || k === 'lastname' || k === 'familienname') && val != null && String(val).trim())
+                  n = String(val).trim()
+              }
+            }
           } catch {
             // ignore
           }
@@ -170,8 +195,24 @@ export async function POST(request: NextRequest) {
             additionalData[key] = v
           }
 
-          const vorname = firstNonEmpty(row, ['Vorname', 'vorname'])
-          const nachname = firstNonEmpty(row, ['Nachname', 'nachname'])
+          let vorname =
+            firstNonEmpty(row, ['Vorname', 'vorname', 'Vorname ', 'FirstName']) ||
+            firstNonEmptyByHeaderPattern(row, headers, /vorname|firstname|prenom/i)
+          let nachname =
+            firstNonEmpty(row, ['Nachname', 'nachname', 'Nachname ', 'LastName', 'Familienname']) ||
+            firstNonEmptyByHeaderPattern(row, headers, /nachname|lastname|familienname/i)
+          // Fallback: wenn nur "Name"-Spalte vorhanden (z. B. "Ali Koc"), daraus ableiten
+          if (!vorname && !nachname) {
+            const nameVal =
+              firstNonEmpty(row, ['Name', 'name', 'NAME', 'Gast', 'GAST']) ||
+              firstNonEmptyByHeaderPattern(row, headers, /^(name|gast|vollständig)$/i) ||
+              firstNonEmpty(row, headers)
+            if (nameVal) {
+              const parts = String(nameVal).trim().split(/\s+/).filter(Boolean)
+              vorname = parts[0] ?? ''
+              nachname = parts.slice(1).join(' ') ?? ''
+            }
+          }
           const fullNameFromSplit =
             [vorname, nachname].filter(Boolean).join(' ').trim() || null
           const name =
