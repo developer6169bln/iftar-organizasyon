@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
         const batch = rows.slice(i, i + batchSize)
         const data: Array<{
           eventId: string
-          name: string | null
+          name: string
           email: string | null
           phone: string | null
           isVip: boolean
@@ -251,7 +251,7 @@ export async function POST(request: NextRequest) {
 
           data.push({
             eventId,
-            name,
+            name: name ?? 'Unbekannt',
             email,
             phone,
             isVip,
