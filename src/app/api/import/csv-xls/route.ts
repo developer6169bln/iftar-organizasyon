@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get('file') as File
     const eventId = (formData.get('eventId') as string) || ''
+    const append = formData.get('append') === 'true' || formData.get('append') === '1'
 
     if (!file) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 })
@@ -90,11 +91,12 @@ export async function POST(request: NextRequest) {
       .map(normalizeKey)
       .filter((h) => h && !shouldIgnoreHeader(h))
 
-    // Import: lösche alte Gästeliste (nur für dieses Event) und schreibe neu
+    // Append: nur neue Einträge hinzufügen; sonst: alte Liste löschen und neu importieren
     const created = await prisma.$transaction(async (tx) => {
-      // Einladungen zuerst löschen (FK auf guests)
-      await tx.invitation.deleteMany({ where: { eventId } })
-      await tx.guest.deleteMany({ where: { eventId } })
+      if (!append) {
+        await tx.invitation.deleteMany({ where: { eventId } })
+        await tx.guest.deleteMany({ where: { eventId } })
+      }
 
       // Chunked createMany, damit Serverless nicht platzt
       const batchSize = 500
@@ -190,10 +192,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${created} Gäste erfolgreich importiert`,
+      message: append ? `${created} Einträge angehängt` : `${created} Gäste erfolgreich importiert`,
       imported: created,
       total: rows.length,
       headers,
+      append: !!append,
     })
   } catch (error: any) {
     console.error('Import-Fehler:', error)

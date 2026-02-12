@@ -164,7 +164,33 @@ export default function GuestsPage() {
   const [eventId, setEventId] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
-  
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name' | 'email'; value: string; guests: any[] }>>([])
+
+  // Doppelte Einträge ermitteln (nach Name oder E-Mail)
+  const computeDuplicateGroups = (guestList: any[]): Array<{ type: 'name' | 'email'; value: string; guests: any[] }> => {
+    const groups: Array<{ type: 'name' | 'email'; value: string; guests: any[] }> = []
+    const norm = (s: string) => (s ?? '').trim().toLowerCase()
+    const byName = new Map<string, any[]>()
+    const byEmail = new Map<string, any[]>()
+    for (const g of guestList) {
+      const nameKey = norm(g.name ?? '')
+      if (nameKey) {
+        if (!byName.has(nameKey)) byName.set(nameKey, [])
+        byName.get(nameKey)!.push(g)
+      }
+      const emailKey = norm(g.email ?? '')
+      if (emailKey) {
+        if (!byEmail.has(emailKey)) byEmail.set(emailKey, [])
+        byEmail.get(emailKey)!.push(g)
+      }
+    }
+    byName.forEach((arr, value) => { if (arr.length > 1) groups.push({ type: 'name', value, guests: arr }) })
+    byEmail.forEach((arr, value) => { if (arr.length > 1) groups.push({ type: 'email', value, guests: arr }) })
+    return groups
+  }
+
   // ENTFERNT: dbFields (nicht mehr benötigt ohne Google Sheets)
 
   useEffect(() => {
@@ -412,26 +438,21 @@ export default function GuestsPage() {
       return
     }
 
-    // Bestätigungsdialog
-    const confirmMessage = 
-      '⚠️ WICHTIG: Dieser Import wird:\n\n' +
-      '• ALLE vorhandenen Einträge in der Einladungsliste löschen\n' +
-      '• Die neue Datei als Master-Liste importieren\n\n' +
-      'Diese Aktion kann nicht rückgängig gemacht werden!\n\n' +
-      'Möchten Sie fortfahren?'
-    
-    const confirmed = window.confirm(confirmMessage)
-    
-    if (!confirmed) {
-      return
-    }
+    const isAppend = importMode === 'append'
+    const confirmMessage = isAppend
+      ? 'Neue Einträge aus der Datei werden an die bestehende Gästeliste angehängt. Spalten werden wie beim Import zugeordnet.\n\nFortfahren?'
+      : '⚠️ WICHTIG: Dieser Import wird:\n\n' +
+        '• ALLE vorhandenen Einträge in der Einladungsliste löschen\n' +
+        '• Die neue Datei als Master-Liste importieren\n\n' +
+        'Diese Aktion kann nicht rückgängig gemacht werden!\n\nMöchten Sie fortfahren?'
+    if (!window.confirm(confirmMessage)) return
 
     try {
       setImporting(true)
-      
       const formData = new FormData()
       formData.append('file', importFile)
       formData.append('eventId', eventId)
+      if (isAppend) formData.append('append', 'true')
 
       const response = await fetch('/api/import/csv-xls', {
         method: 'POST',
@@ -440,10 +461,24 @@ export default function GuestsPage() {
 
       if (response.ok) {
         const result = await response.json()
-        alert(`✅ Import erfolgreich!\n\n• ${result.imported} Einträge importiert\n• ${result.total} Zeilen verarbeitet`)
         setImportFile(null)
-        // Lade Gäste neu (falls nötig)
         await loadGuests()
+        if (isAppend) {
+          const list = await (async () => {
+            const r = await fetch(`/api/guests?eventId=${eventId}`)
+            return r.ok ? await r.json() : []
+          })()
+          const groups = computeDuplicateGroups(list)
+          if (groups.length > 0) {
+            setDuplicateGroups(groups)
+            setShowDuplicateModal(true)
+            alert(`✅ Liste angehängt (${result.imported} Einträge). Es wurden Dopplungen in Name oder E-Mail gefunden – bitte unten bereinigen.`)
+          } else {
+            alert(`✅ Liste angehängt.\n\n• ${result.imported} Einträge hinzugefügt\n• ${result.total} Zeilen verarbeitet\n\nKeine Dopplungen gefunden.`)
+          }
+        } else {
+          alert(`✅ Import erfolgreich!\n\n• ${result.imported} Einträge importiert\n• ${result.total} Zeilen verarbeitet`)
+        }
       } else {
         const error = await response.json()
         alert(error.error || 'Import fehlgeschlagen')
@@ -456,6 +491,31 @@ export default function GuestsPage() {
     }
   }
 
+  const handleDeleteDuplicateGuest = async (guestId: string) => {
+    if (!window.confirm('Diesen Eintrag wirklich löschen?')) return
+    try {
+      const res = await fetch(`/api/guests?id=${encodeURIComponent(guestId)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Löschen fehlgeschlagen')
+      }
+      setGuests((prev) => prev.filter((g) => g.id !== guestId))
+      setDuplicateGroups((prev) => {
+        const next = prev
+          .map((gr) => ({ ...gr, guests: gr.guests.filter((g) => g.id !== guestId) }))
+          .filter((gr) => gr.guests.length > 1)
+        if (next.length === 0) setShowDuplicateModal(false)
+        return next
+      })
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Löschen fehlgeschlagen')
+    }
+  }
+
+  const handleEditDuplicateGuest = (guest: any) => {
+    setEditingGuest(guest.id)
+    setShowDuplicateModal(false)
+  }
 
   // ENTFERNT: loadSheetHeaders - komplett entfernt
 
@@ -1465,15 +1525,13 @@ export default function GuestsPage() {
             </div>
             <div className="flex gap-2">
               {/* CSV/XLS Import */}
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="file"
                   accept=".csv,.xls,.xlsx"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      setImportFile(file)
-                    }
+                    if (file) setImportFile(file)
                   }}
                   className="hidden"
                   id="file-import-input"
@@ -1484,6 +1542,29 @@ export default function GuestsPage() {
                 >
                   📁 Datei auswählen
                 </label>
+                <div className="flex items-center gap-2 border-l border-gray-200 pl-2">
+                  <span className="text-sm text-gray-600">Import:</span>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === 'replace'}
+                      onChange={() => setImportMode('replace')}
+                      className="rounded border-gray-300 text-indigo-600"
+                    />
+                    Ersetzen
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === 'append'}
+                      onChange={() => setImportMode('append')}
+                      className="rounded border-gray-300 text-indigo-600"
+                    />
+                    Anhängen
+                  </label>
+                </div>
                 {importFile && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-600">{importFile.name}</span>
@@ -1492,7 +1573,7 @@ export default function GuestsPage() {
                       disabled={importing}
                       className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                     >
-                      {importing ? '⏳ Importiere...' : '📥 Importieren'}
+                      {importing ? '⏳ Importiere...' : importMode === 'append' ? '📥 Liste anhängen' : '📥 Importieren'}
                     </button>
                     <button
                       onClick={() => setImportFile(null)}
@@ -2270,6 +2351,71 @@ export default function GuestsPage() {
             )}
           </div>
         </div>
+
+        {/* Modal: Doppelte Einträge (nach Anhängen) */}
+        {showDuplicateModal && duplicateGroups.length > 0 && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl">
+              <div className="border-b border-gray-200 px-6 py-4">
+                <h2 className="text-xl font-semibold text-gray-900">Doppelte Einträge</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Es wurden doppelte Namen oder E-Mail-Adressen gefunden. Bitte wählen Sie pro Gruppe, welchen Eintrag Sie löschen oder bearbeiten möchten.
+                </p>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+                {duplicateGroups.map((group, idx) => (
+                  <div key={`${group.type}-${group.value}-${idx}`} className="mb-6">
+                    <h3 className="mb-2 text-sm font-medium text-gray-700">
+                      {group.type === 'name' ? 'Gleicher Name' : 'Gleiche E-Mail'}: {group.value || '(leer)'}
+                    </h3>
+                    <table className="min-w-full border border-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">Name</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">E-Mail</th>
+                          <th className="px-3 py-2 text-right font-medium text-gray-600">Aktionen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.guests.map((guest) => (
+                          <tr key={guest.id} className="border-t border-gray-100">
+                            <td className="px-3 py-2">{guest.name || '-'}</td>
+                            <td className="px-3 py-2">{guest.email || '-'}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleEditDuplicateGuest(guest)}
+                                className="mr-2 text-indigo-600 hover:text-indigo-800"
+                              >
+                                Bearbeiten
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDuplicateGuest(guest.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                Löschen
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-gray-200 px-6 py-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowDuplicateModal(false); setDuplicateGroups([]) }}
+                  className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Schließen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ENTFERNT: Google Sheets Konfigurations-Modal - komplett entfernt */}
       </main>
