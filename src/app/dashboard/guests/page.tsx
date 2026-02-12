@@ -24,7 +24,20 @@ export default function GuestsPage() {
   const [editingValue, setEditingValue] = useState<string>('')
   const [invitations, setInvitations] = useState<Record<string, any>>({}) // guestId -> invitation
   const [checkboxStates, setCheckboxStates] = useState<Record<string, boolean>>({}) // key: `${guestId}-${column}` -> boolean
-  
+  const [pageIndex, setPageIndex] = useState(0)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const PAGE_SIZE = 100
+
+  // Suche debouncen (300ms), reduziert Re-Renders beim Tippen
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+  // Sofort zurücksetzen wenn Suche geleert wird
+  useEffect(() => {
+    if (!searchQuery.trim()) setDebouncedSearchQuery('')
+  }, [searchQuery])
+
   // Geschützte Spalten (können nicht gelöscht werden) - nur "ID" und "İşlemler"
   const protectedColumns = ['ID', 'İşlemler']
   
@@ -73,28 +86,42 @@ export default function GuestsPage() {
     'Hinzugefügt am'
   ]
   
+  // Gäste mit vorgeladenem additionalData (parsen nur einmal, nicht pro Zelle)
+  const guestsWithParsed = useMemo(() => {
+    return guests.map((g) => {
+      let parsed: Record<string, unknown> = {}
+      if (g.additionalData) {
+        try {
+          parsed = JSON.parse(g.additionalData) as Record<string, unknown>
+        } catch {
+          // ignore
+        }
+      }
+      return { ...g, _additionalParsed: parsed }
+    })
+  }, [guests])
+
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
   const getColumnValue = (guest: any, columnName: string, index?: number): any => {
     // Nummer-Spalte: Automatisch generierte fortlaufende Nummer
     if (columnName === 'Nummer') {
       return index !== undefined ? index.toString() : ''
     }
-    
-    // ZUERST: Prüfe additionalData (hat Priorität, da es die importierten Daten enthält)
-    if (guest.additionalData) {
+
+    // ZUERST: Prüfe additionalData (vorgeladen oder parsen)
+    const additional = guest._additionalParsed ?? (() => {
+      if (!guest.additionalData) return {}
       try {
-        const additional = JSON.parse(guest.additionalData)
-        // Wenn die Spalte in additionalData existiert, verwende diesen Wert
-        if (additional.hasOwnProperty(columnName)) {
-          const value = additional[columnName]
-          // Behalte den ursprünglichen Typ (Boolean bleibt Boolean)
-          return value !== null && value !== undefined ? value : ''
-        }
-      } catch (e) {
-        console.error('Fehler beim Parsen von additionalData:', e)
+        return JSON.parse(guest.additionalData) as Record<string, unknown>
+      } catch {
+        return {}
       }
+    })()
+    if (Object.prototype.hasOwnProperty.call(additional, columnName)) {
+      const value = additional[columnName]
+      return value !== null && value !== undefined ? value : ''
     }
-    
+
     // DANN: Standard-Felder - Mapping zu neuen Spaltennamen (Fallback)
     if (columnName === 'Kategorie') {
       return guest.category || ''
@@ -179,18 +206,14 @@ export default function GuestsPage() {
   const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name'; value: string; guests: any[] }>>([])
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
 
-  // Vorname/Nachname aus additionalData oder aus guest.name splitten
+  // Vorname/Nachname aus additionalData oder aus guest.name splitten (nutzt _additionalParsed wenn vorhanden)
   const getVornameNachname = (guest: any): { vorname: string; nachname: string } => {
     let vorname = ''
     let nachname = ''
-    if (guest.additionalData) {
-      try {
-        const add = JSON.parse(guest.additionalData) as Record<string, unknown>
-        vorname = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
-        nachname = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
-      } catch {
-        // ignore
-      }
+    const add = guest._additionalParsed ?? (guest.additionalData ? (() => { try { return JSON.parse(guest.additionalData) as Record<string, unknown> } catch { return {} } })() : {})
+    if (add && typeof add === 'object') {
+      vorname = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
+      nachname = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
     }
     if (!vorname && !nachname && guest.name) {
       const parts = String(guest.name).trim().split(/\s+/).filter(Boolean)
@@ -541,11 +564,11 @@ export default function GuestsPage() {
   }
 
   const handleCheckDuplicates = async () => {
-    if (guests.length === 0) {
+    if (guestsWithParsed.length === 0) {
       alert('Keine Gäste in der Liste. Bitte zuerst Gäste laden oder importieren.')
       return
     }
-    const groups = computeDuplicateGroups(guests)
+    const groups = computeDuplicateGroups(guestsWithParsed)
     if (groups.length === 0) {
       alert('Keine Dopplungen gefunden (gleicher Vorname + Nachname).')
       return
@@ -593,17 +616,32 @@ export default function GuestsPage() {
   // Einmal berechnet: welche Spalten Boolean sind (nicht bei jedem Tastendruck im Formular)
   const booleanColumnsSet = useMemo(() => {
     const set = new Set<string>()
-    if (guests.length === 0) return set
+    if (guestsWithParsed.length === 0) return set
     const formColumns = allColumns.filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID' && col !== 'Hinzugefügt am')
     for (const column of formColumns) {
-      const isBooleanCol = guests.some(g => {
+      const isBooleanCol = guestsWithParsed.some(g => {
         const value = getColumnValue(g, column, 0)
         return isBooleanValue(value)
       })
       if (isBooleanCol) set.add(column)
     }
     return set
-  }, [guests, allColumns])
+  }, [guestsWithParsed, allColumns])
+
+  // Boolean-Spalten pro Spalte (einmal berechnet, nicht pro Zelle) – großer Performance-Gewinn
+  const isBooleanColumnMap = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const column of allColumns) {
+      if (['Nummer', 'İşlemler', 'ID'].includes(column)) continue
+      const allValues = guestsWithParsed
+        .map((g) => getColumnValue(g, column))
+        .filter((v) => v !== null && v !== undefined && v !== '')
+      if (allValues.length === 0) continue
+      const boolCount = allValues.filter((v) => isBooleanValue(v)).length
+      map.set(column, boolCount >= Math.max(1, allValues.length * 0.5))
+    }
+    return map
+  }, [guestsWithParsed, allColumns])
 
   // Sammle NUR importierte Spalten aus additionalData (keine "gesammelten" Spalten)
   useEffect(() => {
@@ -621,25 +659,15 @@ export default function GuestsPage() {
     // Sammle Spalten: Nummer, Hinzugefügt am (DB-Feld) + alle aus additionalData
     const columnsSet = new Set<string>(['Nummer', 'Hinzugefügt am'])
     
-    // Sammle NUR Spalten aus additionalData von ALLEN Gästen
-    guests.forEach(guest => {
-      if (guest?.additionalData) {
-        try {
-          const additional = JSON.parse(guest.additionalData)
-          // Füge ALLE Spalten aus additionalData hinzu (direkter Import)
-          Object.keys(additional).forEach(key => {
-            if (key && key.trim()) {
-              const normalizedKey = key.trim()
-              // Ignoriere nur "Nummer" (wird separat behandelt)
-              if (normalizedKey.toLowerCase() !== 'nummer') {
-                columnsSet.add(normalizedKey)
-              }
-            }
-          })
-        } catch (e) {
-          console.error('Fehler beim Parsen von additionalData für Gast:', guest.id, e)
+    // Sammle Spalten aus additionalData (nutze guestsWithParsed, kein doppeltes Parsen)
+    guestsWithParsed.forEach((guest) => {
+      const add = guest._additionalParsed ?? {}
+      Object.keys(add).forEach((key) => {
+        if (key && key.trim()) {
+          const normalizedKey = key.trim()
+          if (normalizedKey.toLowerCase() !== 'nummer') columnsSet.add(normalizedKey)
         }
-      }
+      })
     })
     
     // Lade gespeicherte Reihenfolge aus localStorage (Standard hat Priorität)
@@ -708,7 +736,7 @@ export default function GuestsPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guests]) // Nur guests als Dependency, nicht allColumns (verhindert Endlosschleife)
+  }, [guestsWithParsed]) // guestsWithParsed statt guests (nutzt vorgeladenes additionalData)
 
   // Ref um vorherige Gäste-Länge zu speichern
   const prevGuestsLengthRef = useRef(guests.length)
@@ -728,29 +756,22 @@ export default function GuestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guests.length]) // Nur Länge als Dependency, nicht die gesamte guests-Liste
 
-  // Gefilterte/sortierte Gästeliste als useMemo (kein setState pro Filter-Änderung → weniger Renders)
+  // Gefilterte/sortierte Gästeliste als useMemo (nutze guestsWithParsed für kein doppeltes Parsen)
   const filteredGuests = useMemo(() => {
-    let filtered = guests
+    let filtered = guestsWithParsed
 
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(guest => {
+    if (debouncedSearchQuery.trim() !== '') {
+      const query = debouncedSearchQuery.toLowerCase()
+      filtered = filtered.filter((guest) => {
         const matchesStandard =
           guest.name?.toLowerCase().includes(query) ||
           guest.email?.toLowerCase().includes(query) ||
           guest.title?.toLowerCase().includes(query) ||
           guest.organization?.toLowerCase().includes(query)
-        let matchesAdditional = false
-        if (guest.additionalData) {
-          try {
-            const additional = JSON.parse(guest.additionalData)
-            matchesAdditional = Object.values(additional).some((val: any) =>
-              String(val).toLowerCase().includes(query)
-            )
-          } catch {
-            // Ignoriere Parse-Fehler
-          }
-        }
+        const add = guest._additionalParsed ?? {}
+        const matchesAdditional = Object.values(add).some((val: unknown) =>
+          String(val ?? '').toLowerCase().includes(query)
+        )
         return matchesStandard || matchesAdditional
       })
     }
@@ -779,15 +800,9 @@ export default function GuestsPage() {
           return new Date(guest.arrivalDate).toLocaleString('de-DE').toLowerCase().includes(filter)
         }
         if (columnName === 'Notiz') return guest.notes?.toLowerCase().includes(filter)
-        if (guest.additionalData) {
-          try {
-            const additional = JSON.parse(guest.additionalData)
-            const value = additional[columnName]
-            if (value !== undefined) return String(value).toLowerCase().includes(filter)
-          } catch {
-            // Ignoriere
-          }
-        }
+        const add = guest._additionalParsed ?? {}
+        const value = add[columnName]
+        if (value !== undefined) return String(value).toLowerCase().includes(filter)
         return true
       })
     })
@@ -818,7 +833,19 @@ export default function GuestsPage() {
     }
 
     return filtered
-  }, [guests, searchQuery, columnFilters, sortColumn, sortDirection])
+  }, [guestsWithParsed, debouncedSearchQuery, columnFilters, sortColumn, sortDirection])
+
+  // Pagination: Nur sichtbare Zeilen rendern (großer Performance-Gewinn bei vielen Gästen)
+  const displayedGuests = useMemo(() => {
+    const start = pageIndex * PAGE_SIZE
+    return filteredGuests.slice(start, start + PAGE_SIZE)
+  }, [filteredGuests, pageIndex])
+  const totalPages = Math.max(1, Math.ceil(filteredGuests.length / PAGE_SIZE))
+
+  // Seite zurücksetzen wenn Filter/Suche geändert
+  useEffect(() => {
+    setPageIndex(0)
+  }, [searchQuery, columnFilters, sortColumn, sortDirection])
 
   // "Keine Ergebnisse"-Warnung und nach 2s Filter zurücksetzen
   useEffect(() => {
@@ -2029,7 +2056,9 @@ export default function GuestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredGuests.map((guest, index) => (
+                    {displayedGuests.map((guest, idx) => {
+                      const index = pageIndex * PAGE_SIZE + idx
+                      return (
                       <tr
                         key={guest.id}
                         className={`border-b border-gray-100 hover:bg-gray-50 ${guest.isVip ? 'bg-yellow-50' : ''}`}
@@ -2092,65 +2121,19 @@ export default function GuestsPage() {
                           
                           // Hole Wert für diese Spalte
                           const rawValue = getColumnValue(guest, column, index)
-                          
-                          // Prüfe ob diese Spalte TRUE/FALSE Werte enthält (automatische Checkbox-Erkennung)
-                          // Prüfe alle Werte dieser Spalte bei allen Gästen
-                          const isBooleanColumn = (() => {
-                            // Prüfe ob alle Gäste Boolean-Werte in dieser Spalte haben
-                            const allValues = filteredGuests.map(g => {
-                              const val = getColumnValue(g, column)
-                              return val
-                            })
-                            
-                            // Filtere leere/null/undefined Werte
-                            const nonEmptyValues = allValues.filter(v => v !== null && v !== undefined && v !== '')
-                            
-                            // Wenn keine Werte vorhanden, prüfe ob die Spalte in der Vergangenheit Boolean war
-                            if (nonEmptyValues.length === 0) {
-                              // Prüfe in allen Gästen (nicht nur gefilterte)
-                              const allGuestsValues = guests.map(g => {
-                                const val = getColumnValue(g, column)
-                                return val
-                              }).filter(v => v !== null && v !== undefined && v !== '')
-                              
-                              if (allGuestsValues.length > 0) {
-                                const booleanCount = allGuestsValues.filter(v => isBooleanValue(v)).length
-                                return booleanCount >= Math.max(1, allGuestsValues.length * 0.5) // 50% Threshold für historische Daten
-                              }
-                              return false
-                            }
-                            
-                            // Wenn mindestens 50% der vorhandenen Werte Boolean sind, behandle die Spalte als Boolean
-                            const booleanCount = nonEmptyValues.filter(v => isBooleanValue(v)).length
-                            return booleanCount >= Math.max(1, nonEmptyValues.length * 0.5)
-                          })()
-                          
+                          const isBooleanColumn = isBooleanColumnMap.get(column) ?? false
+
                           // Wenn Boolean-Spalte: Rendere Checkbox
                           if (isBooleanColumn) {
-                            // Prüfe zuerst lokalen State (optimistic update), dann Datenbank-Wert
                             const checkboxKey = `${guest.id}-${column}`
                             const hasLocalState = checkboxKey in checkboxStates
-                            
-                            // Hole Wert aus Datenbank
+                            const add = guest._additionalParsed ?? {}
                             let dbValue: any = rawValue
-                            if (guest?.additionalData) {
-                              try {
-                                const additional = JSON.parse(guest.additionalData)
-                                if (additional.hasOwnProperty(column)) {
-                                  dbValue = additional[column]
-                                  
-                                  // Konvertiere String-Booleans zu echten Booleans
-                                  if (typeof dbValue === 'string') {
-                                    const lowerValue = dbValue.toLowerCase().trim()
-                                    if (lowerValue === 'true') {
-                                      dbValue = true
-                                    } else if (lowerValue === 'false') {
-                                      dbValue = false
-                                    }
-                                  }
-                                }
-                              } catch (e) {
-                                // Ignoriere Parse-Fehler
+                            if (Object.prototype.hasOwnProperty.call(add, column)) {
+                              dbValue = add[column]
+                              if (typeof dbValue === 'string') {
+                                const lowerValue = dbValue.toLowerCase().trim()
+                                dbValue = lowerValue === 'true' ? true : lowerValue === 'false' ? false : dbValue
                               }
                             }
                             
@@ -2409,9 +2392,35 @@ export default function GuestsPage() {
                           )
                         })}
                       </tr>
-                    ))}
+                    )
+                    })}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {filteredGuests.length > PAGE_SIZE && (
+              <div className="mt-4 flex items-center justify-between border-t border-gray-200 pt-4">
+                <span className="text-sm text-gray-600">
+                  Seite {pageIndex + 1} von {totalPages} ({filteredGuests.length} Gäste)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+                    disabled={pageIndex === 0}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ← Zurück
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={pageIndex >= totalPages - 1}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Weiter →
+                  </button>
+                </div>
               </div>
             )}
             {searchQuery && (
