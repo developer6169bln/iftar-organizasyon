@@ -91,55 +91,82 @@ export async function POST(request: NextRequest) {
       .map(normalizeKey)
       .filter((h) => h && !shouldIgnoreHeader(h))
 
+    // Beim Anhängen: bestehende Gäste laden und Set (Vorname|Nachname) aufbauen, damit keine Doppelten importiert werden
+    const norm = (s: string) => (s ?? '').trim().toLowerCase()
+    let existingVornameNachnameKeys = new Set<string>()
+    if (append) {
+      const existingGuests = await prisma.guest.findMany({
+        where: { eventId },
+        select: { name: true, additionalData: true },
+      })
+      for (const g of existingGuests) {
+        let v = ''
+        let n = ''
+        if (g.additionalData) {
+          try {
+            const add = JSON.parse(g.additionalData) as Record<string, unknown>
+            v = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
+            n = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
+          } catch {
+            // ignore
+          }
+        }
+        if (!v && !n && g.name) {
+          const parts = String(g.name).trim().split(/\s+/).filter(Boolean)
+          v = parts[0] ?? ''
+          n = parts.slice(1).join(' ') ?? ''
+        }
+        existingVornameNachnameKeys.add(`${norm(v)}|${norm(n)}`)
+      }
+    }
+
     // Append: nur neue Einträge hinzufügen; sonst: alte Liste löschen und neu importieren
+    const addedInThisImport = new Set<string>()
+    const skippedDuplicate = { count: 0 }
     const created = await prisma.$transaction(async (tx) => {
       if (!append) {
         await tx.invitation.deleteMany({ where: { eventId } })
         await tx.guest.deleteMany({ where: { eventId } })
       }
 
-      // Chunked createMany, damit Serverless nicht platzt
       const batchSize = 500
       let totalCreated = 0
 
       for (let i = 0; i < rows.length; i += batchSize) {
         const batch = rows.slice(i, i + batchSize)
-        const data = batch.map((row) => {
-          // Felder, die beim Import ignoriert werden sollen (nicht in additionalData speichern)
-          // Case-insensitive Vergleich mit allen möglichen Varianten
+        const data: Array<{
+          eventId: string
+          name: string | null
+          email: string | null
+          phone: string | null
+          isVip: boolean
+          status: string
+          additionalData: string
+        }> = []
+        for (const row of batch) {
           const shouldIgnoreField = (key: string): boolean => {
             const normalized = key.toLowerCase().trim()
-            // Prüfe auf exakte Übereinstimmungen (case-insensitive)
             if (
               normalized === 'auswahl' ||
               normalized === 'einladung e-mail' ||
-              normalized === 'einladung e-mail' ||
               normalized === 'einladung post' ||
               normalized === 'einladungspost' ||
-              normalized === 'einladungspost' ||
-              normalized === 'einladung e mail' ||
-              normalized === 'einladungspost'
-            ) {
+              normalized === 'einladung e mail'
+            )
               return true
-            }
-            // Prüfe auf Teilstrings (z.B. "Einladung E-Mail" enthält "einladung")
             if (
               normalized.includes('auswahl') ||
               (normalized.includes('einladung') && (normalized.includes('e-mail') || normalized.includes('email'))) ||
               (normalized.includes('einladung') && normalized.includes('post'))
-            ) {
+            )
               return true
-            }
             return false
           }
 
-          // additionalData 1:1 wie Datei, aber ignoriere bestimmte Felder
           const additionalData: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(row)) {
             const key = normalizeKey(k)
-            if (!key) continue
-            // Ignoriere Felder, die nicht importiert werden sollen (case-insensitive)
-            if (shouldIgnoreField(key)) continue
+            if (!key || shouldIgnoreField(key)) continue
             additionalData[key] = v
           }
 
@@ -165,14 +192,23 @@ export async function POST(request: NextRequest) {
             ]) || null
 
           const phone =
-            firstNonEmpty(row, ['Telefon', 'telefon', 'Mobil', 'mobil', 'phone']) ||
-            null
+            firstNonEmpty(row, ['Telefon', 'telefon', 'Mobil', 'mobil', 'phone']) || null
 
           const isVip = truthy(
             (row as any)['VIP'] ?? (row as any)['vip'] ?? (row as any)['IsVip'] ?? (row as any)['isVip']
           )
 
-          return {
+          // Beim Anhängen: nur übernehmen wenn Vorname+Nachname noch nicht in Liste (und nicht bereits in dieser Datei)
+          if (append) {
+            const key = `${norm(vorname ?? '')}|${norm(nachname ?? '')}`
+            if (existingVornameNachnameKeys.has(key) || addedInThisImport.has(key)) {
+              skippedDuplicate.count += 1
+              continue
+            }
+            addedInThisImport.add(key)
+          }
+
+          data.push({
             eventId,
             name,
             email,
@@ -180,11 +216,13 @@ export async function POST(request: NextRequest) {
             isVip,
             status: 'INVITED',
             additionalData: JSON.stringify(additionalData),
-          }
-        })
+          })
+        }
 
-        const res = await tx.guest.createMany({ data })
-        totalCreated += res.count
+        if (data.length > 0) {
+          const res = await tx.guest.createMany({ data })
+          totalCreated += res.count
+        }
       }
 
       return totalCreated
@@ -192,9 +230,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: append ? `${created} Einträge angehängt` : `${created} Gäste erfolgreich importiert`,
+      message: append
+        ? `${created} Einträge angehängt${skippedDuplicate.count > 0 ? `, ${skippedDuplicate.count} Doppelte übersprungen` : ''}`
+        : `${created} Gäste erfolgreich importiert`,
       imported: created,
       total: rows.length,
+      skipped: append ? skippedDuplicate.count : 0,
       headers,
       append: !!append,
     })

@@ -483,18 +483,11 @@ export default function GuestsPage() {
         setImportFile(null)
         await loadGuests()
         if (isAppend) {
-          const list = await (async () => {
-            const r = await fetch(`/api/guests?eventId=${eventId}`)
-            return r.ok ? await r.json() : []
-          })()
-          const groups = computeDuplicateGroups(list)
-          if (groups.length > 0) {
-            setDuplicateGroups(groups)
-            setShowDuplicateModal(true)
-            alert(`✅ Liste angehängt (${result.imported} Einträge). Es wurden Dopplungen bei gleichem Vornamen und Nachnamen gefunden – bitte unten bereinigen.`)
-          } else {
-            alert(`✅ Liste angehängt.\n\n• ${result.imported} Einträge hinzugefügt\n• ${result.total} Zeilen verarbeitet\n\nKeine Dopplungen gefunden.`)
-          }
+          const skipped = result.skipped ?? 0
+          const msg =
+            `✅ Liste angehängt.\n\n• ${result.imported} neue Einträge hinzugefügt\n• ${result.total} Zeilen in der Datei` +
+            (skipped > 0 ? `\n• ${skipped} Doppelte übersprungen (bereits in der Liste)` : '')
+          alert(msg)
         } else {
           alert(`✅ Import erfolgreich!\n\n• ${result.imported} Einträge importiert\n• ${result.total} Zeilen verarbeitet`)
         }
