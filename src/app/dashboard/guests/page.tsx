@@ -618,8 +618,8 @@ export default function GuestsPage() {
       return
     }
     
-    // Sammle NUR Spalten aus additionalData (direkter Import, KEINE Standard-Spalten)
-    const columnsSet = new Set<string>(['Nummer'])
+    // Sammle Spalten: Nummer, Hinzugefügt am (DB-Feld) + alle aus additionalData
+    const columnsSet = new Set<string>(['Nummer', 'Hinzugefügt am'])
     
     // Sammle NUR Spalten aus additionalData von ALLEN Gästen
     guests.forEach(guest => {
@@ -800,6 +800,11 @@ export default function GuestsPage() {
           const numA = parseInt(valueA) || 0
           const numB = parseInt(valueB) || 0
           return sortDirection === 'asc' ? numA - numB : numB - numA
+        }
+        if (sortColumn === 'Hinzugefügt am') {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+          return sortDirection === 'asc' ? dateA - dateB : dateB - dateA
         }
         const numA = parseFloat(valueA)
         const numB = parseFloat(valueB)
