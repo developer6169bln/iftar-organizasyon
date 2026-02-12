@@ -44,6 +44,7 @@ export default function GuestsPage() {
     'Einladungspriorität',
     'Wahrscheinlichkeit',
     'Notiz',
+    'Hinzugefügt am',
     'İşlemler'
   ]
   
@@ -68,7 +69,8 @@ export default function GuestsPage() {
     'Abgesagt',
     'Mail-Liste',
     'Anwesend',
-    'Nummer' // Nummer-Spalte hat keinen Filter
+    'Nummer',
+    'Hinzugefügt am'
   ]
   
   // Hilfsfunktion: Hole Wert für eine Spalte (Standard-Feld oder additionalData)
@@ -141,6 +143,14 @@ export default function GuestsPage() {
     }
     if (columnName === 'Notiz' || columnName === 'notes') {
       return guest.notes || ''
+    }
+    if (columnName === 'Hinzugefügt am') {
+      return guest.createdAt
+        ? new Date(guest.createdAt).toLocaleString('de-DE', {
+            dateStyle: 'short',
+            timeStyle: 'short',
+          })
+        : ''
     }
     if (columnName === 'İşlemler') {
       return '' // Aktionen-Spalte
@@ -584,7 +594,7 @@ export default function GuestsPage() {
   const booleanColumnsSet = useMemo(() => {
     const set = new Set<string>()
     if (guests.length === 0) return set
-    const formColumns = allColumns.filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+    const formColumns = allColumns.filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID' && col !== 'Hinzugefügt am')
     for (const column of formColumns) {
       const isBooleanCol = guests.some(g => {
         const value = getColumnValue(g, column, 0)
@@ -1702,7 +1712,7 @@ export default function GuestsPage() {
             <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Dynamische Felder basierend auf allColumns */}
               {allColumns
-                .filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID')
+                .filter(col => col !== 'Nummer' && col !== 'İşlemler' && col !== 'ID' && col !== 'Hinzugefügt am')
                 .map((column) => {
                   const isBooleanCol = booleanColumnsSet.has(column)
                   // Standard-Feld-Mappings (für direkte DB-Felder)
