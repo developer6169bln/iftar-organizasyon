@@ -167,6 +167,7 @@ export default function GuestsPage() {
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name'; value: string; guests: any[] }>>([])
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false)
 
   // Vorname/Nachname aus additionalData oder aus guest.name splitten
   const getVornameNachname = (guest: any): { vorname: string; nachname: string } => {
@@ -529,17 +530,35 @@ export default function GuestsPage() {
     setShowDuplicateModal(false)
   }
 
-  const handleCheckDuplicates = () => {
+  const handleCheckDuplicates = async () => {
     if (guests.length === 0) {
       alert('Keine Gäste in der Liste. Bitte zuerst Gäste laden oder importieren.')
       return
     }
     const groups = computeDuplicateGroups(guests)
-    if (groups.length > 0) {
-      setDuplicateGroups(groups)
-      setShowDuplicateModal(true)
-    } else {
+    if (groups.length === 0) {
       alert('Keine Dopplungen gefunden (gleicher Vorname + Nachname).')
+      return
+    }
+    setCheckingDuplicates(true)
+    let deletedCount = 0
+    try {
+      for (const group of groups) {
+        // Ersten behalten, Rest löschen
+        for (let i = 1; i < group.guests.length; i++) {
+          const res = await fetch(`/api/guests?id=${encodeURIComponent(group.guests[i].id)}`, { method: 'DELETE' })
+          if (res.ok) {
+            deletedCount++
+            setGuests((prev) => prev.filter((g) => g.id !== group.guests[i].id))
+          }
+        }
+      }
+      await loadGuests()
+      alert(`✅ ${deletedCount} Doppelte Einträge automatisch gelöscht.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Fehler beim Löschen der Dopplungen')
+    } finally {
+      setCheckingDuplicates(false)
     }
   }
 
@@ -1614,11 +1633,11 @@ export default function GuestsPage() {
               <button
                 type="button"
                 onClick={handleCheckDuplicates}
-                disabled={guests.length === 0}
+                disabled={guests.length === 0 || checkingDuplicates}
                 className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-                title="Aktuelle Liste auf doppelte Vorname+Nachname prüfen"
+                title="Doppelte (Vorname+Nachname) automatisch löschen"
               >
-                🔍 Doppelte prüfen
+                {checkingDuplicates ? '⏳ Lösche…' : '🔍 Doppelte prüfen'}
               </button>
               {/* Export Buttons */}
               <div className="flex items-center gap-2">
