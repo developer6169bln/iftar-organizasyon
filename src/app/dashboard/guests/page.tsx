@@ -166,28 +166,47 @@ export default function GuestsPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
-  const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name' | 'email'; value: string; guests: any[] }>>([])
+  const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name'; value: string; guests: any[] }>>([])
 
-  // Doppelte Einträge ermitteln (nach Name oder E-Mail)
-  const computeDuplicateGroups = (guestList: any[]): Array<{ type: 'name' | 'email'; value: string; guests: any[] }> => {
-    const groups: Array<{ type: 'name' | 'email'; value: string; guests: any[] }> = []
-    const norm = (s: string) => (s ?? '').trim().toLowerCase()
-    const byName = new Map<string, any[]>()
-    const byEmail = new Map<string, any[]>()
-    for (const g of guestList) {
-      const nameKey = norm(g.name ?? '')
-      if (nameKey) {
-        if (!byName.has(nameKey)) byName.set(nameKey, [])
-        byName.get(nameKey)!.push(g)
-      }
-      const emailKey = norm(g.email ?? '')
-      if (emailKey) {
-        if (!byEmail.has(emailKey)) byEmail.set(emailKey, [])
-        byEmail.get(emailKey)!.push(g)
+  // Vorname/Nachname aus additionalData oder aus guest.name splitten
+  const getVornameNachname = (guest: any): { vorname: string; nachname: string } => {
+    let vorname = ''
+    let nachname = ''
+    if (guest.additionalData) {
+      try {
+        const add = JSON.parse(guest.additionalData) as Record<string, unknown>
+        vorname = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
+        nachname = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
+      } catch {
+        // ignore
       }
     }
-    byName.forEach((arr, value) => { if (arr.length > 1) groups.push({ type: 'name', value, guests: arr }) })
-    byEmail.forEach((arr, value) => { if (arr.length > 1) groups.push({ type: 'email', value, guests: arr }) })
+    if (!vorname && !nachname && guest.name) {
+      const parts = String(guest.name).trim().split(/\s+/).filter(Boolean)
+      vorname = parts[0] ?? ''
+      nachname = parts.slice(1).join(' ') ?? ''
+    }
+    return { vorname, nachname }
+  }
+
+  // Doppelte Einträge nur wenn Vorname und Nachname identisch sind (z. B. Ali Koc = Ali Koc)
+  const computeDuplicateGroups = (guestList: any[]): Array<{ type: 'name'; value: string; guests: any[] }> => {
+    const norm = (s: string) => (s ?? '').trim().toLowerCase()
+    const byVornameNachname = new Map<string, any[]>()
+    for (const g of guestList) {
+      const { vorname, nachname } = getVornameNachname(g)
+      const key = `${norm(vorname)}|${norm(nachname)}`
+      if (!byVornameNachname.has(key)) byVornameNachname.set(key, [])
+      byVornameNachname.get(key)!.push(g)
+    }
+    const groups: Array<{ type: 'name'; value: string; guests: any[] }> = []
+    byVornameNachname.forEach((arr, key) => {
+      if (arr.length > 1) {
+        const first = getVornameNachname(arr[0])
+        const display = [first.vorname, first.nachname].filter(Boolean).join(' ') || key
+        groups.push({ type: 'name', value: display, guests: arr })
+      }
+    })
     return groups
   }
 
@@ -472,7 +491,7 @@ export default function GuestsPage() {
           if (groups.length > 0) {
             setDuplicateGroups(groups)
             setShowDuplicateModal(true)
-            alert(`✅ Liste angehängt (${result.imported} Einträge). Es wurden Dopplungen in Name oder E-Mail gefunden – bitte unten bereinigen.`)
+            alert(`✅ Liste angehängt (${result.imported} Einträge). Es wurden Dopplungen bei gleichem Vornamen und Nachnamen gefunden – bitte unten bereinigen.`)
           } else {
             alert(`✅ Liste angehängt.\n\n• ${result.imported} Einträge hinzugefügt\n• ${result.total} Zeilen verarbeitet\n\nKeine Dopplungen gefunden.`)
           }
@@ -515,6 +534,20 @@ export default function GuestsPage() {
   const handleEditDuplicateGuest = (guest: any) => {
     setEditingGuest(guest.id)
     setShowDuplicateModal(false)
+  }
+
+  const handleCheckDuplicates = () => {
+    if (guests.length === 0) {
+      alert('Keine Gäste in der Liste. Bitte zuerst Gäste laden oder importieren.')
+      return
+    }
+    const groups = computeDuplicateGroups(guests)
+    if (groups.length > 0) {
+      setDuplicateGroups(groups)
+      setShowDuplicateModal(true)
+    } else {
+      alert('Keine Dopplungen gefunden (gleicher Vorname + Nachname).')
+    }
   }
 
   // ENTFERNT: loadSheetHeaders - komplett entfernt
@@ -1584,6 +1617,16 @@ export default function GuestsPage() {
                   </div>
                 )}
               </div>
+              {/* Doppelte prüfen (ohne Import) */}
+              <button
+                type="button"
+                onClick={handleCheckDuplicates}
+                disabled={guests.length === 0}
+                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Aktuelle Liste auf doppelte Vorname+Nachname prüfen"
+              >
+                🔍 Doppelte prüfen
+              </button>
               {/* Export Buttons */}
               <div className="flex items-center gap-2">
                 <button
@@ -2359,27 +2402,31 @@ export default function GuestsPage() {
               <div className="border-b border-gray-200 px-6 py-4">
                 <h2 className="text-xl font-semibold text-gray-900">Doppelte Einträge</h2>
                 <p className="mt-1 text-sm text-gray-600">
-                  Es wurden doppelte Namen oder E-Mail-Adressen gefunden. Bitte wählen Sie pro Gruppe, welchen Eintrag Sie löschen oder bearbeiten möchten.
+                  Doppelte Einträge: gleicher Vorname und gleicher Nachname (z. B. „Ali Koc“ mehrfach). Bitte wählen Sie pro Gruppe, welchen Eintrag Sie löschen oder bearbeiten möchten.
                 </p>
               </div>
               <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
                 {duplicateGroups.map((group, idx) => (
                   <div key={`${group.type}-${group.value}-${idx}`} className="mb-6">
                     <h3 className="mb-2 text-sm font-medium text-gray-700">
-                      {group.type === 'name' ? 'Gleicher Name' : 'Gleiche E-Mail'}: {group.value || '(leer)'}
+                      Gleicher Vorname + Nachname: {group.value || '(leer)'}
                     </h3>
                     <table className="min-w-full border border-gray-200 text-sm">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">Name</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">Vorname</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-600">Nachname</th>
                           <th className="px-3 py-2 text-left font-medium text-gray-600">E-Mail</th>
                           <th className="px-3 py-2 text-right font-medium text-gray-600">Aktionen</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {group.guests.map((guest) => (
+                        {group.guests.map((guest) => {
+                          const { vorname, nachname } = getVornameNachname(guest)
+                          return (
                           <tr key={guest.id} className="border-t border-gray-100">
-                            <td className="px-3 py-2">{guest.name || '-'}</td>
+                            <td className="px-3 py-2">{vorname || '-'}</td>
+                            <td className="px-3 py-2">{nachname || '-'}</td>
                             <td className="px-3 py-2">{guest.email || '-'}</td>
                             <td className="px-3 py-2 text-right">
                               <button
@@ -2398,7 +2445,8 @@ export default function GuestsPage() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
