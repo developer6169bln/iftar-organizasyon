@@ -164,7 +164,7 @@ export default function InvitationsPage() {
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
-  const [statsListFilter, setStatsListFilter] = useState<'sent' | 'accepted' | 'declined' | 'pending' | 'opened' | 'total' | null>(null)
+  const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'accepted' | 'declined' | 'pending' | 'opened' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1436,9 +1436,12 @@ export default function InvitationsPage() {
     const declined = invitations.filter(i => i.response === 'DECLINED').length
     const pending = invitations.filter(i => i.response === 'PENDING' || !i.response).length
     const opened = invitations.filter(i => i.openedAt).length
-    // Gesamt versendet = Gelesen + Ausstehend (Summe; Überlappung möglich)
-    const sent = opened + pending
-    return { accepted, declined, pending, opened, sent, total: invitations.length }
+    const sent = invitations.filter(i => i.sentAt).length
+    const sentRead = invitations.filter(i => i.sentAt && i.openedAt).length
+    const sentNotRead = invitations.filter(i => i.sentAt && !i.openedAt).length
+    const openedAccepted = invitations.filter(i => i.openedAt && i.response === 'ACCEPTED').length
+    const openedDeclined = invitations.filter(i => i.openedAt && i.response === 'DECLINED').length
+    return { accepted, declined, pending, opened, sent, sentRead, sentNotRead, openedAccepted, openedDeclined, total: invitations.length }
   }
 
   const stats = getResponseStats()
@@ -1446,11 +1449,15 @@ export default function InvitationsPage() {
   const statsFilteredList = useMemo(() => {
     if (!statsListFilter) return []
     switch (statsListFilter) {
-      case 'sent': return invitations.filter(i => i.openedAt || i.response === 'PENDING' || !i.response)
+      case 'sent': return invitations.filter(i => i.sentAt)
+      case 'sentRead': return invitations.filter(i => i.sentAt && i.openedAt)
+      case 'sentNotRead': return invitations.filter(i => i.sentAt && !i.openedAt)
       case 'accepted': return invitations.filter(i => i.response === 'ACCEPTED')
       case 'declined': return invitations.filter(i => i.response === 'DECLINED')
       case 'pending': return invitations.filter(i => i.response === 'PENDING' || !i.response)
       case 'opened': return invitations.filter(i => i.openedAt)
+      case 'openedAccepted': return invitations.filter(i => i.openedAt && i.response === 'ACCEPTED')
+      case 'openedDeclined': return invitations.filter(i => i.openedAt && i.response === 'DECLINED')
       case 'total': return invitations
       default: return []
     }
@@ -1459,10 +1466,14 @@ export default function InvitationsPage() {
   const statsListTitle = useMemo(() => {
     switch (statsListFilter) {
       case 'sent': return 'Gesamt versendet'
+      case 'sentRead': return 'Von versendet gelesen'
+      case 'sentNotRead': return 'Von versendet nicht gelesen'
       case 'accepted': return 'Zusagen'
       case 'declined': return 'Absagen'
       case 'pending': return 'Ausstehend'
       case 'opened': return 'Gelesen'
+      case 'openedAccepted': return 'Von gelesen: Zusagen'
+      case 'openedDeclined': return 'Von gelesen: Absagen'
       case 'total': return 'Gesamt'
       default: return ''
     }
@@ -1614,7 +1625,7 @@ export default function InvitationsPage() {
             <h2 className="mb-4 text-xl font-semibold">Einladungen senden</h2>
             
             {/* Statistiken (klickbar für Liste) */}
-            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               <button
                 type="button"
                 onClick={() => setStatsListFilter(statsListFilter === 'sent' ? null : 'sent')}
@@ -1622,6 +1633,22 @@ export default function InvitationsPage() {
               >
                 <div className="text-2xl font-bold text-indigo-600">{stats.sent}</div>
                 <div className="text-sm text-gray-600">Gesamt versendet</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'sentRead' ? null : 'sentRead')}
+                className="rounded-lg bg-teal-50 p-4 text-left transition hover:bg-teal-100 cursor-pointer"
+              >
+                <div className="text-2xl font-bold text-teal-600">{stats.sentRead}</div>
+                <div className="text-sm text-gray-600">Davon gelesen</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'sentNotRead' ? null : 'sentNotRead')}
+                className="rounded-lg bg-orange-50 p-4 text-left transition hover:bg-orange-100 cursor-pointer"
+              >
+                <div className="text-2xl font-bold text-orange-600">{stats.sentNotRead}</div>
+                <div className="text-sm text-gray-600">Davon nicht gelesen</div>
               </button>
               <button
                 type="button"
@@ -1654,6 +1681,22 @@ export default function InvitationsPage() {
               >
                 <div className="text-2xl font-bold text-blue-600">{stats.opened}</div>
                 <div className="text-sm text-gray-600">Gelesen</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'openedAccepted' ? null : 'openedAccepted')}
+                className="rounded-lg bg-emerald-50 p-4 text-left transition hover:bg-emerald-100 cursor-pointer"
+              >
+                <div className="text-2xl font-bold text-emerald-600">{stats.openedAccepted}</div>
+                <div className="text-sm text-gray-600">Davon Zusagen</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'openedDeclined' ? null : 'openedDeclined')}
+                className="rounded-lg bg-rose-50 p-4 text-left transition hover:bg-rose-100 cursor-pointer"
+              >
+                <div className="text-2xl font-bold text-rose-600">{stats.openedDeclined}</div>
+                <div className="text-sm text-gray-600">Davon Absagen</div>
               </button>
               <button
                 type="button"
