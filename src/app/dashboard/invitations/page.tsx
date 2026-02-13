@@ -148,6 +148,7 @@ export default function InvitationsPage() {
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [statsListFilter, setStatsListFilter] = useState<'sent' | 'accepted' | 'declined' | 'pending' | 'opened' | 'total' | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1425,6 +1426,31 @@ export default function InvitationsPage() {
 
   const stats = getResponseStats()
 
+  const statsFilteredList = useMemo(() => {
+    if (!statsListFilter) return []
+    switch (statsListFilter) {
+      case 'sent': return invitations.filter(i => i.sentAt)
+      case 'accepted': return invitations.filter(i => i.response === 'ACCEPTED')
+      case 'declined': return invitations.filter(i => i.response === 'DECLINED')
+      case 'pending': return invitations.filter(i => i.response === 'PENDING' || !i.response)
+      case 'opened': return invitations.filter(i => i.openedAt)
+      case 'total': return invitations
+      default: return []
+    }
+  }, [invitations, statsListFilter])
+
+  const statsListTitle = useMemo(() => {
+    switch (statsListFilter) {
+      case 'sent': return 'Gesamt versendet'
+      case 'accepted': return 'Zusagen'
+      case 'declined': return 'Absagen'
+      case 'pending': return 'Ausstehend'
+      case 'opened': return 'Gelesen'
+      case 'total': return 'Gesamt'
+      default: return ''
+    }
+  }, [statsListFilter])
+
   const sortedInvitations = useMemo(() => {
     if (!listSortBy || listSortBy !== 'bemerkungen') return invitations
     const dir = listSortDir === 'asc' ? 1 : -1
@@ -1485,33 +1511,119 @@ export default function InvitationsPage() {
           <div className="rounded-lg bg-white p-6 shadow">
             <h2 className="mb-4 text-xl font-semibold">Einladungen senden</h2>
             
-            {/* Statistiken */}
+            {/* Statistiken (klickbar für Liste) */}
             <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-              <div className="rounded-lg bg-indigo-50 p-4">
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'sent' ? null : 'sent')}
+                className="rounded-lg bg-indigo-50 p-4 text-left transition hover:bg-indigo-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-indigo-600">{stats.sent}</div>
                 <div className="text-sm text-gray-600">Gesamt versendet</div>
-              </div>
-              <div className="rounded-lg bg-green-50 p-4">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'accepted' ? null : 'accepted')}
+                className="rounded-lg bg-green-50 p-4 text-left transition hover:bg-green-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
                 <div className="text-sm text-gray-600">Zusagen</div>
-              </div>
-              <div className="rounded-lg bg-red-50 p-4">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'declined' ? null : 'declined')}
+                className="rounded-lg bg-red-50 p-4 text-left transition hover:bg-red-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-red-600">{stats.declined}</div>
                 <div className="text-sm text-gray-600">Absagen</div>
-              </div>
-              <div className="rounded-lg bg-yellow-50 p-4">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'pending' ? null : 'pending')}
+                className="rounded-lg bg-yellow-50 p-4 text-left transition hover:bg-yellow-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
                 <div className="text-sm text-gray-600">Ausstehend</div>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-4">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'opened' ? null : 'opened')}
+                className="rounded-lg bg-blue-50 p-4 text-left transition hover:bg-blue-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-blue-600">{stats.opened}</div>
                 <div className="text-sm text-gray-600">Gelesen</div>
-              </div>
-              <div className="rounded-lg bg-gray-50 p-4">
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatsListFilter(statsListFilter === 'total' ? null : 'total')}
+                className="rounded-lg bg-gray-50 p-4 text-left transition hover:bg-gray-100 cursor-pointer"
+              >
                 <div className="text-2xl font-bold text-gray-600">{stats.total}</div>
                 <div className="text-sm text-gray-600">Gesamt</div>
-              </div>
+              </button>
             </div>
+
+            {/* Modal: Liste der gefilterten Einladungen */}
+            {statsListFilter && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                onClick={() => setStatsListFilter(null)}
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Liste: ${statsListTitle}`}
+              >
+                <div
+                  className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {statsListTitle} ({statsFilteredList.length})
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setStatsListFilter(null)}
+                      className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                      aria-label="Schließen"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="overflow-y-auto p-4" style={{ maxHeight: '70vh' }}>
+                    {statsFilteredList.length === 0 ? (
+                      <p className="text-gray-500">Keine Einträge.</p>
+                    ) : (
+                      <ul className="divide-y divide-gray-200">
+                        {statsFilteredList.map((inv) => (
+                          <li key={inv.id} className="flex items-center justify-between py-3">
+                            <div>
+                              <span className="font-medium text-gray-900">{inv.guest?.name ?? '–'}</span>
+                              <span className="ml-2 text-sm text-gray-500">
+                                {getGuestDisplayEmail(inv.guest) || '–'}
+                              </span>
+                            </div>
+                            {inv.sentAt && (
+                              <span className="text-xs text-gray-400">
+                                {new Date(inv.sentAt).toLocaleString('de-DE')}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setStatsListFilter(null)}
+                      className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Template-Auswahl: E-Mail wird mit diesem Template gesendet */}
             <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
