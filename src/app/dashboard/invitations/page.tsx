@@ -1167,9 +1167,46 @@ export default function InvitationsPage() {
     } else if (field === 'response') {
       setEditingValue(currentValue || 'PENDING')
     } else {
-      setEditingValue(String(currentValue || ''))
+      setEditingValue(String(currentValue ?? ''))
     }
   }
+
+  const renderEditableInput = (invitationId: string, field: string, isText = true) => (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      {isText ? (
+        <input
+          type="text"
+          value={editingValue}
+          onChange={(e) => setEditingValue(e.target.value)}
+          onBlur={() => (field.startsWith('guest') ? handleGuestFieldSave(invitationId, field) : handleCellSave(invitationId, field))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              field.startsWith('guest') ? handleGuestFieldSave(invitationId, field) : handleCellSave(invitationId, field)
+            } else if (e.key === 'Escape') {
+              handleCellCancel()
+            }
+          }}
+          className="min-w-[120px] rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          autoFocus
+        />
+      ) : (
+        <input
+          type="email"
+          value={editingValue}
+          onChange={(e) => setEditingValue(e.target.value)}
+          onBlur={() => handleGuestFieldSave(invitationId, field)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleGuestFieldSave(invitationId, field)
+            else if (e.key === 'Escape') handleCellCancel()
+          }}
+          className="min-w-[180px] rounded border border-indigo-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          autoFocus
+        />
+      )}
+      <button type="button" onClick={() => (field.startsWith('guest') ? handleGuestFieldSave(invitationId, field) : handleCellSave(invitationId, field))} className="text-green-600 hover:text-green-700">✓</button>
+      <button type="button" onClick={handleCellCancel} className="text-red-600 hover:text-red-700">✕</button>
+    </div>
+  )
 
   const handleCellSave = async (invitationId: string, field: string) => {
     try {
@@ -1193,6 +1230,50 @@ export default function InvitationsPage() {
         setInvitations(invitations.map(inv => 
           inv.id === invitationId ? updated : inv
         ))
+        setEditingCell(null)
+        setEditingValue('')
+      } else {
+        const error = await response.json()
+        alert('Fehler beim Speichern: ' + (error.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleGuestFieldSave = async (invitationId: string, field: string) => {
+    const invitation = invitations.find((inv) => inv.id === invitationId)
+    if (!invitation?.guestId || !invitation?.guest) return
+    const guestId = invitation.guestId
+    try {
+      let body: Record<string, unknown> = { id: guestId }
+      if (field === 'guestName') {
+        body.name = editingValue.trim() || invitation.guest.name
+      } else if (field === 'guestVorname') {
+        const ad = parseAdditionalData(invitation.guest)
+        body.additionalData = JSON.stringify({ ...ad, Vorname: editingValue.trim() })
+      } else if (field === 'guestStaatInstitution') {
+        body.organization = editingValue.trim() || null
+      } else if (field === 'guestAnrede2') {
+        const ad = parseAdditionalData(invitation.guest)
+        body.additionalData = JSON.stringify({ ...ad, 'Anrede 2': editingValue.trim() })
+      } else if (field === 'guestEmail') {
+        body.email = editingValue.trim() || null
+      } else if (field === 'guestBemerkungen') {
+        body.notes = editingValue.trim() || null
+      }
+      const response = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (response.ok) {
+        const updatedGuest = await response.json()
+        setInvitations(invitations.map((inv) =>
+          inv.id === invitationId ? { ...inv, guest: updatedGuest } : inv
+        ))
+        setGuests(guests.map((g) => (g.id === guestId ? updatedGuest : g)))
         setEditingCell(null)
         setEditingValue('')
       } else {
@@ -1917,20 +1998,55 @@ export default function InvitationsPage() {
                           title={invitation.sentAt ? `Gesendet: ${new Date(invitation.sentAt).toLocaleString('de-DE')}` : 'Nicht gesendet'}
                         />
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">
-                        {invitation.guest?.name}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-900 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestName', invitation.guest?.name)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestName' ? (
+                          renderEditableInput(invitation.id, 'guestName')
+                        ) : (
+                          invitation.guest?.name || <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                        {getGuestVorname(invitation.guest)}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestVorname', getGuestVorname(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestVorname' ? (
+                          renderEditableInput(invitation.id, 'guestVorname')
+                        ) : (
+                          getGuestVorname(invitation.guest) || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                        {getGuestStaatInstitution(invitation.guest)}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestStaatInstitution', getGuestStaatInstitution(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestStaatInstitution' ? (
+                          renderEditableInput(invitation.id, 'guestStaatInstitution')
+                        ) : (
+                          getGuestStaatInstitution(invitation.guest) || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                        {getGuestAnrede2(invitation.guest)}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestAnrede2', getGuestAnrede2(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestAnrede2' ? (
+                          renderEditableInput(invitation.id, 'guestAnrede2')
+                        ) : (
+                          getGuestAnrede2(invitation.guest) || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
-                        {getGuestDisplayEmail(invitation.guest)}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestEmail', getGuestDisplayEmail(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestEmail' ? (
+                          renderEditableInput(invitation.id, 'guestEmail', false)
+                        ) : (
+                          getGuestDisplayEmail(invitation.guest) || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <select
@@ -2225,8 +2341,16 @@ export default function InvitationsPage() {
                             : <span className="text-gray-400 italic">Klicken zum Bearbeiten</span>
                         )}
                       </td>
-                      <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={getGuestBemerkungen(invitation.guest)}>
-                        {getGuestBemerkungen(invitation.guest) || '–'}
+                      <td
+                        className="max-w-xs truncate px-4 py-3 text-sm text-gray-600 cursor-pointer hover:bg-gray-50"
+                        title={getGuestBemerkungen(invitation.guest)}
+                        onClick={() => handleCellEdit(invitation.id, 'guestBemerkungen', getGuestBemerkungen(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestBemerkungen' ? (
+                          renderEditableInput(invitation.id, 'guestBemerkungen')
+                        ) : (
+                          getGuestBemerkungen(invitation.guest) || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
                     </tr>
                     ))
