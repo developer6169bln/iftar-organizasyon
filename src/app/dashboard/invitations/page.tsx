@@ -164,7 +164,7 @@ export default function InvitationsPage() {
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
-  const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'accepted' | 'declined' | 'pending' | 'opened' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
+  const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1452,10 +1452,6 @@ export default function InvitationsPage() {
       case 'sent': return invitations.filter(i => i.sentAt)
       case 'sentRead': return invitations.filter(i => i.sentAt && i.openedAt)
       case 'sentNotRead': return invitations.filter(i => i.sentAt && !i.openedAt)
-      case 'accepted': return invitations.filter(i => i.response === 'ACCEPTED')
-      case 'declined': return invitations.filter(i => i.response === 'DECLINED')
-      case 'pending': return invitations.filter(i => i.response === 'PENDING' || !i.response)
-      case 'opened': return invitations.filter(i => i.openedAt)
       case 'openedAccepted': return invitations.filter(i => i.openedAt && i.response === 'ACCEPTED')
       case 'openedDeclined': return invitations.filter(i => i.openedAt && i.response === 'DECLINED')
       case 'total': return invitations
@@ -1468,10 +1464,6 @@ export default function InvitationsPage() {
       case 'sent': return 'Gesamt versendet'
       case 'sentRead': return 'Von versendet gelesen'
       case 'sentNotRead': return 'Von versendet nicht gelesen'
-      case 'accepted': return 'Zusagen'
-      case 'declined': return 'Absagen'
-      case 'pending': return 'Ausstehend'
-      case 'opened': return 'Gelesen'
       case 'openedAccepted': return 'Von gelesen: Zusagen'
       case 'openedDeclined': return 'Von gelesen: Absagen'
       case 'total': return 'Gesamt'
@@ -1649,38 +1641,6 @@ export default function InvitationsPage() {
               >
                 <div className="text-2xl font-bold text-orange-600">{stats.sentNotRead}</div>
                 <div className="text-sm text-gray-600">Davon nicht gelesen</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatsListFilter(statsListFilter === 'accepted' ? null : 'accepted')}
-                className="rounded-lg bg-green-50 p-4 text-left transition hover:bg-green-100 cursor-pointer"
-              >
-                <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
-                <div className="text-sm text-gray-600">Zusagen</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatsListFilter(statsListFilter === 'declined' ? null : 'declined')}
-                className="rounded-lg bg-red-50 p-4 text-left transition hover:bg-red-100 cursor-pointer"
-              >
-                <div className="text-2xl font-bold text-red-600">{stats.declined}</div>
-                <div className="text-sm text-gray-600">Absagen</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatsListFilter(statsListFilter === 'pending' ? null : 'pending')}
-                className="rounded-lg bg-yellow-50 p-4 text-left transition hover:bg-yellow-100 cursor-pointer"
-              >
-                <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-                <div className="text-sm text-gray-600">Ausstehend</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatsListFilter(statsListFilter === 'opened' ? null : 'opened')}
-                className="rounded-lg bg-blue-50 p-4 text-left transition hover:bg-blue-100 cursor-pointer"
-              >
-                <div className="text-2xl font-bold text-blue-600">{stats.opened}</div>
-                <div className="text-sm text-gray-600">Gelesen</div>
               </button>
               <button
                 type="button"
