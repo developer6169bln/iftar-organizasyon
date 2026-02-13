@@ -1436,7 +1436,8 @@ export default function InvitationsPage() {
     const declined = invitations.filter(i => i.response === 'DECLINED').length
     const pending = invitations.filter(i => i.response === 'PENDING' || !i.response).length
     const opened = invitations.filter(i => i.openedAt).length
-    const sent = invitations.filter(i => i.sentAt).length
+    // Gesamt versendet = Gelesen + Ausstehend (Summe; Überlappung möglich)
+    const sent = opened + pending
     return { accepted, declined, pending, opened, sent, total: invitations.length }
   }
 
@@ -1445,7 +1446,7 @@ export default function InvitationsPage() {
   const statsFilteredList = useMemo(() => {
     if (!statsListFilter) return []
     switch (statsListFilter) {
-      case 'sent': return invitations.filter(i => i.sentAt)
+      case 'sent': return invitations.filter(i => i.openedAt || i.response === 'PENDING' || !i.response)
       case 'accepted': return invitations.filter(i => i.response === 'ACCEPTED')
       case 'declined': return invitations.filter(i => i.response === 'DECLINED')
       case 'pending': return invitations.filter(i => i.response === 'PENDING' || !i.response)
