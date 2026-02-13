@@ -39,6 +39,30 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function buildWhatsAppShareText(r: Reservation): string {
+  const lines = [
+    `Raumreservierung: ${r.title}`,
+    `Raum: ${r.room.name}`,
+    `${formatDateTime(r.startAt)} – ${r.endAt ? formatDateTime(r.endAt) : '–'}`,
+  ]
+  if (r.project) lines.push(`Projekt: ${r.project.name}`)
+  if (r.event) lines.push(`Event: ${r.event.title}`)
+  if (r.notes) lines.push(r.notes)
+  return lines.join('\n')
+}
+
+function buildWhatsAppTerminText(r: Reservation, baseUrl: string): string {
+  const icalUrl = `${baseUrl}/api/room-reservations/${r.id}/ical`
+  const lines = [
+    `📅 Termin: ${r.title}`,
+    `Raum: ${r.room.name}`,
+    `${formatDateTime(r.startAt)} – ${r.endAt ? formatDateTime(r.endAt) : '–'}`,
+    '',
+    `Zum Kalender hinzufügen (mobil): ${icalUrl}`,
+  ]
+  return lines.join('\n')
+}
+
 function ReservationTooltip({
   reservation,
   x,
@@ -903,6 +927,7 @@ export default function RoomReservationsPage() {
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Verantwortlicher</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Leiter</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-700">Reserviert von</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-700">Teilen</th>
                     {canManageRoomReservations && (
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Aktionen</th>
                     )}
@@ -929,6 +954,33 @@ export default function RoomReservationsPage() {
                       <td className="px-3 py-2">{r.responsibleUser ? (r.responsibleUser.name || r.responsibleUser.email) : '–'}</td>
                       <td className="px-3 py-2">{r.eventLeader ? (r.eventLeader.name || r.eventLeader.email) : '–'}</td>
                       <td className="px-3 py-2">{r.reservedBy.name}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <a
+                            href={`https://wa.me/?text=${encodeURIComponent(buildWhatsAppShareText(r))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800 hover:bg-green-200"
+                            title="Reservierung per WhatsApp teilen"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span aria-hidden>📱</span> Teilen
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const baseUrl = window.location.origin
+                              const url = `https://wa.me/?text=${encodeURIComponent(buildWhatsAppTerminText(r, baseUrl))}`
+                              window.open(url, '_blank', 'noopener,noreferrer')
+                            }}
+                            className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800 hover:bg-green-200"
+                            title="Als Termin per WhatsApp senden (mit Kalender-Link für Mobilgeräte)"
+                          >
+                            <span aria-hidden>📅</span> Termin
+                          </button>
+                        </div>
+                      </td>
                       {canManageRoomReservations && (
                         <td className="px-3 py-2">
                           <button
