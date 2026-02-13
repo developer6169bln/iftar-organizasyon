@@ -53,7 +53,10 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const additionalData: Record<string, string> = {}
+      const additionalData: Record<string, string> = {
+        Vorname: reg.firstName?.trim() ?? '',
+        Nachname: reg.lastName?.trim() ?? '',
+      }
       if (reg.district) additionalData['Bezirk'] = reg.district
       if (reg.sube) additionalData['Şube'] = reg.sube
       if (reg.notes) additionalData['Notizen'] = reg.notes
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
           phone: reg.phone || null,
           notes: reg.notes || null,
           organization: reg.district || reg.sube || null,
-          additionalData: Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
+          additionalData: JSON.stringify(additionalData),
           status: 'INVITED',
         },
       })
