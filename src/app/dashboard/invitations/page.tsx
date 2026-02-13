@@ -1419,7 +1419,8 @@ export default function InvitationsPage() {
     const declined = invitations.filter(i => i.response === 'DECLINED').length
     const pending = invitations.filter(i => i.response === 'PENDING' || !i.response).length
     const opened = invitations.filter(i => i.openedAt).length
-    return { accepted, declined, pending, opened, total: invitations.length }
+    const sent = invitations.filter(i => i.sentAt).length
+    return { accepted, declined, pending, opened, sent, total: invitations.length }
   }
 
   const stats = getResponseStats()
@@ -1485,7 +1486,11 @@ export default function InvitationsPage() {
             <h2 className="mb-4 text-xl font-semibold">Einladungen senden</h2>
             
             {/* Statistiken */}
-            <div className="mb-6 grid grid-cols-4 gap-4">
+            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="rounded-lg bg-indigo-50 p-4">
+                <div className="text-2xl font-bold text-indigo-600">{stats.sent}</div>
+                <div className="text-sm text-gray-600">Gesamt versendet</div>
+              </div>
               <div className="rounded-lg bg-green-50 p-4">
                 <div className="text-2xl font-bold text-green-600">{stats.accepted}</div>
                 <div className="text-sm text-gray-600">Zusagen</div>
@@ -1501,6 +1506,10 @@ export default function InvitationsPage() {
               <div className="rounded-lg bg-blue-50 p-4">
                 <div className="text-2xl font-bold text-blue-600">{stats.opened}</div>
                 <div className="text-sm text-gray-600">Gelesen</div>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-4">
+                <div className="text-2xl font-bold text-gray-600">{stats.total}</div>
+                <div className="text-sm text-gray-600">Gesamt</div>
               </div>
             </div>
 
