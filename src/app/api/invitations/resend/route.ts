@@ -238,6 +238,20 @@ export async function POST(request: NextRequest) {
           console.error('Fehler beim Aktualisieren von additionalData für Gast:', guest.id, e)
         }
 
+        // Vermerk in Anmeldungsliste: Einladung per E-Mail gesendet (für importierte Gäste)
+        try {
+          const guestFullName = (guest.name ?? '').trim()
+          if (guestFullName) {
+            await prisma.$executeRaw`
+              UPDATE event_registrations
+              SET "invitationSentAt" = NOW()
+              WHERE LOWER(TRIM(CONCAT("firstName", ' ', "lastName"))) = LOWER(TRIM(${guestFullName}))
+            `
+          }
+        } catch {
+          // ignore – Anmeldungs-Update ist optional
+        }
+
         results.push({ invitationId: inv.id, guestName: guest.name, success: true })
       } catch (error) {
         console.error(`Resend fehlgeschlagen für Einladung ${inv.id}:`, error)

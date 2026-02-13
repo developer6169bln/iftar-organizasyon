@@ -15,6 +15,7 @@ type Registration = {
   participating: boolean
   notes: string | null
   createdAt: string
+  invitationSentAt?: string | null
 }
 
 type EventOption = { id: string; title: string; date: string }
@@ -28,22 +29,31 @@ export default function RegistrierungenPage() {
   const [importing, setImporting] = useState<string | null>(null)
   const [fixing, setFixing] = useState<string | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true)
-        const res = await fetch('/api/registrations')
-        if (!res.ok) throw new Error('Laden fehlgeschlagen')
-        const data = await res.json()
-        setList(Array.isArray(data) ? data : [])
-      } catch (e) {
-        console.error(e)
-        setList([])
-      } finally {
-        setLoading(false)
-      }
+  const loadRegistrations = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/registrations')
+      if (!res.ok) throw new Error('Laden fehlgeschlagen')
+      const data = await res.json()
+      setList(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error(e)
+      setList([])
+    } finally {
+      setLoading(false)
     }
-    load()
+  }
+
+  useEffect(() => {
+    loadRegistrations()
+  }, [])
+
+  useEffect(() => {
+    const onEmailSent = () => loadRegistrations()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('email-sent', onEmailSent)
+      return () => window.removeEventListener('email-sent', onEmailSent)
+    }
   }, [])
 
   useEffect(() => {
@@ -177,19 +187,23 @@ export default function RegistrierungenPage() {
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
             <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Teilnahme</th>
+            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Einladung per E-Mail</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Notizen</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={showSube ? 9 : 8} className="px-4 py-8 text-center text-sm text-gray-500">
+              <td colSpan={showSube ? 10 : 9} className="px-4 py-8 text-center text-sm text-gray-500">
                 Noch keine Anmeldungen.
               </td>
             </tr>
           ) : (
             rows.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
+              <tr
+                key={r.id}
+                className={`hover:bg-gray-50 ${r.invitationSentAt ? 'bg-green-50' : ''}`}
+              >
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{formatDate(r.createdAt)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.firstName}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.lastName}</td>
@@ -204,6 +218,16 @@ export default function RegistrierungenPage() {
                     <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
                   ) : (
                     <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Nein</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
+                  {r.invitationSentAt ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800" title={`Gesendet: ${formatDate(r.invitationSentAt)}`}>
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-600" aria-hidden />
+                      {formatDate(r.invitationSentAt)}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">–</span>
                   )}
                 </td>
                 <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={r.notes ?? ''}>
