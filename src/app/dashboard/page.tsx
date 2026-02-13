@@ -149,15 +149,15 @@ export default function DashboardPage() {
         }
         const eventId = event.id
         const [guestsRes, tasksRes, checklistRes] = await Promise.all([
-          fetch(`/api/guests?eventId=${eventId}`),
+          fetch(`/api/guests?eventId=${eventId}&countOnly=true`),
           fetch(`/api/tasks?eventId=${eventId}`),
           fetch(`/api/checklist?eventId=${eventId}`),
         ])
         if (cancelled) return
         let totalGuests = 0
         if (guestsRes.ok) {
-          const guests = await guestsRes.json()
-          totalGuests = guests.length
+          const data = await guestsRes.json()
+          totalGuests = typeof data?.count === 'number' ? data.count : (Array.isArray(data) ? data.length : 0)
         }
         let completedTasks = 0
         let inProgressTasks = 0

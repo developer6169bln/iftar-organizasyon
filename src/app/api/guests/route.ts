@@ -44,6 +44,12 @@ export async function GET(request: NextRequest) {
       where.needsSpecialReception = true
     }
 
+    const countOnly = searchParams.get('countOnly') === 'true'
+    if (countOnly && eventId) {
+      const count = await prisma.guest.count({ where })
+      return NextResponse.json({ count })
+    }
+
     const guests = await prisma.guest.findMany({
       where,
       orderBy: {
@@ -51,14 +57,14 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Log view
+    // Log view (nicht blockierend, damit Response schneller zurückkommt)
     const userInfo = await getUserIdFromRequest(request)
-    await logView('GUEST', 'LIST', request, {
+    logView('GUEST', 'LIST', request, {
       userId: userInfo.userId,
       userEmail: userInfo.userEmail,
       eventId: eventId || undefined,
       description: `Gästeliste angezeigt (${guests.length} Gäste)`,
-    })
+    }).catch(() => {})
 
     return NextResponse.json(guests)
   } catch (error) {
