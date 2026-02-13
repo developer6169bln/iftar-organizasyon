@@ -17,10 +17,15 @@ type Registration = {
   createdAt: string
 }
 
+type EventOption = { id: string; title: string; date: string }
+
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari'>('uid-iftar')
+  const [events, setEvents] = useState<EventOption[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
+  const [importing, setImporting] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -40,6 +45,46 @@ export default function RegistrierungenPage() {
     load()
   }, [])
 
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const params = new URLSearchParams({ list: 'true' })
+        if (projectId) params.set('projectId', projectId)
+        const res = await fetch(`/api/events?${params}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const arr = Array.isArray(data) ? data : (data?.id ? [data] : [])
+        const evs = arr.map((e: { id: string; title: string; date: string }) => ({ id: e.id, title: e.title, date: e.date }))
+        setEvents(evs)
+        setSelectedEventId((prev) => (prev ? prev : evs[0]?.id ?? ''))
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    loadEvents()
+  }, [])
+
+  useEffect(() => {
+    const onProjectChange = () => {
+      const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+      const params = new URLSearchParams({ list: 'true' })
+      if (projectId) params.set('projectId', projectId)
+      fetch(`/api/events?${params}`)
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => {
+          const arr = Array.isArray(data) ? data : []
+          setEvents(arr.map((e: { id: string; title: string; date: string }) => ({ id: e.id, title: e.title, date: e.date })))
+          setSelectedEventId((prev) => (arr.some((e: { id: string }) => e.id === prev) ? prev : arr[0]?.id ?? ''))
+        })
+        .catch(() => {})
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('dashboard-project-changed', onProjectChange)
+      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
+    }
+  }, [])
+
   const uidIftar = list.filter((r) => r.eventSlug === 'uid-iftar')
   const subeBaskanlari = list.filter((r) => r.eventSlug === 'sube-baskanlari')
   const kadinKollari = list.filter((r) => r.eventSlug === 'kadin-kollari')
@@ -53,6 +98,39 @@ export default function RegistrierungenPage() {
       })
     } catch {
       return s
+    }
+  }
+
+  const handleImportToGuests = async (eventSlug: string) => {
+    if (!selectedEventId) {
+      alert('Bitte wählen Sie zuerst ein Event aus.')
+      return
+    }
+    setImporting(eventSlug)
+    try {
+      const res = await fetch('/api/registrations/import-to-guests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventSlug, eventId: selectedEventId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Import fehlgeschlagen')
+        return
+      }
+      const msg = [
+        `${data.imported} Anmeldung(en) in die Gästeliste übernommen.`,
+        data.skipped > 0 ? `${data.skipped} übersprungen (bereits vorhanden).` : '',
+        data.duplicateNames?.length ? `Duplikate: ${data.duplicateNames.slice(0, 5).join(', ')}${data.duplicateNames.length > 5 ? ' …' : ''}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+      alert(msg)
+    } catch (e) {
+      console.error(e)
+      alert('Import fehlgeschlagen')
+    } finally {
+      setImporting(null)
     }
   }
 
@@ -176,25 +254,60 @@ export default function RegistrierungenPage() {
 
         {loading ? (
           <p className="text-gray-500">Lade Anmeldungen …</p>
-        ) : activeTab === 'uid-iftar' ? (
-          <>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
-            {renderTable(uidIftar, false)}
-          </>
-        ) : activeTab === 'sube-baskanlari' ? (
-          <>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Şube Başkanları</h2>
-            {renderTable(subeBaskanlari, true)}
-          </>
-        ) : activeTab === 'kadin-kollari' ? (
-          <>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
-            {renderTable(kadinKollari, false)}
-          </>
         ) : (
           <>
-            <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
-            {renderTable(genclikKollari, false)}
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label htmlFor="import-event" className="text-sm font-medium text-gray-700">
+                  Ziel-Event für Import:
+                </label>
+                <select
+                  id="import-event"
+                  value={selectedEventId}
+                  onChange={(e) => setSelectedEventId(e.target.value)}
+                  className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">– Event wählen –</option>
+                  {events.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} ({ev.date ? new Date(ev.date).toLocaleDateString('de-DE') : ''})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleImportToGuests(activeTab)}
+                disabled={!selectedEventId || importing !== null}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {importing === activeTab ? 'Import läuft …' : 'In Gästeliste übernehmen'}
+              </button>
+              <span className="text-sm text-gray-500">
+                Doppelte Namen werden übersprungen.
+              </span>
+            </div>
+            {activeTab === 'uid-iftar' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
+                {renderTable(uidIftar, false)}
+              </>
+            ) : activeTab === 'sube-baskanlari' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Şube Başkanları</h2>
+                {renderTable(subeBaskanlari, true)}
+              </>
+            ) : activeTab === 'kadin-kollari' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
+                {renderTable(kadinKollari, false)}
+              </>
+            ) : (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
+                {renderTable(genclikKollari, false)}
+              </>
+            )}
           </>
         )}
 
