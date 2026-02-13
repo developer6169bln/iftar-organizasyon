@@ -26,6 +26,7 @@ export default function RegistrierungenPage() {
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
+  const [fixing, setFixing] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -131,6 +132,33 @@ export default function RegistrierungenPage() {
       alert('Import fehlgeschlagen')
     } finally {
       setImporting(null)
+    }
+  }
+
+  const handleFixImportedGuests = async (eventSlug: string) => {
+    if (!selectedEventId) {
+      alert('Bitte wählen Sie zuerst ein Event aus.')
+      return
+    }
+    if (!confirm('Bereits importierte Gäste korrigieren? Vorname und Nachname werden aus den Anmeldungen in die richtigen Spalten übertragen.')) return
+    setFixing(eventSlug)
+    try {
+      const res = await fetch('/api/registrations/fix-imported-guests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventSlug, eventId: selectedEventId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Korrektur fehlgeschlagen')
+        return
+      }
+      alert(`${data.fixed} Gäste korrigiert.`)
+    } catch (e) {
+      console.error(e)
+      alert('Korrektur fehlgeschlagen')
+    } finally {
+      setFixing(null)
     }
   }
 
@@ -282,6 +310,15 @@ export default function RegistrierungenPage() {
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing === activeTab ? 'Import läuft …' : 'In Gästeliste übernehmen'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFixImportedGuests(activeTab)}
+                disabled={!selectedEventId || fixing !== null}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Vorname und Nachname in die richtigen Spalten übertragen (für bereits importierte Gäste)"
+              >
+                {fixing === activeTab ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
               </button>
               <span className="text-sm text-gray-500">
                 Doppelte Namen werden übersprungen.
