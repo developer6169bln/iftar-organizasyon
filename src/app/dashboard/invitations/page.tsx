@@ -1496,8 +1496,8 @@ export default function InvitationsPage() {
       })
       y -= 24
 
-      const colWidths = [40, 80, 100, 180, 100]
-      const headers = ['Nr', 'Vorname', 'Name', 'E-Mail', 'Versand']
+      const colWidths = [40, 70, 90, 120, 150, 90]
+      const headers = ['Nr', 'Vorname', 'Name', 'Staat/Institution', 'E-Mail', 'Versand']
       const totalWidth = colWidths.reduce((a, b) => a + b, 0)
       const rowHeight = 14
 
@@ -1525,10 +1525,11 @@ export default function InvitationsPage() {
         const inv = statsFilteredList[idx]
         const vorname = getGuestVorname(inv.guest)
         const nachname = getGuestNachname(inv.guest) || inv.guest?.name || '–'
+        const staatInstitution = getGuestStaatInstitution(inv.guest) || '–'
         const email = getGuestDisplayEmail(inv.guest) || '–'
         const sentStr = inv.sentAt ? new Date(inv.sentAt).toLocaleString('de-DE') : '–'
 
-        const row = [String(idx + 1), vorname, nachname, email, sentStr]
+        const row = [String(idx + 1), vorname, nachname, staatInstitution, email, sentStr]
         x = marginX + 4
         for (let i = 0; i < row.length; i++) {
           page.drawText(sanitizePdfText(row[i]).slice(0, 35), { x, y: y - 10, size: 8, font, color: rgb(0, 0, 0), maxWidth: colWidths[i] - 6 })
@@ -1712,6 +1713,9 @@ export default function InvitationsPage() {
                               </span>
                               <span className="font-medium text-gray-900">
                                 {getGuestNachname(inv.guest) || inv.guest?.name || '–'}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {getGuestStaatInstitution(inv.guest) || '–'}
                               </span>
                               <span className="text-sm text-gray-500">
                                 {getGuestDisplayEmail(inv.guest) || '–'}
