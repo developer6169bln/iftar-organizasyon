@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { getKnownCategoryKeys, getCategoryLabel } from '@/lib/guestCategory'
+
+function sanitizePdfText(s: string): string {
+  return (s || '').replace(/[İıŞşĞğÜüÖöÇç]/g, (c) => ({ İ: 'I', ı: 'i', Ş: 'S', ş: 's', Ğ: 'G', ğ: 'g', Ü: 'U', ü: 'u', Ö: 'O', ö: 'o', Ç: 'C', ç: 'c' }[c] ?? c))
+}
 
 /** E-Mail aus guest.email oder additionalData: E-Mail kurumsal / E-Mail privat (erstes vorhandenes). */
 function getGuestDisplayEmail(guest: any): string {
@@ -54,6 +59,17 @@ function getGuestVorname(guest: any): string {
   const name = guest.name ? String(guest.name).trim() : ''
   const parts = name.split(/\s+/).filter((p: string) => p.trim() !== '')
   return parts[0] || ''
+}
+
+/** Nachname aus additionalData oder guest.name (Rest nach erstem Wort). */
+function getGuestNachname(guest: any): string {
+  if (!guest) return ''
+  const add = parseAdditionalData(guest)
+  const fromAdd = getFromAdditional(add, ['Nachname', 'nachname', 'Name'])
+  if (fromAdd) return fromAdd
+  const name = guest.name ? String(guest.name).trim() : ''
+  const parts = name.split(/\s+/).filter((p: string) => p.trim() !== '')
+  return parts.slice(1).join(' ') || ''
 }
 
 /** Staat/Institution aus guest.organization oder additionalData. */
@@ -1451,6 +1467,90 @@ export default function InvitationsPage() {
     }
   }, [statsListFilter])
 
+  const handleSaveAsPdf = async () => {
+    if (statsFilteredList.length === 0) return
+    try {
+      const pdfDoc = await PDFDocument.create()
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+      let page = pdfDoc.addPage([595.28, 841.89])
+      const marginX = 40
+      const marginY = 40
+      let y = 841.89 - marginY
+
+      page.drawText(sanitizePdfText(statsListTitle), {
+        x: marginX,
+        y,
+        size: 16,
+        font: fontBold,
+        color: rgb(0, 0, 0),
+      })
+      y -= 20
+
+      page.drawText(sanitizePdfText(`Stand: ${new Date().toLocaleDateString('de-DE')} ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} | ${statsFilteredList.length} Einträge`), {
+        x: marginX,
+        y,
+        size: 9,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      })
+      y -= 24
+
+      const colWidths = [40, 80, 100, 180, 100]
+      const headers = ['Nr', 'Vorname', 'Name', 'E-Mail', 'Versand']
+      const totalWidth = colWidths.reduce((a, b) => a + b, 0)
+      const rowHeight = 14
+
+      page.drawRectangle({
+        x: marginX,
+        y: y - rowHeight,
+        width: totalWidth,
+        height: rowHeight,
+        color: rgb(0.92, 0.92, 0.92),
+        borderColor: rgb(0.5, 0.5, 0.5),
+        borderWidth: 0.5,
+      })
+      let x = marginX + 4
+      for (let i = 0; i < headers.length; i++) {
+        page.drawText(sanitizePdfText(headers[i]).slice(0, 25), { x, y: y - 10, size: 8, font: fontBold, color: rgb(0, 0, 0), maxWidth: colWidths[i] - 6 })
+        x += colWidths[i]
+      }
+      y -= rowHeight + 4
+
+      for (let idx = 0; idx < statsFilteredList.length; idx++) {
+        if (y < marginY + rowHeight) {
+          page = pdfDoc.addPage([595.28, 841.89])
+          y = 841.89 - marginY
+        }
+        const inv = statsFilteredList[idx]
+        const vorname = getGuestVorname(inv.guest)
+        const nachname = getGuestNachname(inv.guest) || inv.guest?.name || '–'
+        const email = getGuestDisplayEmail(inv.guest) || '–'
+        const sentStr = inv.sentAt ? new Date(inv.sentAt).toLocaleString('de-DE') : '–'
+
+        const row = [String(idx + 1), vorname, nachname, email, sentStr]
+        x = marginX + 4
+        for (let i = 0; i < row.length; i++) {
+          page.drawText(sanitizePdfText(row[i]).slice(0, 35), { x, y: y - 10, size: 8, font, color: rgb(0, 0, 0), maxWidth: colWidths[i] - 6 })
+          x += colWidths[i]
+        }
+        y -= rowHeight
+      }
+
+      const pdfBytes = await pdfDoc.save()
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${statsListTitle.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('PDF-Export fehlgeschlagen:', e)
+      alert('PDF konnte nicht erstellt werden.')
+    }
+  }
+
   const sortedInvitations = useMemo(() => {
     if (!listSortBy || listSortBy !== 'bemerkungen') return invitations
     const dir = listSortDir === 'asc' ? 1 : -1
@@ -1580,14 +1680,24 @@ export default function InvitationsPage() {
                     <h3 className="text-lg font-semibold text-gray-900">
                       {statsListTitle} ({statsFilteredList.length})
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() => setStatsListFilter(null)}
-                      className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
-                      aria-label="Schließen"
-                    >
-                      ✕
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveAsPdf}
+                        disabled={statsFilteredList.length === 0}
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Als PDF speichern
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStatsListFilter(null)}
+                        className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                        aria-label="Schließen"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-y-auto p-4" style={{ maxHeight: '70vh' }}>
                     {statsFilteredList.length === 0 ? (
@@ -1596,14 +1706,19 @@ export default function InvitationsPage() {
                       <ul className="divide-y divide-gray-200">
                         {statsFilteredList.map((inv) => (
                           <li key={inv.id} className="flex items-center justify-between py-3">
-                            <div>
-                              <span className="font-medium text-gray-900">{inv.guest?.name ?? '–'}</span>
-                              <span className="ml-2 text-sm text-gray-500">
+                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                              <span className="font-medium text-gray-900">
+                                {getGuestVorname(inv.guest) || '–'}
+                              </span>
+                              <span className="font-medium text-gray-900">
+                                {getGuestNachname(inv.guest) || inv.guest?.name || '–'}
+                              </span>
+                              <span className="text-sm text-gray-500">
                                 {getGuestDisplayEmail(inv.guest) || '–'}
                               </span>
                             </div>
                             {inv.sentAt && (
-                              <span className="text-xs text-gray-400">
+                              <span className="text-xs text-gray-400 shrink-0">
                                 {new Date(inv.sentAt).toLocaleString('de-DE')}
                               </span>
                             )}
