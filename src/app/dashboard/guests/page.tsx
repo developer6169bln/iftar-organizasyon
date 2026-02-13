@@ -127,6 +127,9 @@ export default function GuestsPage() {
       return guest.category || ''
     }
     if (columnName === 'Name' || columnName === 'name') {
+      // Wenn Nachname in additionalData: Name-Spalte zeigt nur Nachname (nicht Vorname+Nachname)
+      const nachname = String(additional['Nachname'] ?? additional['nachname'] ?? '').trim()
+      if (nachname) return nachname
       return guest.name || ''
     }
     if (columnName === 'Partei / Organisation / Unternehmen') {
