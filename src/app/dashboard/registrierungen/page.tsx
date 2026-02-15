@@ -23,7 +23,7 @@ type EventOption = { id: string; title: string; date: string }
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari'>('uid-iftar')
+  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe'>('uid-iftar')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
@@ -100,6 +100,7 @@ export default function RegistrierungenPage() {
   const subeBaskanlari = list.filter((r) => r.eventSlug === 'sube-baskanlari')
   const kadinKollari = list.filter((r) => r.eventSlug === 'kadin-kollari')
   const genclikKollari = list.filter((r) => r.eventSlug === 'genclik-kollari')
+  const fatihgruppe = list.filter((r) => r.eventSlug === 'fatihgruppe')
 
   const formatDate = (s: string) => {
     try {
@@ -302,6 +303,17 @@ export default function RegistrierungenPage() {
           >
             Gençlik Kolları ({genclikKollari.length})
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('fatihgruppe')}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+              activeTab === 'fatihgruppe'
+                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Fatihgruppe ({fatihgruppe.length})
+          </button>
         </div>
 
         {loading ? (
@@ -363,6 +375,11 @@ export default function RegistrierungenPage() {
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
                 {renderTable(kadinKollari, false)}
               </>
+            ) : activeTab === 'fatihgruppe' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Fatihgruppe</h2>
+                {renderTable(fatihgruppe, false)}
+              </>
             ) : (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
@@ -388,6 +405,10 @@ export default function RegistrierungenPage() {
           {' · '}
           <a href="/anmeldung/genclik-kollari" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
             Gençlik Kolları
+          </a>
+          {' · '}
+          <a href="/anmeldung/fatihgruppe" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+            Fatihgruppe
           </a>
         </p>
       </main>
