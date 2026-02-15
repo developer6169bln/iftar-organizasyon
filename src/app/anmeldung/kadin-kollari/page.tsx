@@ -79,7 +79,7 @@ export default function KadinKollariAnmeldungPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
+      <div className="anmeldung-form w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Kadın Kolları</h1>
         <p className="mb-6 text-center text-gray-600">
           Registrierung für Interessenten – Teilnahme am Event bekunden

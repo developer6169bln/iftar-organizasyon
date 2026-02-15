@@ -283,7 +283,7 @@ export default function InvitationAcceptPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+      <div className="invitation-form w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-xl font-bold text-gray-900">Teilnahme bestätigen</h1>
         <p className="mb-6 text-gray-600">
           Guten Tag {info.guestName}, Sie sind zu „{info.eventTitle}“ eingeladen. Bitte bestätigen Sie Ihre Teilnahme

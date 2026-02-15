@@ -24,3 +24,34 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Anmeldung & Einladungsformulare: Schwarze Schrift auf allen Geräten (mobile Kompatibilität) */
+.anmeldung-form,
+.invitation-form {
+  color-scheme: light; /* Pfeile bei number-Inputs auf Mobilgeräten sichtbar (schwarz) */
+}
+.anmeldung-form label,
+.invitation-form label {
+  color: #000 !important;
+}
+.anmeldung-form input,
+.anmeldung-form textarea,
+.anmeldung-form select,
+.invitation-form input,
+.invitation-form textarea,
+.invitation-form select {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+}
+.anmeldung-form input::placeholder,
+.anmeldung-form textarea::placeholder,
+.invitation-form input::placeholder,
+.invitation-form textarea::placeholder {
+  color: #6b7280 !important;
+  -webkit-text-fill-color: #6b7280 !important;
+}
+/* Autofill: Schrift bleibt schwarz */
+.anmeldung-form input:-webkit-autofill,
+.invitation-form input:-webkit-autofill {
+  -webkit-text-fill-color: #000 !important;
+}
