@@ -43,6 +43,13 @@ body {
   color: #000 !important;
   -webkit-text-fill-color: #000 !important;
 }
+/* Number-Input: Pfeile/Stepper auf Mobilgeräten schwarz sichtbar */
+.anmeldung-form input[type="number"],
+.invitation-form input[type="number"] {
+  color: #000 !important;
+  -webkit-text-fill-color: #000 !important;
+  color-scheme: light;
+}
 .anmeldung-form input::placeholder,
 .anmeldung-form textarea::placeholder,
 .invitation-form input::placeholder,

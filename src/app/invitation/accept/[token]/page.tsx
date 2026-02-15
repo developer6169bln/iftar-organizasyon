@@ -295,22 +295,18 @@ export default function InvitationAcceptPage() {
             <label htmlFor="accompanyingGuestsCount" className="mb-1 block text-sm font-medium text-gray-700">
               Anzahl mitkommender Gäste (inkl. Sie selbst: 1)
             </label>
-            <input
+            <select
               id="accompanyingGuestsCount"
-              type="number"
-              min={1}
-              max={max}
               value={accompanyingGuestsCount}
               onChange={(e) => handleCountChange(parseInt(e.target.value, 10) || 1)}
-              onBlur={() => {
-                if (accompanyingGuestsCount > max) {
-                  setMaxExceededWarning(
-                    `Die maximale Anzahl mitkommender Gäste ist ${max}. Bitte wählen Sie höchstens ${max}.`
-                  )
-                }
-              }}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-lg focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-lg text-black focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {Array.from({ length: max }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
             <p className="mt-1 text-xs text-gray-500">
               Maximal erlaubt: {max} mitkommende Gäste (festgelegt auf der Einladungsliste).
             </p>
@@ -334,27 +330,27 @@ export default function InvitationAcceptPage() {
                       placeholder="Vorname"
                       value={ag.firstName}
                       onChange={(e) => updateAccompanying(idx, 'firstName', e.target.value)}
-                      className="rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="rounded border border-gray-300 px-3 py-2 text-sm text-black"
                     />
                     <input
                       placeholder="Nachname"
                       value={ag.lastName}
                       onChange={(e) => updateAccompanying(idx, 'lastName', e.target.value)}
-                      className="rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="rounded border border-gray-300 px-3 py-2 text-sm text-black"
                     />
                   </div>
                   <input
                     placeholder="Funktion / Rolle"
                     value={ag.funktion}
                     onChange={(e) => updateAccompanying(idx, 'funktion', e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-black"
                   />
                   <input
                     type="email"
                     placeholder="E-Mail"
                     value={ag.email}
                     onChange={(e) => updateAccompanying(idx, 'email', e.target.value)}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm text-black"
                   />
                 </div>
               ))}
