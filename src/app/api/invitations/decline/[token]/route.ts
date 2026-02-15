@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
+import { sendPushNotificationFromServer } from '@/lib/sendPushNotification'
 
 export async function GET(
   request: NextRequest,
@@ -69,6 +70,38 @@ export async function GET(
           },
         })
       }
+    }
+
+    // Push-Benachrichtigung an Admins und App-Inhaber: Absage mit Gesamtanzahl Zusagen und Absagen
+    try {
+      const [totalZusagen, totalAbsagen] = await Promise.all([
+        prisma.invitation.count({ where: { eventId: invitation.eventId, response: 'ACCEPTED' } }),
+        prisma.invitation.count({ where: { eventId: invitation.eventId, response: 'DECLINED' } }),
+      ])
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN' },
+        select: { id: true },
+      })
+      const recipientIds = new Set(admins.map((a) => a.id))
+      if (invitation.event?.projectId) {
+        const project = await prisma.project.findUnique({
+          where: { id: invitation.event.projectId },
+          select: { ownerId: true },
+        })
+        if (project?.ownerId) recipientIds.add(project.ownerId)
+      }
+      if (recipientIds.size > 0) {
+        const guestName = invitation.guest?.name ?? 'Ein Gast'
+        await sendPushNotificationFromServer({
+          title: 'Neue Absage',
+          body: `${guestName} hat abgesagt. Gesamt: ${totalZusagen} Zusagen, ${totalAbsagen} Absagen.`,
+          url: '/dashboard/invitations',
+          userIds: Array.from(recipientIds),
+          tag: 'invitation-declined',
+        })
+      }
+    } catch (e) {
+      console.error('Push-Benachrichtigung an App-Inhaber fehlgeschlagen:', e)
     }
 
     // Weiterleitung zur Bestätigungsseite (konfigurierte App-URL, nie localhost in Produktion)

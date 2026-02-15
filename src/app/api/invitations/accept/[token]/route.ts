@@ -162,28 +162,36 @@ export async function POST(
       })
     }
 
-    // Push-Benachrichtigung an Admins: Zusage mit Gesamtanzahl
+    // Push-Benachrichtigung an Admins und App-Inhaber: Zusage mit Gesamtanzahl Zusagen und Absagen
     try {
-      const totalZusagen = await prisma.invitation.count({
-        where: { eventId: invitation.eventId, response: 'ACCEPTED' },
-      })
+      const [totalZusagen, totalAbsagen] = await Promise.all([
+        prisma.invitation.count({ where: { eventId: invitation.eventId, response: 'ACCEPTED' } }),
+        prisma.invitation.count({ where: { eventId: invitation.eventId, response: 'DECLINED' } }),
+      ])
       const admins = await prisma.user.findMany({
         where: { role: 'ADMIN' },
         select: { id: true },
       })
-      const adminIds = admins.map((a) => a.id)
-      if (adminIds.length > 0) {
+      const recipientIds = new Set(admins.map((a) => a.id))
+      if (invitation.event?.projectId) {
+        const project = await prisma.project.findUnique({
+          where: { id: invitation.event.projectId },
+          select: { ownerId: true },
+        })
+        if (project?.ownerId) recipientIds.add(project.ownerId)
+      }
+      if (recipientIds.size > 0) {
         const guestName = invitation.guest?.name ?? 'Ein Gast'
         await sendPushNotificationFromServer({
           title: 'Neue Zusage',
-          body: `${guestName} hat zugesagt. Gesamt: ${totalZusagen} Zusagen.`,
+          body: `${guestName} hat zugesagt. Gesamt: ${totalZusagen} Zusagen, ${totalAbsagen} Absagen.`,
           url: '/dashboard/invitations',
-          userIds: adminIds,
+          userIds: Array.from(recipientIds),
           tag: 'invitation-accepted',
         })
       }
     } catch (e) {
-      console.error('Push-Benachrichtigung an Admin fehlgeschlagen:', e)
+      console.error('Push-Benachrichtigung an App-Inhaber fehlgeschlagen:', e)
     }
 
     return NextResponse.json({
