@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
+import { sendPushNotificationFromServer } from '@/lib/sendPushNotification'
 
 function generateCheckInToken(): string {
   return randomBytes(24).toString('hex')
@@ -159,6 +160,30 @@ export async function POST(
         token,
         type: 'accompanying',
       })
+    }
+
+    // Push-Benachrichtigung an Admins: Zusage mit Gesamtanzahl
+    try {
+      const totalZusagen = await prisma.invitation.count({
+        where: { eventId: invitation.eventId, response: 'ACCEPTED' },
+      })
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN' },
+        select: { id: true },
+      })
+      const adminIds = admins.map((a) => a.id)
+      if (adminIds.length > 0) {
+        const guestName = invitation.guest?.name ?? 'Ein Gast'
+        await sendPushNotificationFromServer({
+          title: 'Neue Zusage',
+          body: `${guestName} hat zugesagt. Gesamt: ${totalZusagen} Zusagen.`,
+          url: '/dashboard/invitations',
+          userIds: adminIds,
+          tag: 'invitation-accepted',
+        })
+      }
+    } catch (e) {
+      console.error('Push-Benachrichtigung an Admin fehlgeschlagen:', e)
     }
 
     return NextResponse.json({

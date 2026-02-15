@@ -5,6 +5,8 @@ export interface PushNotificationData {
   body: string
   url?: string
   userId?: string
+  /** Mehrere User-IDs (z. B. alle Admins) – wenn gesetzt, wird userId ignoriert */
+  userIds?: string[]
   icon?: string
   tag?: string
   requireInteraction?: boolean
@@ -85,7 +87,9 @@ export async function sendPushNotificationFromServer(
   try {
     // Hole Subscriptions aus der Datenbank
     const where: any = {}
-    if (data.userId) {
+    if (data.userIds && data.userIds.length > 0) {
+      where.userId = { in: data.userIds }
+    } else if (data.userId) {
       where.userId = data.userId
     }
 
