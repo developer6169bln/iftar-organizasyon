@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type CheckInTokenEntry = { label: string; token: string; type: 'main' | 'accompanying' }
 
-export default function FatihgruppeErfolgPage() {
+function FatihgruppeErfolgContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
 
@@ -162,5 +162,24 @@ export default function FatihgruppeErfolgPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function LoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 p-4">
+      <div className="text-center">
+        <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+        <p className="text-gray-600">Lade …</p>
+      </div>
+    </div>
+  )
+}
+
+export default function FatihgruppeErfolgPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <FatihgruppeErfolgContent />
+    </Suspense>
   )
 }

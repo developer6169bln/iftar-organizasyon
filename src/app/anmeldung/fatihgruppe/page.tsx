@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function FatihgruppeAnmeldungPage() {
+function FatihgruppeAnmeldungContent() {
   const searchParams = useSearchParams()
   const eventId = searchParams.get('eventId') ?? ''
 
@@ -251,5 +251,13 @@ export default function FatihgruppeAnmeldungPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function FatihgruppeAnmeldungPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-amber-50 p-4"><p className="text-gray-600">Lade …</p></div>}>
+      <FatihgruppeAnmeldungContent />
+    </Suspense>
   )
 }
