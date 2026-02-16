@@ -1,5 +1,31 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 import QRCode from 'qrcode'
+
+const UNICODE_FONT_URLS = [
+  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
+  'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
+  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/arimo/Arimo-Regular.ttf',
+]
+
+async function loadUnicodeFont(pdfDoc: PDFDocument): Promise<PDFFont | null> {
+  for (const url of UNICODE_FONT_URLS) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: 'font/ttf, application/octet-stream, */*' },
+      })
+      if (res.ok) {
+        const bytes = await res.arrayBuffer()
+        if (bytes.byteLength > 1000) {
+          return await pdfDoc.embedFont(bytes)
+        }
+      }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
 
 function sanitizePdfText(s: string): string {
   return (s || '')
@@ -60,8 +86,10 @@ export async function buildQrPdf(
   const eventLocation = invitation.event?.location ?? ''
 
   const pdfDoc = await PDFDocument.create()
+  pdfDoc.registerFontkit(fontkit)
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  const unicodeFont = await loadUnicodeFont(pdfDoc)
   pdfDoc.addPage([595, 842])
   const page = pdfDoc.getPage(0)
   const { width, height } = page.getSize()
@@ -94,15 +122,16 @@ export async function buildQrPdf(
     y -= 24
   }
 
-  // Event-Details (türkisch) – Emojis entfernt für PDF
+  // Event-Details (türkisch) – Unicode-Font für Ş, ı, İ, ü, ö, ç, ğ
   const detailsLines = pdfSafeDetailsText(EVENT_DETAILS_TEXT)
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
+  const textFont = unicodeFont ?? font
   for (const line of detailsLines) {
     if (y < 100) break
     try {
-      page.drawText(line || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
+      page.drawText(line || ' ', { x: 50, y, size: 10, font: textFont, color: rgb(0.2, 0.2, 0.3) })
     } catch {
       page.drawText(sanitizePdfText(line) || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
     }
