@@ -22,7 +22,7 @@ export async function GET(
       where: { acceptToken: token },
       include: {
         guest: { select: { name: true, checkInToken: true, email: true, additionalData: true } },
-        event: { select: { title: true, date: true, location: true } },
+        event: { select: { title: true, date: true, location: true, project: { select: { description: true } } } },
         accompanyingGuests: { select: { firstName: true, lastName: true, checkInToken: true } },
       },
     })

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getBaseUrlForInvitationEmails } from '@/lib/appUrl'
-import { buildQrPdf, EVENT_DETAILS_TEXT } from '@/lib/qrPdf'
+import { buildQrPdf } from '@/lib/qrPdf'
 import { sendEmailWithAttachment } from '@/lib/email'
 
 export const runtime = 'nodejs'
@@ -43,7 +43,7 @@ export async function POST(
       where: { acceptToken: token },
       include: {
         guest: { select: { name: true, checkInToken: true, email: true, additionalData: true } },
-        event: { select: { title: true, date: true, location: true } },
+        event: { select: { title: true, date: true, location: true, project: { select: { description: true } } } },
         accompanyingGuests: { select: { firstName: true, lastName: true, checkInToken: true } },
       },
     })
@@ -68,14 +68,15 @@ export async function POST(
     const eventTitle = invitation.event?.title ?? 'Veranstaltung'
 
     const subject = `Check-in & Eventinformationen – ${eventTitle}`
-    const detailsHtml = EVENT_DETAILS_TEXT.split('\n').join('<br/>')
+    const projectDescription = invitation.event?.project?.description?.trim()
+    const descriptionBlock = projectDescription
+      ? `<div style="margin: 1em 0; padding: 1em; background: #f5f5f5; border-radius: 8px; white-space: pre-line;">${projectDescription.split('\n').join('<br/>')}</div>`
+      : ''
     const htmlBody = `
       <p>Guten Tag${invitation.guest?.name ? ` ${invitation.guest.name}` : ''},</p>
       <p>anbei erhalten Sie Ihre Check-in-QR-Codes und Eventinformationen für <strong>${eventTitle}</strong>.</p>
       <p>Bitte zeigen Sie am Eventtag beim Einlass den jeweiligen QR-Code zum Scannen. Jede Person hat einen eigenen Code.</p>
-      <div style="margin: 1em 0; padding: 1em; background: #f5f5f5; border-radius: 8px; white-space: pre-line;">
-        ${detailsHtml}
-      </div>
+      ${descriptionBlock}
       <p>Sie können dieses PDF ausdrucken oder auf dem Smartphone bereithalten.</p>
       <p>Mit freundlichen Grüßen<br/>Ihr Veranstaltungsteam</p>
     `
