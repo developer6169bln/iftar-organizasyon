@@ -1,8 +1,24 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 
-export default function KadinKollariAnmeldungPage() {
+function KadinKollariAnmeldungContent() {
+  const searchParams = useSearchParams()
+  const eventId = searchParams.get('eventId') ?? ''
+
+  const [shareUrl, setShareUrl] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
+  useEffect(() => {
+    setShareUrl(typeof window !== 'undefined' ? window.location.href : '')
+  }, [])
+  const handleCopyLink = () => {
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl || window.location.href)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    }
+  }
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [district, setDistrict] = useState('')
@@ -19,22 +35,31 @@ export default function KadinKollariAnmeldungPage() {
     setError(null)
     setSubmitting(true)
     try {
+      const body: Record<string, unknown> = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        district: district.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim(),
+        participating,
+        notes: notes.trim() || undefined,
+      }
+      if (participating && eventId) body.eventId = eventId
+
       const res = await fetch('/api/registrations/kadin-kollari', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          district: district.trim() || undefined,
-          phone: phone.trim() || undefined,
-          email: email.trim(),
-          participating,
-          notes: notes.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Ein Fehler ist aufgetreten.')
+        return
+      }
+      if (data.participating && data.acceptToken) {
+        const params = new URLSearchParams({ token: data.acceptToken })
+        if (eventId) params.set('eventId', eventId)
+        window.location.href = `/anmeldung/kadin-kollari/erfolg?${params.toString()}`
         return
       }
       setSuccess(true)
@@ -82,7 +107,7 @@ export default function KadinKollariAnmeldungPage() {
       <div className="anmeldung-form w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Kadın Kolları</h1>
         <p className="mb-6 text-center text-gray-600">
-          Registrierung für Interessenten – Teilnahme am Event bekunden
+          Registrierung für Kadın Kolları – Teilnahme am Event bekunden
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -133,11 +158,12 @@ export default function KadinKollariAnmeldungPage() {
 
           <div>
             <label htmlFor="phone" className="mb-1 block text-sm font-medium text-gray-700">
-              Telefon
+              Telefonnummer <span className="text-red-500">*</span>
             </label>
             <input
               id="phone"
               type="tel"
+              required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -172,6 +198,11 @@ export default function KadinKollariAnmeldungPage() {
               Ich nehme teil
             </label>
           </div>
+          {participating && !eventId && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Hinweis: Für sofortigen QR-Code und E-Mail-Versand muss der Anmeldelink die Event-ID enthalten. Bitte verwenden Sie den Link von der Registrierungen-Seite.
+            </p>
+          )}
 
           <div>
             <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">
@@ -205,7 +236,30 @@ export default function KadinKollariAnmeldungPage() {
         <p className="mt-4 text-center text-xs text-gray-500">
           Diese Seite ist öffentlich zugänglich. Der Link kann geteilt werden.
         </p>
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <input
+            type="text"
+            readOnly
+            value={shareUrl || '/anmeldung/kadin-kollari'}
+            className="flex-1 max-w-xs rounded border border-gray-300 px-3 py-2 text-xs text-gray-600"
+          />
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          >
+            {linkCopied ? 'Kopiert!' : 'Link kopieren'}
+          </button>
+        </div>
       </div>
     </div>
+  )
+}
+
+export default function KadinKollariAnmeldungPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-amber-50 p-4"><p className="text-gray-600">Lade …</p></div>}>
+      <KadinKollariAnmeldungContent />
+    </Suspense>
   )
 }
