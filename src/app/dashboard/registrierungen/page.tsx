@@ -407,7 +407,13 @@ export default function RegistrierungenPage() {
             Gençlik Kolları
           </a>
           {' · '}
-          <a href="/anmeldung/fatihgruppe" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+          <a
+            href={selectedEventId ? `/anmeldung/fatihgruppe?eventId=${encodeURIComponent(selectedEventId)}` : '/anmeldung/fatihgruppe'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 hover:underline"
+            title={selectedEventId ? 'Mit Event verknüpft – bei „Ich nehme teil“ sofort QR-Code & E-Mail' : 'Event wählen für QR-Code bei Teilnahme'}
+          >
             Fatihgruppe
           </a>
         </p>

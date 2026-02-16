@@ -1,8 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 export default function FatihgruppeAnmeldungPage() {
+  const searchParams = useSearchParams()
+  const eventId = searchParams.get('eventId') ?? ''
+
   const [shareUrl, setShareUrl] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
   useEffect(() => {
@@ -31,22 +35,29 @@ export default function FatihgruppeAnmeldungPage() {
     setError(null)
     setSubmitting(true)
     try {
+      const body: Record<string, unknown> = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        district: district.trim() || undefined,
+        phone: phone.trim() || undefined,
+        email: email.trim(),
+        participating,
+        notes: notes.trim() || undefined,
+      }
+      if (participating && eventId) body.eventId = eventId
+
       const res = await fetch('/api/registrations/fatihgruppe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          district: district.trim() || undefined,
-          phone: phone.trim() || undefined,
-          email: email.trim(),
-          participating,
-          notes: notes.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Ein Fehler ist aufgetreten.')
+        return
+      }
+      if (data.participating && data.acceptToken) {
+        window.location.href = `/anmeldung/fatihgruppe/erfolg?token=${encodeURIComponent(data.acceptToken)}`
         return
       }
       setSuccess(true)
@@ -185,6 +196,11 @@ export default function FatihgruppeAnmeldungPage() {
               Ich nehme teil
             </label>
           </div>
+          {participating && !eventId && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Hinweis: Für sofortigen QR-Code und E-Mail-Versand muss der Anmeldelink die Event-ID enthalten. Bitte verwenden Sie den Link von der Registrierungen-Seite.
+            </p>
+          )}
 
           <div>
             <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">
