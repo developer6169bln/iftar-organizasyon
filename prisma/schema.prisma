@@ -171,11 +171,12 @@ model PasswordResetToken {
 
 // Projekt eines Hauptaccounts (z.B. "Iftar Organizasyon Sistemi")
 model Project {
-  id        String   @id @default(cuid())
-  ownerId   String   // Hauptaccount (User)
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  ownerId     String   // Hauptaccount (User)
+  name        String
+  description String?  // Projektbeschreibung (optional)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   owner   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   events  Event[]

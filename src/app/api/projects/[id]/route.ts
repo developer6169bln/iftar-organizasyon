@@ -26,7 +26,7 @@ export async function GET(
     // Projekt zuerst ohne Relationen laden (robust bei fehlenden Tabellen)
     const project = await prisma.project.findUnique({
       where: { id },
-      select: { id: true, name: true, ownerId: true, createdAt: true, updatedAt: true },
+      select: { id: true, name: true, description: true, ownerId: true, createdAt: true, updatedAt: true },
     })
     if (!project) {
       return NextResponse.json({ error: 'Projekt nicht gefunden' }, { status: 404 })
@@ -108,8 +108,10 @@ export async function PATCH(
 
     const body = await request.json()
     const name = typeof body.name === 'string' ? body.name.trim() : undefined
-    const data: { name?: string } = {}
-    if (name) data.name = name
+    const description = typeof body.description === 'string' ? body.description.trim() || null : undefined
+    const data: { name?: string; description?: string | null } = {}
+    if (name !== undefined) data.name = name
+    if (description !== undefined) data.description = description
 
     const updated = await prisma.project.update({
       where: { id },

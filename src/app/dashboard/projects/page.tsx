@@ -28,7 +28,7 @@ const PAGE_LABELS: Record<string, string> = {
 }
 
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }
-type ProjectDetail = Project & { _count?: { events: number; members: number }; owner?: { id: string; email: string; name: string } }
+type ProjectDetail = Project & { description?: string | null; _count?: { events: number; members: number }; owner?: { id: string; email: string; name: string } }
 type Member = {
   id: string
   projectId: string
@@ -82,6 +82,8 @@ export default function DashboardProjectsPage() {
   const [editCategoryDescription, setEditCategoryDescription] = useState('')
   const [editCategoryResponsibleUserId, setEditCategoryResponsibleUserId] = useState('')
   const [savingCategory, setSavingCategory] = useState(false)
+  const [projectDescription, setProjectDescription] = useState('')
+  const [savingProjectDescription, setSavingProjectDescription] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -157,6 +159,35 @@ export default function DashboardProjectsPage() {
     setEditCategoryDescription(editingCategory.description ? String(editingCategory.description) : '')
     setEditCategoryResponsibleUserId(editingCategory.responsibleUserId ? String(editingCategory.responsibleUserId) : '')
   }, [editingCategory])
+
+  useEffect(() => {
+    setProjectDescription(selectedProject?.description ?? '')
+  }, [selectedProject?.id, selectedProject?.description])
+
+  const handleSaveProjectDescription = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProject?.id) return
+    setSavingProjectDescription(true)
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(selectedProject.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ description: projectDescription.trim() || null }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setSelectedProject((p) => (p && p.id === selectedProject.id ? { ...p, description: updated.description } : p))
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Projektbeschreibung konnte nicht gespeichert werden')
+      }
+    } catch {
+      alert('Projektbeschreibung konnte nicht gespeichert werden')
+    } finally {
+      setSavingProjectDescription(false)
+    }
+  }
 
   const handleSaveCategoryDetails = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -578,6 +609,28 @@ export default function DashboardProjectsPage() {
                     <p className="mt-1 text-sm text-gray-600">
                       Events: {selectedProject._count?.events ?? 0} · Mitglieder: {selectedProject._count?.members ?? members.length}
                     </p>
+                    {(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && (
+                      <form onSubmit={handleSaveProjectDescription} className="mt-3">
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Projektbeschreibung</label>
+                        <textarea
+                          value={projectDescription}
+                          onChange={(e) => setProjectDescription(e.target.value)}
+                          placeholder="Kurze Beschreibung des Projekts …"
+                          rows={3}
+                          className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={savingProjectDescription}
+                          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {savingProjectDescription ? '…' : 'Beschreibung speichern'}
+                        </button>
+                      </form>
+                    )}
+                    {!(selectedProject.isOwner || isAdmin || (!!currentUserId && members.some((m) => m.userId === currentUserId && m.role === 'PARTNER'))) && selectedProject.description && (
+                      <p className="mt-2 text-sm text-gray-600">{selectedProject.description}</p>
+                    )}
                     <Link
                       href={`/dashboard/room-reservations?projectId=${encodeURIComponent(selectedProject.id)}`}
                       className="mt-2 inline-block text-sm font-medium text-sky-600 hover:text-sky-700"
