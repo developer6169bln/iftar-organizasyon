@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { getAuthHeaders } from '@/lib/authClient'
 
 type Project = { id: string; name: string; ownerId: string; isOwner: boolean }
 
@@ -18,7 +19,7 @@ export default function DashboardProjectSwitcher() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/projects', { credentials: 'include' })
+        const res = await fetch('/api/projects', { credentials: 'include', headers: getAuthHeaders() })
         if (res.ok) {
           const list = await res.json()
           setProjects(list)

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import { getAuthHeaders } from '@/lib/authClient'
 import DashboardProjectSwitcher from './DashboardProjectSwitcher'
 
 /** Pfad zu Page-ID (feste Dashboard-Seiten). */
@@ -46,7 +47,11 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
       try {
         const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
         const url = projectId ? `/api/me?projectId=${encodeURIComponent(projectId)}` : '/api/me'
-        const res = await fetch(url, { credentials: 'include', cache: 'no-store' })
+        const res = await fetch(url, {
+          credentials: 'include',
+          cache: 'no-store',
+          headers: getAuthHeaders(),
+        })
         if (!res.ok) {
           router.replace('/login')
           setAllowed(false)

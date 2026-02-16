@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getAuthHeaders } from '@/lib/authClient'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
@@ -67,7 +68,7 @@ export default function DashboardPage() {
       try {
         const storedProjectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
         const url = storedProjectId ? `/api/me?projectId=${encodeURIComponent(storedProjectId)}` : '/api/me'
-        const res = await fetch(url, { credentials: 'include' })
+        const res = await fetch(url, { credentials: 'include', headers: getAuthHeaders() })
         if (res.ok) {
           const data = await res.json()
           setUser(data.user)
@@ -109,7 +110,7 @@ export default function DashboardPage() {
     const url = selectedProjectId
       ? `/api/me?projectId=${encodeURIComponent(selectedProjectId)}`
       : '/api/me'
-    fetch(url, { credentials: 'include' })
+    fetch(url, { credentials: 'include', headers: getAuthHeaders() })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (cancelled || !data) return

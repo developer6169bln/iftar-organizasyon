@@ -72,11 +72,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // JWT token oluştur
+    // JWT token oluştur (30 Tage – weniger Abmeldungen bei Programm-Inhabern)
     const token = await new SignJWT({ userId: user.id, email: user.email })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
-      .setExpirationTime('7d')
+      .setExpirationTime('30d')
       .sign(secret)
 
     // Şifreyi response'dan çıkar
@@ -91,13 +91,18 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     )
 
-    // Cookie'ye token ekle
+    // Cookie'ye token ekle (30 Tage, Secure nur wenn HTTPS)
+    const isHttps = process.env.NODE_ENV === 'production' && (
+      process.env.VERCEL === '1' ||
+      process.env.RAILWAY_PUBLIC_DOMAIN != null ||
+      (process.env.NEXT_PUBLIC_BASE_URL ?? '').startsWith('https://')
+    )
     response.cookies.set('auth-token', token, {
-      httpOnly: false, // Client-side erişim für false
-      secure: process.env.NODE_ENV === 'production',
+      httpOnly: false,
+      secure: isHttps,
       sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 gün
+      maxAge: 60 * 60 * 24 * 30, // 30 Tage
     })
 
     // Log login (nicht blockieren, falls Audit-Log fehlschlägt)
@@ -139,19 +144,23 @@ export async function POST(request: NextRequest) {
           const token = await new SignJWT({ userId: user.id, email: user.email })
             .setProtectedHeader({ alg: 'HS256' })
             .setIssuedAt()
-            .setExpirationTime('7d')
+            .setExpirationTime('30d')
             .sign(secret)
           const { password: _, ...userWithoutPassword } = user
           const response = NextResponse.json(
             { message: 'Giriş başarılı', user: userWithoutPassword, token },
             { status: 200 }
           )
+          const isHttps = process.env.NODE_ENV === 'production' && (
+            process.env.VERCEL === '1' || process.env.RAILWAY_PUBLIC_DOMAIN != null ||
+            (process.env.NEXT_PUBLIC_BASE_URL ?? '').startsWith('https://')
+          )
           response.cookies.set('auth-token', token, {
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isHttps,
             sameSite: 'lax',
             path: '/',
-            maxAge: 60 * 60 * 24 * 7,
+            maxAge: 60 * 60 * 24 * 30,
           })
           try {
             await logLogin(user.id, user.email, request, {
