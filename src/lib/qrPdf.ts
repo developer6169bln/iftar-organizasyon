@@ -8,6 +8,32 @@ function sanitizePdfText(s: string): string {
     .slice(0, 200)
 }
 
+/** Event-Details für PDF und E-Mail (türkisch). */
+export const EVENT_DETAILS_TEXT = `📅 Tarih:
+27 Şubat 2026, Cuma
+
+🕰 Giriş:
+16:30
+
+🕰 Program Başlangıcı:
+17:00
+
+🕰 İftar Saati:
+17:47
+
+📍 Yer:
+Moon Events – Festsaal
+Oranienstraße 140–142
+10969 Berlin`
+
+/** PDF-sichere Version (Emojis entfernt, Standard-Schrift unterstützt ggf. kein Türkisch). */
+function pdfSafeDetailsText(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // Emojis entfernen
+    .replace(/📅|🕰|📍/g, '')
+    .trim()
+}
+
 export type QrPdfInvitation = {
   guest?: { name: string | null; checkInToken: string | null } | null
   event?: { title: string; date: Date; location: string } | null
@@ -67,6 +93,22 @@ export async function buildQrPdf(
     page.drawText('Ort: ' + sanitizePdfText(eventLocation), { x: 50, y, size: 11, font, color: rgb(0.3, 0.3, 0.3) })
     y -= 24
   }
+
+  // Event-Details (türkisch) – Emojis entfernt für PDF
+  const detailsLines = pdfSafeDetailsText(EVENT_DETAILS_TEXT)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  for (const line of detailsLines) {
+    if (y < 100) break
+    try {
+      page.drawText(line || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
+    } catch {
+      page.drawText(sanitizePdfText(line) || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
+    }
+    y -= 14
+  }
+  y -= 16
 
   const entries: { label: string; token: string }[] = []
   if (invitation.guest?.checkInToken) {
