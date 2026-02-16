@@ -11,6 +11,7 @@ function FatihgruppeErfolgContent() {
 
   const [checkInTokens, setCheckInTokens] = useState<CheckInTokenEntry[]>([])
   const [eventTitle, setEventTitle] = useState('')
+  const [eventId, setEventId] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pdfSent, setPdfSent] = useState<boolean | null>(null)
@@ -32,6 +33,7 @@ function FatihgruppeErfolgContent() {
         }
         setCheckInTokens(data.checkInTokens ?? [])
         setEventTitle(data.eventTitle ?? '')
+        setEventId(data.eventId ?? searchParams.get('eventId') ?? '')
       } catch (e) {
         setError('Verbindungsfehler.')
       } finally {
@@ -40,7 +42,7 @@ function FatihgruppeErfolgContent() {
     }
 
     fetchTokens()
-  }, [token])
+  }, [token, searchParams])
 
   useEffect(() => {
     if (!token || checkInTokens.length === 0 || pdfSent !== null) return
@@ -83,7 +85,10 @@ function FatihgruppeErfolgContent() {
           <h1 className="mb-2 text-xl font-bold text-gray-900">Fehler</h1>
           <p className="mb-6 text-gray-600">{error}</p>
           <a
-            href="/anmeldung/fatihgruppe"
+            href={(() => {
+              const eid = eventId || searchParams.get('eventId')
+              return eid ? `/anmeldung/fatihgruppe?eventId=${encodeURIComponent(eid)}` : '/anmeldung/fatihgruppe'
+            })()}
             className="inline-block rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white hover:bg-indigo-700"
           >
             Zurück zur Anmeldung
@@ -154,7 +159,7 @@ function FatihgruppeErfolgContent() {
             </p>
           )}
           <a
-            href="/anmeldung/fatihgruppe"
+            href={eventId ? `/anmeldung/fatihgruppe?eventId=${encodeURIComponent(eventId)}` : '/anmeldung/fatihgruppe'}
             className="rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700"
           >
             Weitere Anmeldung

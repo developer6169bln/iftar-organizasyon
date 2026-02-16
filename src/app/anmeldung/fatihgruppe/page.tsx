@@ -57,7 +57,9 @@ function FatihgruppeAnmeldungContent() {
         return
       }
       if (data.participating && data.acceptToken) {
-        window.location.href = `/anmeldung/fatihgruppe/erfolg?token=${encodeURIComponent(data.acceptToken)}`
+        const params = new URLSearchParams({ token: data.acceptToken })
+        if (eventId) params.set('eventId', eventId)
+        window.location.href = `/anmeldung/fatihgruppe/erfolg?${params.toString()}`
         return
       }
       setSuccess(true)

@@ -19,7 +19,7 @@ export async function GET(
       where: { acceptToken: token },
       include: {
         guest: { select: { name: true, checkInToken: true } },
-        event: { select: { title: true } },
+        event: { select: { id: true, title: true } },
         accompanyingGuests: { select: { firstName: true, lastName: true, checkInToken: true } },
       },
     })
@@ -53,6 +53,7 @@ export async function GET(
     return NextResponse.json({
       checkInTokens,
       eventTitle: invitation.event?.title ?? '',
+      eventId: invitation.event?.id ?? '',
     })
   } catch (error) {
     console.error('Fehler beim Abrufen der Check-in-Tokens:', error)
