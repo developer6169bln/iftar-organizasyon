@@ -23,7 +23,7 @@ type EventOption = { id: string; title: string; date: string }
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste'>('uid-iftar')
+  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uid-iftar')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
@@ -102,6 +102,7 @@ export default function RegistrierungenPage() {
   const genclikKollari = list.filter((r) => r.eventSlug === 'genclik-kollari')
   const fatihgruppe = list.filter((r) => r.eventSlug === 'fatihgruppe')
   const omerliste = list.filter((r) => r.eventSlug === 'omerliste')
+  const kemalettingruppe = list.filter((r) => r.eventSlug === 'kemalettingruppe')
 
   const formatDate = (s: string) => {
     try {
@@ -326,6 +327,17 @@ export default function RegistrierungenPage() {
           >
             Ömerliste ({omerliste.length})
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('kemalettingruppe')}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+              activeTab === 'kemalettingruppe'
+                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Kemalettingruppe ({kemalettingruppe.length})
+          </button>
         </div>
 
         {loading ? (
@@ -397,6 +409,11 @@ export default function RegistrierungenPage() {
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Ömerliste</h2>
                 {renderTable(omerliste, false)}
               </>
+            ) : activeTab === 'kemalettingruppe' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">Kemalettingruppe</h2>
+                {renderTable(kemalettingruppe, false)}
+              </>
             ) : (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
@@ -448,6 +465,16 @@ export default function RegistrierungenPage() {
             title={selectedEventId ? 'Mit Event verknüpft – bei „Ich nehme teil“ sofort QR-Code & E-Mail' : 'Event wählen für QR-Code bei Teilnahme'}
           >
             Ömerliste
+          </a>
+          {' · '}
+          <a
+            href={selectedEventId ? `/anmeldung/kemalettingruppe?eventId=${encodeURIComponent(selectedEventId)}` : '/anmeldung/kemalettingruppe'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-indigo-600 hover:underline"
+            title={selectedEventId ? 'Mit Event verknüpft – bei „Ich nehme teil“ sofort QR-Code & E-Mail' : 'Event wählen für QR-Code bei Teilnahme'}
+          >
+            Kemalettingruppe
           </a>
         </p>
       </main>
