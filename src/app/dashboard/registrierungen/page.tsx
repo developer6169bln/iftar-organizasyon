@@ -67,6 +67,8 @@ function hasEinladungsliste(guest: GuestEntry): boolean {
 
 type GesamtEntry = {
   key: string
+  firstName: string
+  lastName: string
   fullName: string
   email: string | null
   phone: string | null
@@ -132,6 +134,8 @@ function mergeGesamtList(mergedList: MergedEntry[], guests: GuestEntry[]): Gesam
     if (m.inGuestList) sources.push('Gästeliste')
     map.set(k, {
       key: k,
+      firstName: m.firstName ?? '',
+      lastName: m.lastName ?? '',
       fullName: m.fullName,
       email: m.email || null,
       phone: m.phone,
@@ -147,6 +151,9 @@ function mergeGesamtList(mergedList: MergedEntry[], guests: GuestEntry[]): Gesam
   for (const g of guests) {
     const k = nameKey(g.name)
     if (!k) continue
+    const parts = (g.name || '').trim().split(/\s+/)
+    const guestFirstName = parts.length > 1 ? parts[0] : ''
+    const guestLastName = parts.length > 1 ? parts.slice(1).join(' ') : g.name
     const existing = map.get(k)
     if (existing) {
       existing.fromGuestList = true
@@ -158,6 +165,8 @@ function mergeGesamtList(mergedList: MergedEntry[], guests: GuestEntry[]): Gesam
     } else {
       map.set(k, {
         key: k,
+        firstName: guestFirstName,
+        lastName: guestLastName,
         fullName: g.name,
         email: g.email,
         phone: g.phone,
@@ -219,6 +228,8 @@ function filterGesamtBySearch(rows: GesamtEntry[], query: string): GesamtEntry[]
   const q = query.trim().toLowerCase()
   return rows.filter(
     (g) =>
+      g.firstName?.toLowerCase().includes(q) ||
+      g.lastName?.toLowerCase().includes(q) ||
       g.fullName?.toLowerCase().includes(q) ||
       g.email?.toLowerCase().includes(q) ||
       g.district?.toLowerCase().includes(q) ||
@@ -739,6 +750,7 @@ export default function RegistrierungenPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Vorname</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Quelle</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
@@ -751,7 +763,7 @@ export default function RegistrierungenPage() {
             <tbody className="divide-y divide-gray-200">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
                     {searchQuery.trim()
                       ? 'Keine Einträge entsprechen der Suche.'
                       : filterNoQr
@@ -769,7 +781,8 @@ export default function RegistrierungenPage() {
                       g.fromRegistration && g.fromGuestList ? 'bg-green-50/50' : ''
                     } ${g.fromGuestList && !g.fromRegistration ? 'bg-blue-50/30' : ''} ${g.hasQr ? 'bg-indigo-50/30' : ''}`}
                   >
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{g.fullName}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{g.firstName || '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{g.lastName || g.fullName || '–'}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <span className="inline-flex flex-wrap gap-1">
                         {g.sources.map((s) => (
