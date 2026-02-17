@@ -121,6 +121,7 @@ export default function InvitationsPage() {
   const [includeLinks, setIncludeLinks] = useState<boolean>(true) // Standard: Links einbeziehen
   const [listSortBy, setListSortBy] = useState<'bemerkungen' | null>(null)
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc')
+  const [listResponseFilter, setListResponseFilter] = useState<'all' | 'ACCEPTED' | 'DECLINED' | 'PENDING'>('all')
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [templateForm, setTemplateForm] = useState({
@@ -1556,15 +1557,24 @@ export default function InvitationsPage() {
     }
   }
 
+  const listFilteredInvitations = useMemo(() => {
+    if (listResponseFilter === 'all') return invitations
+    return invitations.filter((i: any) => {
+      const r = i.response || 'PENDING'
+      return r === listResponseFilter
+    })
+  }, [invitations, listResponseFilter])
+
   const sortedInvitations = useMemo(() => {
-    if (!listSortBy || listSortBy !== 'bemerkungen') return invitations
+    const base = listFilteredInvitations
+    if (!listSortBy || listSortBy !== 'bemerkungen') return base
     const dir = listSortDir === 'asc' ? 1 : -1
-    return [...invitations].sort((a, b) => {
+    return [...base].sort((a, b) => {
       const va = getGuestBemerkungen(a.guest)
       const vb = getGuestBemerkungen(b.guest)
       return dir * (va.localeCompare(vb, 'de'))
     })
-  }, [invitations, listSortBy, listSortDir])
+  }, [listFilteredInvitations, listSortBy, listSortDir])
 
   if (loading) {
     return (
@@ -1889,6 +1899,11 @@ export default function InvitationsPage() {
                 <h2 className="text-xl font-semibold">Einladungsliste</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   Gesamtanzahl: <span className="font-medium text-gray-900">{invitations.length}</span> Gäste
+                  {listResponseFilter !== 'all' && (
+                    <span className="ml-2 text-gray-500">
+                      (angezeigt: {listFilteredInvitations.length})
+                    </span>
+                  )}
                 </p>
               </div>
               <button
@@ -2068,49 +2083,51 @@ export default function InvitationsPage() {
               </div>
             )}
 
-            {/* Filter */}
-            <div className="mb-4 flex gap-2">
+            {/* Tabs: Zusage, Absage, Ausstehend */}
+            <div className="mb-4 flex gap-2 border-b border-gray-200">
               <button
-                onClick={() => {
-                  loadInvitations(eventId)
-                  setSelectedInvitations([])
-                }}
-                className="rounded-lg bg-gray-200 px-4 py-2 text-sm hover:bg-gray-300"
+                type="button"
+                onClick={() => { setListResponseFilter('all'); setSelectedInvitations([]) }}
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                  listResponseFilter === 'all'
+                    ? 'border border-b-0 border-gray-200 bg-white text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
               >
-                Alle
+                Alle ({stats.total})
               </button>
               <button
-                onClick={() => {
-                  fetch(`/api/invitations/list?eventId=${eventId}&response=ACCEPTED`)
-                    .then(r => r.json())
-                    .then(setInvitations)
-                    .then(() => setSelectedInvitations([]))
-                }}
-                className="rounded-lg bg-green-100 px-4 py-2 text-sm text-green-700 hover:bg-green-200"
+                type="button"
+                onClick={() => { setListResponseFilter('ACCEPTED'); setSelectedInvitations([]) }}
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                  listResponseFilter === 'ACCEPTED'
+                    ? 'border border-b-0 border-green-200 bg-green-50 text-green-800'
+                    : 'text-green-700 hover:bg-green-50'
+                }`}
               >
-                Zusagen
+                Zusage ({stats.accepted})
               </button>
               <button
-                onClick={() => {
-                  fetch(`/api/invitations/list?eventId=${eventId}&response=DECLINED`)
-                    .then(r => r.json())
-                    .then(setInvitations)
-                    .then(() => setSelectedInvitations([]))
-                }}
-                className="rounded-lg bg-red-100 px-4 py-2 text-sm text-red-700 hover:bg-red-200"
+                type="button"
+                onClick={() => { setListResponseFilter('DECLINED'); setSelectedInvitations([]) }}
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                  listResponseFilter === 'DECLINED'
+                    ? 'border border-b-0 border-red-200 bg-red-50 text-red-800'
+                    : 'text-red-700 hover:bg-red-50'
+                }`}
               >
-                Absagen
+                Absage ({stats.declined})
               </button>
               <button
-                onClick={() => {
-                  fetch(`/api/invitations/list?eventId=${eventId}&response=PENDING`)
-                    .then(r => r.json())
-                    .then(setInvitations)
-                    .then(() => setSelectedInvitations([]))
-                }}
-                className="rounded-lg bg-yellow-100 px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-200"
+                type="button"
+                onClick={() => { setListResponseFilter('PENDING'); setSelectedInvitations([]) }}
+                className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+                  listResponseFilter === 'PENDING'
+                    ? 'border border-b-0 border-yellow-200 bg-yellow-50 text-yellow-800'
+                    : 'text-yellow-700 hover:bg-yellow-50'
+                }`}
               >
-                Ausstehend
+                Ausstehend ({stats.pending})
               </button>
             </div>
 
