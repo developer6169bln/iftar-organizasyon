@@ -283,7 +283,7 @@ export default function RegistrierungenPage() {
     }
     let cancelled = false
     setLoadingGuests(true)
-    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}`)
+    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}${activeTab === 'gesamtliste' ? '&einladungslisteOnly=true' : ''}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (cancelled) return

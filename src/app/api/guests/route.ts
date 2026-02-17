@@ -50,12 +50,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ count })
     }
 
-    const guests = await prisma.guest.findMany({
+    let guests = await prisma.guest.findMany({
       where,
       orderBy: {
         name: 'asc',
       },
     })
+
+    const einladungslisteOnly = searchParams.get('einladungslisteOnly') === 'true'
+    if (einladungslisteOnly) {
+      guests = guests.filter((g) => {
+        const additional = g.additionalData
+        if (!additional) return false
+        try {
+          const data = typeof additional === 'string' ? JSON.parse(additional) : additional
+          if (!data || typeof data !== 'object') return false
+          const key = Object.keys(data).find((k) => k.trim().toLowerCase() === 'einladungsliste')
+          const value = key ? data[key] : undefined
+          if (value === undefined) return false
+          if (value === true || value === 1) return true
+          if (typeof value === 'string') {
+            const s = value.trim().toLowerCase()
+            return s === 'true' || s === 'ja' || s === 'yes' || s === '1'
+          }
+          return false
+        } catch {
+          return false
+        }
+      })
+    }
 
     // Log view (nicht blockierend, damit Response schneller zurückkommt)
     const userInfo = await getUserIdFromRequest(request)
