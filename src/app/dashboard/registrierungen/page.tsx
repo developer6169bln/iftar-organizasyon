@@ -16,6 +16,7 @@ type Registration = {
   notes: string | null
   createdAt: string
   invitationSentAt?: string | null
+  called?: boolean
 }
 
 type EventOption = { id: string; title: string; date: string }
@@ -46,6 +47,7 @@ export default function RegistrierungenPage() {
   const [fixing, setFixing] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+  const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
 
   const loadRegistrations = async () => {
@@ -288,11 +290,48 @@ export default function RegistrierungenPage() {
     }
   }
 
+  const handleCalledChange = async (r: Registration, checked: boolean) => {
+    setUpdatingCalledId(r.id)
+    try {
+      const res = await fetch(`/api/registrations/${encodeURIComponent(r.id)}/called`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ called: checked }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || 'Status konnte nicht aktualisiert werden.')
+        return
+      }
+      await loadRegistrations()
+    } catch (e) {
+      console.error(e)
+      alert('Status konnte nicht aktualisiert werden.')
+    } finally {
+      setUpdatingCalledId(null)
+    }
+  }
+
+  const handleWhatsAppShare = async (r: Registration) => {
+    if (!selectedEventId) return
+    const info = await fetchQrInfo(r.id)
+    if (!info?.checkInToken) {
+      alert('QR-Code konnte nicht geladen werden.')
+      return
+    }
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    const qrUrl = `${base}/api/checkin/qr?t=${encodeURIComponent(info.checkInToken)}`
+    const text = `Ihr Check-in QR-Code für die Veranstaltung:\n\n${qrUrl}`
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+  }
+
   const renderTable = (rows: Registration[], showSube: boolean) => (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
+            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
+            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Angerufen</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Datum</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Vorname</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
@@ -305,13 +344,12 @@ export default function RegistrierungenPage() {
             <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Teilnahme</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Einladung per E-Mail</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Notizen</th>
-            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={showSube ? 11 : 10} className="px-4 py-8 text-center text-sm text-gray-500">
+              <td colSpan={showSube ? 12 : 11} className="px-4 py-8 text-center text-sm text-gray-500">
                 {searchQuery.trim() ? 'Keine Anmeldungen entsprechen der Suche.' : 'Noch keine Anmeldungen.'}
               </td>
             </tr>
@@ -321,6 +359,61 @@ export default function RegistrierungenPage() {
                 key={r.id}
                 className={`hover:bg-gray-50 ${r.invitationSentAt ? 'bg-green-50' : ''}`}
               >
+                <td className="whitespace-nowrap px-4 py-3 text-center">
+                  {r.invitationSentAt ? (
+                    <div className="flex flex-wrap justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleWhatsAppShare(r)}
+                        disabled={!selectedEventId}
+                        className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        title="QR-Code per WhatsApp senden"
+                      >
+                        WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadQr(r)}
+                        disabled={!selectedEventId}
+                        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        title="QR-Code als Bild herunterladen"
+                      >
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendEmailAgain(r)}
+                        disabled={!selectedEventId || sendingEmailId !== null}
+                        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="PDF per E-Mail erneut senden"
+                      >
+                        {sendingEmailId === r.id ? '…' : 'E-Mail'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAcceptParticipation(r.id)}
+                      disabled={!selectedEventId || acceptingId !== null}
+                      className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Teilnahme akzeptieren und QR-Code generieren"
+                    >
+                      {acceptingId === r.id ? '…' : 'QR erstellen'}
+                    </button>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-center">
+                  <label className="flex items-center justify-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={r.called ?? false}
+                      onChange={(e) => handleCalledChange(r, e.target.checked)}
+                      disabled={updatingCalledId === r.id}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-gray-600">Angerufen</span>
+                  </label>
+                </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{formatDate(r.createdAt)}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.firstName}</td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.lastName}</td>
@@ -349,40 +442,6 @@ export default function RegistrierungenPage() {
                 </td>
                 <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={r.notes ?? ''}>
                   {r.notes ?? '–'}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-center">
-                  {r.invitationSentAt ? (
-                    <div className="flex flex-wrap justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadQr(r)}
-                        disabled={!selectedEventId}
-                        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                        title="QR-Code als Bild herunterladen"
-                      >
-                        Download
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSendEmailAgain(r)}
-                        disabled={!selectedEventId || sendingEmailId !== null}
-                        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="PDF per E-Mail erneut senden"
-                      >
-                        {sendingEmailId === r.id ? '…' : 'E-Mail senden'}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleAcceptParticipation(r.id)}
-                      disabled={!selectedEventId || acceptingId !== null}
-                      className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Teilnahme akzeptieren und QR-Code generieren"
-                    >
-                      {acceptingId === r.id ? '…' : 'QR erstellen'}
-                    </button>
-                  )}
                 </td>
               </tr>
             ))

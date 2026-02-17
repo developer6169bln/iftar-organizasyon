@@ -674,6 +674,7 @@ model EventRegistration {
   notes            String?   // Notizen / Vorschläge
   createdAt        DateTime  @default(now())
   invitationSentAt DateTime? // Wann Einladung per E-Mail gesendet wurde
+  called           Boolean   @default(false) // Angerufen
 
   @@index([eventSlug])
   @@index([createdAt])
