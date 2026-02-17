@@ -325,8 +325,16 @@ export default function RegistrierungenPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
-  const renderTable = (rows: Registration[], showSube: boolean) => (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+  const renderTable = (rows: Registration[], showSube: boolean) => {
+    const zusagenCount = rows.filter((r) => r.participating).length
+    return (
+    <div>
+      <p className="mb-3 text-sm text-gray-600">
+        <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
+        {' · '}
+        <span className="font-medium text-green-700">Zusagen: {zusagenCount}</span>
+      </p>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
@@ -449,7 +457,9 @@ export default function RegistrierungenPage() {
         </tbody>
       </table>
     </div>
+    </div>
   )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
