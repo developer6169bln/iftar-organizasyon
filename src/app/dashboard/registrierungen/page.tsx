@@ -42,6 +42,27 @@ type GuestEntry = {
   email: string | null
   phone: string | null
   organization: string | null
+  additionalData?: string | null
+}
+
+function hasEinladungsliste(guest: GuestEntry): boolean {
+  const additional = guest.additionalData
+  if (!additional) return false
+  try {
+    const data = typeof additional === 'string' ? JSON.parse(additional) : additional
+    if (!data || typeof data !== 'object') return false
+    const key = Object.keys(data).find((k) => k.trim().toLowerCase() === 'einladungsliste')
+    const value = key ? data[key] : undefined
+    if (value === undefined) return false
+    if (value === true || value === 1) return true
+    if (typeof value === 'string') {
+      const s = value.trim().toLowerCase()
+      return s === 'true' || s === 'ja' || s === 'yes' || s === '1'
+    }
+    return false
+  } catch {
+    return false
+  }
 }
 
 type GesamtEntry = {
@@ -288,12 +309,13 @@ export default function RegistrierungenPage() {
       .then((data) => {
         if (cancelled) return
         const arr = Array.isArray(data) ? data : []
-        setGuests(arr.map((g: { id?: string; name?: string; email?: string | null; phone?: string | null; organization?: string | null }) => ({
+        setGuests(arr.map((g: { id?: string; name?: string; email?: string | null; phone?: string | null; organization?: string | null; additionalData?: string | null }) => ({
           id: g.id ?? '',
           name: (g.name || '').trim(),
           email: g.email ?? null,
           phone: g.phone ?? null,
           organization: g.organization ?? null,
+          additionalData: g.additionalData ?? null,
         })))
       })
       .catch(() => { if (!cancelled) setGuests([]) })
@@ -333,7 +355,10 @@ export default function RegistrierungenPage() {
   const mergedList = mergeRegistrations(list, guestNamesLower)
   const mergedFiltered = filterMergedByNoQr(filterMergedBySearch(mergedList, searchQuery), filterNoQr)
 
-  const gesamtList = mergeGesamtList(mergedList, guests)
+  const guestsWithEinladungsliste = guests.filter(hasEinladungsliste)
+  const guestNamesLowerEinladungsliste = new Set(guestsWithEinladungsliste.map((g) => g.name.toLowerCase()).filter(Boolean))
+  const mergedListForGesamt = mergeRegistrations(list, guestNamesLowerEinladungsliste)
+  const gesamtList = mergeGesamtList(mergedListForGesamt, guestsWithEinladungsliste)
   const gesamtFiltered = filterGesamtByNoQr(filterGesamtBySearch(gesamtList, searchQuery), filterNoQr)
 
   const formatDate = (s: string) => {
