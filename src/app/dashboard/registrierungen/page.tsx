@@ -227,26 +227,6 @@ function filterByNoQr(rows: Registration[], filterNoQr: boolean): Registration[]
   return rows.filter((r) => !r.invitationSentAt)
 }
 
-function filterMergedBySearch(rows: MergedEntry[], query: string): MergedEntry[] {
-  if (!query.trim()) return rows
-  const q = query.trim().toLowerCase()
-  return rows.filter(
-    (m) =>
-      m.firstName?.toLowerCase().includes(q) ||
-      m.lastName?.toLowerCase().includes(q) ||
-      m.fullName?.toLowerCase().includes(q) ||
-      m.email?.toLowerCase().includes(q) ||
-      m.district?.toLowerCase().includes(q) ||
-      m.phone?.includes(q) ||
-      m.sources.some((s) => s.toLowerCase().includes(q))
-  )
-}
-
-function filterMergedByNoQr(rows: MergedEntry[], filterNoQr: boolean): MergedEntry[] {
-  if (!filterNoQr) return rows
-  return rows.filter((m) => !m.hasQr)
-}
-
 function filterGesamtBySearch(rows: GesamtEntry[], query: string): GesamtEntry[] {
   if (!query.trim()) return rows
   const q = query.trim().toLowerCase()
@@ -272,7 +252,7 @@ export default function RegistrierungenPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterNoQr, setFilterNoQr] = useState(false)
-  const [activeTab, setActiveTab] = useState<'gesamtliste' | 'uebersicht' | 'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uebersicht')
+  const [activeTab, setActiveTab] = useState<'gesamtliste' | 'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('gesamtliste')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
@@ -333,13 +313,13 @@ export default function RegistrierungenPage() {
   }, [])
 
   useEffect(() => {
-    if ((activeTab !== 'uebersicht' && activeTab !== 'gesamtliste') || !selectedEventId) {
+    if (activeTab !== 'gesamtliste' || !selectedEventId) {
       setGuests([])
       return
     }
     let cancelled = false
     setLoadingGuests(true)
-    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}${activeTab === 'gesamtliste' ? '&einladungslisteOnly=true' : ''}`)
+    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}&einladungslisteOnly=true`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (cancelled) return
@@ -385,10 +365,6 @@ export default function RegistrierungenPage() {
   const fatihgruppe = list.filter((r) => r.eventSlug === 'fatihgruppe')
   const omerliste = list.filter((r) => r.eventSlug === 'omerliste')
   const kemalettingruppe = list.filter((r) => r.eventSlug === 'kemalettingruppe')
-
-  const guestNamesLower = new Set(guests.map((g) => g.name.toLowerCase()).filter(Boolean))
-  const mergedList = mergeRegistrations(list, guestNamesLower)
-  const mergedFiltered = filterMergedByNoQr(filterMergedBySearch(mergedList, searchQuery), filterNoQr)
 
   const guestsWithEinladungsliste = guests.filter(hasEinladungsliste)
   const guestNamesLowerEinladungsliste = new Set(guestsWithEinladungsliste.map((g) => g.name.toLowerCase()).filter(Boolean))
@@ -627,131 +603,6 @@ export default function RegistrierungenPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
-  const renderMergedTable = (rows: MergedEntry[]) => {
-    const inGuestCount = rows.filter((m) => m.inGuestList).length
-    const hasQrCount = rows.filter((m) => m.hasQr).length
-    return (
-      <div>
-        <p className="mb-3 text-sm text-gray-600">
-          <span className="font-medium">Gesamtanzahl: {rows.length} Einträge (nach Name zusammengeführt)</span>
-          {' · '}
-          <span className="font-medium text-green-700">In Gästeliste: {inGuestCount}</span>
-          {' · '}
-          <span className="font-medium text-indigo-700">QR-Codes gesendet: {hasQrCount}</span>
-        </p>
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Listen</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">In Gästeliste</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">QR</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
-                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    {searchQuery.trim()
-                      ? 'Keine Einträge entsprechen der Suche.'
-                      : filterNoQr
-                        ? 'Keine Einträge ohne QR-Code.'
-                        : 'Keine Anmeldungen.'}
-                  </td>
-                </tr>
-              ) : (
-                rows.map((m) => (
-                  <tr
-                    key={m.key}
-                    className={`hover:bg-gray-50 ${m.inGuestList ? 'bg-green-50/50' : ''} ${m.hasQr ? 'bg-indigo-50/30' : ''}`}
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{m.fullName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      <span className="inline-flex flex-wrap gap-1">
-                        {m.sources.map((s) => (
-                          <span key={s} className="rounded bg-gray-200 px-1.5 py-0.5 text-xs">
-                            {s}
-                          </span>
-                        ))}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {m.inGuestList ? (
-                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Nein</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {m.hasQr ? (
-                        <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Gesendet</span>
-                      ) : (
-                        <span className="text-gray-400">–</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.email || '–'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.phone || '–'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.district || '–'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-center">
-                      <div className="flex flex-wrap justify-center gap-1">
-                        {m.hasQr ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => handleWhatsAppShare(m.primaryReg)}
-                              disabled={!selectedEventId}
-                              className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                              title="QR per WhatsApp"
-                            >
-                              WhatsApp
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadQr(m.primaryReg)}
-                              disabled={!selectedEventId}
-                              className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                              title="QR herunterladen"
-                            >
-                              Download
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSendEmailAgain(m.primaryReg)}
-                              disabled={!selectedEventId || sendingEmailId !== null}
-                              className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                              title="PDF per E-Mail"
-                            >
-                              {sendingEmailId === m.primaryReg.id ? '…' : 'E-Mail'}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleAcceptParticipation(m.primaryReg.id)}
-                            disabled={!selectedEventId || acceptingId !== null}
-                            className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                            title="QR erstellen"
-                          >
-                            {acceptingId === m.primaryReg.id ? '…' : 'QR erstellen'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    )
-  }
-
   const renderGesamtTable = (rows: GesamtEntry[]) => {
     const fromBoth = rows.filter((g) => g.fromRegistration && g.fromGuestList).length
     const onlyReg = rows.filter((g) => g.fromRegistration && !g.fromGuestList).length
@@ -889,143 +740,143 @@ export default function RegistrierungenPage() {
     const zusagenCount = rows.filter((r) => r.participating).length
     const qrGesendetCount = rows.filter((r) => r.invitationSentAt).length
     return (
-    <div>
-      <p className="mb-3 text-sm text-gray-600">
-        <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
-        {' · '}
-        <span className="font-medium text-green-700">Zusagen: {zusagenCount}</span>
-        {' · '}
-        <span className="font-medium text-indigo-700">QR-Codes gesendet: {qrGesendetCount}</span>
-      </p>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
-            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Angerufen</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Datum</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Vorname</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
-            {showSube && (
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Şube</th>
-            )}
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
-            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Teilnahme</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Einladung per E-Mail</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Notizen</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={showSube ? 12 : 11} className="px-4 py-8 text-center text-sm text-gray-500">
-                {searchQuery.trim()
-                  ? 'Keine Anmeldungen entsprechen der Suche.'
-                  : noQrFilterActive
-                    ? 'Keine Anmeldungen ohne QR-Code.'
-                    : 'Noch keine Anmeldungen.'}
-              </td>
-            </tr>
-          ) : (
-            rows.map((r) => (
-              <tr
-                key={r.id}
-                className={`hover:bg-gray-50 ${r.invitationSentAt ? 'bg-green-50' : ''}`}
-              >
-                <td className="whitespace-nowrap px-4 py-3 text-center">
-                  {r.invitationSentAt ? (
-                    <div className="flex flex-wrap justify-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleWhatsAppShare(r)}
-                        disabled={!selectedEventId}
-                        className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                        title="QR-Code per WhatsApp senden"
-                      >
-                        WhatsApp
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadQr(r)}
-                        disabled={!selectedEventId}
-                        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                        title="QR-Code als Bild herunterladen"
-                      >
-                        Download
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSendEmailAgain(r)}
-                        disabled={!selectedEventId || sendingEmailId !== null}
-                        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="PDF per E-Mail erneut senden"
-                      >
-                        {sendingEmailId === r.id ? '…' : 'E-Mail'}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleAcceptParticipation(r.id)}
-                      disabled={!selectedEventId || acceptingId !== null}
-                      className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Teilnahme akzeptieren und QR-Code generieren"
-                    >
-                      {acceptingId === r.id ? '…' : 'QR erstellen'}
-                    </button>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-center">
-                  <label className="flex items-center justify-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={r.called ?? false}
-                      onChange={(e) => handleCalledChange(r, e.target.checked)}
-                      disabled={updatingCalledId === r.id}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs text-gray-600">Angerufen</span>
-                  </label>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{formatDate(r.createdAt)}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.firstName}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.lastName}</td>
+      <div>
+        <p className="mb-3 text-sm text-gray-600">
+          <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
+          {' · '}
+          <span className="font-medium text-green-700">Zusagen: {zusagenCount}</span>
+          {' · '}
+          <span className="font-medium text-indigo-700">QR-Codes gesendet: {qrGesendetCount}</span>
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Angerufen</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Datum</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Vorname</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
                 {showSube && (
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.sube ?? '–'}</td>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Şube</th>
                 )}
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.district ?? '–'}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.phone ?? '–'}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.email}</td>
-                <td className="whitespace-nowrap px-4 py-3 text-center">
-                  {r.participating ? (
-                    <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
-                  ) : (
-                    <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Nein</span>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm">
-                  {r.invitationSentAt ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800" title={`Gesendet: ${formatDate(r.invitationSentAt)}`}>
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-600" aria-hidden />
-                      {formatDate(r.invitationSentAt)}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">–</span>
-                  )}
-                </td>
-                <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={r.notes ?? ''}>
-                  {r.notes ?? '–'}
-                </td>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Teilnahme</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Einladung per E-Mail</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Notizen</th>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-    </div>
-  )
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={showSube ? 12 : 11} className="px-4 py-8 text-center text-sm text-gray-500">
+                    {searchQuery.trim()
+                      ? 'Keine Anmeldungen entsprechen der Suche.'
+                      : noQrFilterActive
+                        ? 'Keine Anmeldungen ohne QR-Code.'
+                        : 'Noch keine Anmeldungen.'}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={`hover:bg-gray-50 ${r.invitationSentAt ? 'bg-green-50' : ''}`}
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {r.invitationSentAt ? (
+                        <div className="flex flex-wrap justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleWhatsAppShare(r)}
+                            disabled={!selectedEventId}
+                            className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                            title="QR-Code per WhatsApp senden"
+                          >
+                            WhatsApp
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadQr(r)}
+                            disabled={!selectedEventId}
+                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                            title="QR-Code als Bild herunterladen"
+                          >
+                            Download
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSendEmailAgain(r)}
+                            disabled={!selectedEventId || sendingEmailId !== null}
+                            className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="PDF per E-Mail erneut senden"
+                          >
+                            {sendingEmailId === r.id ? '…' : 'E-Mail'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptParticipation(r.id)}
+                          disabled={!selectedEventId || acceptingId !== null}
+                          className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Teilnahme akzeptieren und QR-Code generieren"
+                        >
+                          {acceptingId === r.id ? '…' : 'QR erstellen'}
+                        </button>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      <label className="flex items-center justify-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={r.called ?? false}
+                          onChange={(e) => handleCalledChange(r, e.target.checked)}
+                          disabled={updatingCalledId === r.id}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-xs text-gray-600">Angerufen</span>
+                      </label>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{formatDate(r.createdAt)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.firstName}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900">{r.lastName}</td>
+                    {showSube && (
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.sube ?? '–'}</td>
+                    )}
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.district ?? '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.phone ?? '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.email}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {r.participating ? (
+                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Nein</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm">
+                      {r.invitationSentAt ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800" title={`Gesendet: ${formatDate(r.invitationSentAt)}`}>
+                          <span className="h-1.5 w-1.5 rounded-full bg-green-600" aria-hidden />
+                          {formatDate(r.invitationSentAt)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={r.notes ?? ''}>
+                      {r.notes ?? '–'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -1055,17 +906,6 @@ export default function RegistrierungenPage() {
             }`}
           >
             Gesamtliste ({gesamtList.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('uebersicht')}
-            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
-              activeTab === 'uebersicht'
-                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Übersicht ({mergedList.length})
           </button>
           <button
             type="button"
@@ -1193,24 +1033,24 @@ export default function RegistrierungenPage() {
               </div>
               <button
                 type="button"
-                onClick={() => handleImportToGuests(activeTab === 'uebersicht' || activeTab === 'gesamtliste' ? 'all' : activeTab)}
+                onClick={() => handleImportToGuests(activeTab === 'gesamtliste' ? 'all' : activeTab)}
                 disabled={!selectedEventId || importing !== null}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {importing === (activeTab === 'uebersicht' || activeTab === 'gesamtliste' ? 'all' : activeTab)
+                {importing === (activeTab === 'gesamtliste' ? 'all' : activeTab)
                   ? 'Import läuft …'
-                  : activeTab === 'uebersicht' || activeTab === 'gesamtliste'
+                  : activeTab === 'gesamtliste'
                     ? 'Alle in Gästeliste übernehmen'
                     : 'In Gästeliste übernehmen'}
               </button>
               <button
                 type="button"
-                onClick={() => handleFixImportedGuests(activeTab === 'uebersicht' ? 'uid-iftar' : activeTab)}
-                disabled={!selectedEventId || fixing !== null || activeTab === 'uebersicht' || activeTab === 'gesamtliste'}
+                onClick={() => handleFixImportedGuests(activeTab === 'gesamtliste' ? 'all' : activeTab)}
+                disabled={!selectedEventId || fixing !== null}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Vorname und Nachname in die richtigen Spalten übertragen (für bereits importierte Gäste)"
               >
-                {fixing === activeTab ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
+                {fixing === (activeTab === 'gesamtliste' ? 'all' : activeTab) ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
               </button>
               <button
                 type="button"
@@ -1228,7 +1068,7 @@ export default function RegistrierungenPage() {
             {activeTab === 'gesamtliste' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">
-                  Gesamtliste – Anmeldungen + Gästeliste zusammengeführt
+                  Gesamtliste – alle Anmeldungen + Gästeliste (Einladungsliste) zusammengeführt
                 </h2>
                 {!selectedEventId ? (
                   <p className="text-amber-600">Bitte wählen Sie ein Ziel-Event für den Gästelisten-Vergleich.</p>
@@ -1236,19 +1076,6 @@ export default function RegistrierungenPage() {
                   <p className="text-gray-500">Lade Gästeliste …</p>
                 ) : (
                   renderGesamtTable(gesamtFiltered)
-                )}
-              </>
-            ) : activeTab === 'uebersicht' ? (
-              <>
-                <h2 className="mb-4 text-lg font-semibold text-gray-900">
-                  Übersicht – alle Listen zusammengeführt (Duplikate nach Name zusammengefasst)
-                </h2>
-                {!selectedEventId ? (
-                  <p className="text-amber-600">Bitte wählen Sie ein Ziel-Event für den Gästelisten-Vergleich.</p>
-                ) : loadingGuests ? (
-                  <p className="text-gray-500">Lade Gästeliste …</p>
-                ) : (
-                  renderMergedTable(mergedFiltered)
                 )}
               </>
             ) : activeTab === 'uid-iftar' ? (

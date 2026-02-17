@@ -26,8 +26,9 @@ export async function POST(request: NextRequest) {
     const eventAccess = await requireEventAccess(request, eventId)
     if (eventAccess instanceof NextResponse) return eventAccess
 
+    const ALL_SLUGS = ['uid-iftar', 'sube-baskanlari', 'kadin-kollari', 'genclik-kollari', 'fatihgruppe', 'omerliste', 'kemalettingruppe']
     const registrations = await prisma.eventRegistration.findMany({
-      where: { eventSlug },
+      where: eventSlug === 'all' ? { eventSlug: { in: ALL_SLUGS } } : { eventSlug },
     })
 
     const guests = await prisma.guest.findMany({
