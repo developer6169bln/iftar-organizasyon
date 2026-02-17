@@ -163,6 +163,7 @@ export default function InvitationsPage() {
   const [currentEvent, setCurrentEvent] = useState<{ id: string; maxAccompanyingGuests?: number } | null>(null)
   const [maxAccompanyingGuestsInput, setMaxAccompanyingGuestsInput] = useState<string>('5')
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
+  const [syncFromRegistrations, setSyncFromRegistrations] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
@@ -1906,13 +1907,43 @@ export default function InvitationsPage() {
                   )}
                 </p>
               </div>
-              <button
-                onClick={() => eventId && loadInvitations(eventId)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-                title="Liste aktualisieren"
-              >
-                🔄 Aktualisieren
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!eventId) return
+                    if (!confirm('Abgleich durchführen? Gäste, die in den Formular-Ergebnissen ihre Teilnahme bestätigt haben, werden in der Einladungsliste als Zusage markiert.')) return
+                    setSyncFromRegistrations(true)
+                    try {
+                      const res = await fetch('/api/invitations/sync-from-registrations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data.error || 'Abgleich fehlgeschlagen')
+                      await loadInvitations(eventId)
+                      alert(`${data.updated} Einladung(en) als Zusage markiert.`)
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : 'Abgleich fehlgeschlagen')
+                    } finally {
+                      setSyncFromRegistrations(false)
+                    }
+                  }}
+                  disabled={!eventId || syncFromRegistrations}
+                  className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                  title="Formular-Ergebnisse mit Einladungsliste abgleichen – Teilnahme bestätigt → Zusage"
+                >
+                  {syncFromRegistrations ? 'Abgleich läuft…' : '↔ Mit Formular-Ergebnissen abgleichen'}
+                </button>
+                <button
+                  onClick={() => eventId && loadInvitations(eventId)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                  title="Liste aktualisieren"
+                >
+                  🔄 Aktualisieren
+                </button>
+              </div>
             </div>
 
             {/* Template-Auswahl (wie im Senden-Bereich) + Bearbeiten */}

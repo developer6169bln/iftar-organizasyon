@@ -261,6 +261,7 @@ export default function RegistrierungenPage() {
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
   const [removingDuplicates, setRemovingDuplicates] = useState(false)
+  const [syncingToInvitations, setSyncingToInvitations] = useState(false)
   const [guests, setGuests] = useState<GuestEntry[]>([])
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
@@ -1060,6 +1061,36 @@ export default function RegistrierungenPage() {
                 title="Doppelteinträge über alle Gruppen prüfen, entfernen und E-Mail senden"
               >
                 {removingDuplicates ? 'Duplikate werden entfernt …' : 'Duplikate entfernen'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!selectedEventId) {
+                    alert('Bitte wählen Sie ein Ziel-Event aus.')
+                    return
+                  }
+                  if (!confirm('Abgleich durchführen? Gäste mit bestätigter Teilnahme in den Formular-Ergebnissen werden in der Einladungsliste als Zusage markiert.')) return
+                  setSyncingToInvitations(true)
+                  try {
+                    const res = await fetch('/api/invitations/sync-from-registrations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ eventId: selectedEventId }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error || 'Abgleich fehlgeschlagen')
+                    alert(`${data.updated} Einladung(en) als Zusage markiert.`)
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Abgleich fehlgeschlagen')
+                  } finally {
+                    setSyncingToInvitations(false)
+                  }
+                }}
+                disabled={!selectedEventId || syncingToInvitations}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Teilnahme bestätigt in Formular-Ergebnissen → Einladungsliste als Zusage markieren"
+              >
+                {syncingToInvitations ? 'Abgleich läuft…' : '↔ Mit Einladungsliste abgleichen'}
               </button>
               <span className="text-sm text-gray-500">
                 Doppelte Namen werden übersprungen.
