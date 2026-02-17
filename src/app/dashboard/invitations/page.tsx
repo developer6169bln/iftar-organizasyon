@@ -1885,7 +1885,12 @@ export default function InvitationsPage() {
         {activeTab === 'list' && (
           <div className="rounded-lg bg-white p-6 shadow">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Einladungsliste</h2>
+              <div>
+                <h2 className="text-xl font-semibold">Einladungsliste</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Gesamtanzahl: <span className="font-medium text-gray-900">{invitations.length}</span> Gäste
+                </p>
+              </div>
               <button
                 onClick={() => eventId && loadInvitations(eventId)}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
