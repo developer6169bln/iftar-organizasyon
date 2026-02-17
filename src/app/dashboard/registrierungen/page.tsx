@@ -20,14 +20,32 @@ type Registration = {
 
 type EventOption = { id: string; title: string; date: string }
 
+function filterBySearch(rows: Registration[], query: string): Registration[] {
+  if (!query.trim()) return rows
+  const q = query.trim().toLowerCase()
+  return rows.filter(
+    (r) =>
+      r.firstName?.toLowerCase().includes(q) ||
+      r.lastName?.toLowerCase().includes(q) ||
+      r.email?.toLowerCase().includes(q) ||
+      r.district?.toLowerCase().includes(q) ||
+      r.sube?.toLowerCase().includes(q) ||
+      r.phone?.includes(q) ||
+      r.notes?.toLowerCase().includes(q)
+  )
+}
+
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uid-iftar')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
   const [fixing, setFixing] = useState<string | null>(null)
+  const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  const [qrModal, setQrModal] = useState<{ checkInToken: string; fullName: string; eventTitle: string } | null>(null)
 
   const loadRegistrations = async () => {
     try {
@@ -175,6 +193,39 @@ export default function RegistrierungenPage() {
     }
   }
 
+  const handleAcceptParticipation = async (registrationId: string) => {
+    if (!selectedEventId) {
+      alert('Bitte wählen Sie zuerst ein Event aus.')
+      return
+    }
+    setAcceptingId(registrationId)
+    try {
+      const res = await fetch('/api/registrations/accept-participation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrationId, eventId: selectedEventId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Teilnahme konnte nicht bestätigt werden.')
+        return
+      }
+      await loadRegistrations()
+      if (data.checkInToken) {
+        setQrModal({
+          checkInToken: data.checkInToken,
+          fullName: data.fullName ?? '',
+          eventTitle: data.eventTitle ?? '',
+        })
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Teilnahme konnte nicht bestätigt werden.')
+    } finally {
+      setAcceptingId(null)
+    }
+  }
+
   const renderTable = (rows: Registration[], showSube: boolean) => (
     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
@@ -192,13 +243,14 @@ export default function RegistrierungenPage() {
             <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Teilnahme</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Einladung per E-Mail</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Notizen</th>
+            <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={showSube ? 10 : 9} className="px-4 py-8 text-center text-sm text-gray-500">
-                Noch keine Anmeldungen.
+              <td colSpan={showSube ? 11 : 10} className="px-4 py-8 text-center text-sm text-gray-500">
+                {searchQuery.trim() ? 'Keine Anmeldungen entsprechen der Suche.' : 'Noch keine Anmeldungen.'}
               </td>
             </tr>
           ) : (
@@ -235,6 +287,21 @@ export default function RegistrierungenPage() {
                 </td>
                 <td className="max-w-xs truncate px-4 py-3 text-sm text-gray-600" title={r.notes ?? ''}>
                   {r.notes ?? '–'}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-center">
+                  {r.invitationSentAt ? (
+                    <span className="text-xs text-green-600">QR erstellt</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleAcceptParticipation(r.id)}
+                      disabled={!selectedEventId || acceptingId !== null}
+                      className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Teilnahme akzeptieren und QR-Code generieren"
+                    >
+                      {acceptingId === r.id ? '…' : 'QR erstellen'}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))
@@ -345,6 +412,19 @@ export default function RegistrierungenPage() {
         ) : (
           <>
             <div className="mb-4 flex flex-wrap items-center gap-4">
+              <div className="flex flex-1 min-w-[200px] items-center gap-2">
+                <label htmlFor="search-registrations" className="text-sm font-medium text-gray-700 shrink-0">
+                  Suchen:
+                </label>
+                <input
+                  id="search-registrations"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Vorname, Name, E-Mail, Bezirk …"
+                  className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-xs"
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <label htmlFor="import-event" className="text-sm font-medium text-gray-700">
                   Ziel-Event für Import:
@@ -387,37 +467,37 @@ export default function RegistrierungenPage() {
             {activeTab === 'uid-iftar' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
-                {renderTable(uidIftar, false)}
+                {renderTable(filterBySearch(uidIftar, searchQuery), false)}
               </>
             ) : activeTab === 'sube-baskanlari' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Şube Başkanları</h2>
-                {renderTable(subeBaskanlari, true)}
+                {renderTable(filterBySearch(subeBaskanlari, searchQuery), true)}
               </>
             ) : activeTab === 'kadin-kollari' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
-                {renderTable(kadinKollari, false)}
+                {renderTable(filterBySearch(kadinKollari, searchQuery), false)}
               </>
             ) : activeTab === 'fatihgruppe' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Fatihgruppe</h2>
-                {renderTable(fatihgruppe, false)}
+                {renderTable(filterBySearch(fatihgruppe, searchQuery), false)}
               </>
             ) : activeTab === 'omerliste' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Ömerliste</h2>
-                {renderTable(omerliste, false)}
+                {renderTable(filterBySearch(omerliste, searchQuery), false)}
               </>
             ) : activeTab === 'kemalettingruppe' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Kemalettingruppe</h2>
-                {renderTable(kemalettingruppe, false)}
+                {renderTable(filterBySearch(kemalettingruppe, searchQuery), false)}
               </>
             ) : (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
-                {renderTable(genclikKollari, false)}
+                {renderTable(filterBySearch(genclikKollari, searchQuery), false)}
               </>
             )}
           </>
@@ -478,6 +558,43 @@ export default function RegistrierungenPage() {
           </a>
         </p>
       </main>
+
+      {qrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setQrModal(null)}>
+          <div className="rounded-2xl bg-white p-6 shadow-xl max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 text-center">
+              <h3 className="text-lg font-semibold text-gray-900">QR-Code erstellt</h3>
+              <p className="text-sm text-gray-600">{qrModal.fullName}</p>
+              {qrModal.eventTitle && <p className="text-xs text-gray-500 mt-1">{qrModal.eventTitle}</p>}
+            </div>
+            <div className="flex justify-center mb-4">
+              <img
+                src={`/api/checkin/qr?t=${encodeURIComponent(qrModal.checkInToken)}`}
+                alt={`QR-Code für ${qrModal.fullName}`}
+                className="h-48 w-48 rounded border border-gray-200 bg-white object-contain"
+              />
+            </div>
+            <div className="flex justify-center gap-2">
+              <a
+                href={`/api/checkin/qr?t=${encodeURIComponent(qrModal.checkInToken)}`}
+                download={`QR-${qrModal.fullName.replace(/\s+/g, '-')}.png`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                QR-Code als Bild speichern
+              </a>
+              <button
+                type="button"
+                onClick={() => setQrModal(null)}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
