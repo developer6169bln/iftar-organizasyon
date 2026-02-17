@@ -21,6 +21,63 @@ type Registration = {
 
 type EventOption = { id: string; title: string; date: string }
 
+type MergedEntry = {
+  key: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  phone: string | null
+  district: string | null
+  sources: string[]
+  registrations: Registration[]
+  inGuestList: boolean
+  hasQr: boolean
+  primaryReg: Registration
+}
+
+const EVENT_SLUG_LABELS: Record<string, string> = {
+  'uid-iftar': 'UID Iftar',
+  'sube-baskanlari': 'Şube Başkanları',
+  'kadin-kollari': 'Kadın Kolları',
+  'genclik-kollari': 'Gençlik Kolları',
+  'fatihgruppe': 'Fatihgruppe',
+  'omerliste': 'Ömerliste',
+  'kemalettingruppe': 'Kemalettingruppe',
+}
+
+function mergeRegistrations(list: Registration[], guestNamesLower: Set<string>): MergedEntry[] {
+  const key = (r: Registration) =>
+    `${(r.firstName || '').trim().toLowerCase()}|${(r.lastName || '').trim().toLowerCase()}`
+  const groups = new Map<string, Registration[]>()
+  for (const r of list) {
+    const k = key(r)
+    if (!groups.has(k)) groups.set(k, [])
+    groups.get(k)!.push(r)
+  }
+  const merged: MergedEntry[] = []
+  for (const [, regs] of groups) {
+    const primary = regs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0]
+    const fullName = [primary.firstName, primary.lastName].filter(Boolean).join(' ').trim()
+    const nameLower = fullName.toLowerCase()
+    merged.push({
+      key: key(primary),
+      firstName: primary.firstName,
+      lastName: primary.lastName,
+      fullName,
+      email: primary.email,
+      phone: primary.phone ?? regs.find((r) => r.phone)?.phone ?? null,
+      district: primary.district ?? regs.find((r) => r.district)?.district ?? null,
+      sources: [...new Set(regs.map((r) => EVENT_SLUG_LABELS[r.eventSlug] ?? r.eventSlug))],
+      registrations: regs,
+      inGuestList: guestNamesLower.has(nameLower),
+      hasQr: regs.some((r) => r.invitationSentAt),
+      primaryReg: primary,
+    })
+  }
+  return merged.sort((a, b) => a.fullName.localeCompare(b.fullName))
+}
+
 function filterBySearch(rows: Registration[], query: string): Registration[] {
   if (!query.trim()) return rows
   const q = query.trim().toLowerCase()
@@ -41,12 +98,32 @@ function filterByNoQr(rows: Registration[], filterNoQr: boolean): Registration[]
   return rows.filter((r) => !r.invitationSentAt)
 }
 
+function filterMergedBySearch(rows: MergedEntry[], query: string): MergedEntry[] {
+  if (!query.trim()) return rows
+  const q = query.trim().toLowerCase()
+  return rows.filter(
+    (m) =>
+      m.firstName?.toLowerCase().includes(q) ||
+      m.lastName?.toLowerCase().includes(q) ||
+      m.fullName?.toLowerCase().includes(q) ||
+      m.email?.toLowerCase().includes(q) ||
+      m.district?.toLowerCase().includes(q) ||
+      m.phone?.includes(q) ||
+      m.sources.some((s) => s.toLowerCase().includes(q))
+  )
+}
+
+function filterMergedByNoQr(rows: MergedEntry[], filterNoQr: boolean): MergedEntry[] {
+  if (!filterNoQr) return rows
+  return rows.filter((m) => !m.hasQr)
+}
+
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterNoQr, setFilterNoQr] = useState(false)
-  const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uid-iftar')
+  const [activeTab, setActiveTab] = useState<'uebersicht' | 'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uebersicht')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [importing, setImporting] = useState<string | null>(null)
@@ -55,6 +132,8 @@ export default function RegistrierungenPage() {
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
   const [removingDuplicates, setRemovingDuplicates] = useState(false)
+  const [guests, setGuests] = useState<{ name: string }[]>([])
+  const [loadingGuests, setLoadingGuests] = useState(false)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
 
   const loadRegistrations = async () => {
@@ -105,6 +184,25 @@ export default function RegistrierungenPage() {
   }, [])
 
   useEffect(() => {
+    if (activeTab !== 'uebersicht' || !selectedEventId) {
+      setGuests([])
+      return
+    }
+    let cancelled = false
+    setLoadingGuests(true)
+    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (cancelled) return
+        const arr = Array.isArray(data) ? data : []
+        setGuests(arr.map((g: { name?: string }) => ({ name: (g.name || '').trim() })))
+      })
+      .catch(() => { if (!cancelled) setGuests([]) })
+      .finally(() => { if (!cancelled) setLoadingGuests(false) })
+    return () => { cancelled = true }
+  }, [activeTab, selectedEventId])
+
+  useEffect(() => {
     const onProjectChange = () => {
       const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
       const params = new URLSearchParams({ list: 'true' })
@@ -131,6 +229,10 @@ export default function RegistrierungenPage() {
   const fatihgruppe = list.filter((r) => r.eventSlug === 'fatihgruppe')
   const omerliste = list.filter((r) => r.eventSlug === 'omerliste')
   const kemalettingruppe = list.filter((r) => r.eventSlug === 'kemalettingruppe')
+
+  const guestNamesLower = new Set(guests.map((g) => g.name.toLowerCase()).filter(Boolean))
+  const mergedList = mergeRegistrations(list, guestNamesLower)
+  const mergedFiltered = filterMergedByNoQr(filterMergedBySearch(mergedList, searchQuery), filterNoQr)
 
   const formatDate = (s: string) => {
     try {
@@ -363,6 +465,131 @@ export default function RegistrierungenPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
+  const renderMergedTable = (rows: MergedEntry[]) => {
+    const inGuestCount = rows.filter((m) => m.inGuestList).length
+    const hasQrCount = rows.filter((m) => m.hasQr).length
+    return (
+      <div>
+        <p className="mb-3 text-sm text-gray-600">
+          <span className="font-medium">Gesamtanzahl: {rows.length} Einträge (nach Name zusammengeführt)</span>
+          {' · '}
+          <span className="font-medium text-green-700">In Gästeliste: {inGuestCount}</span>
+          {' · '}
+          <span className="font-medium text-indigo-700">QR-Codes gesendet: {hasQrCount}</span>
+        </p>
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Listen</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">In Gästeliste</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">QR</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    {searchQuery.trim()
+                      ? 'Keine Einträge entsprechen der Suche.'
+                      : filterNoQr
+                        ? 'Keine Einträge ohne QR-Code.'
+                        : 'Keine Anmeldungen.'}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((m) => (
+                  <tr
+                    key={m.key}
+                    className={`hover:bg-gray-50 ${m.inGuestList ? 'bg-green-50/50' : ''} ${m.hasQr ? 'bg-indigo-50/30' : ''}`}
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{m.fullName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <span className="inline-flex flex-wrap gap-1">
+                        {m.sources.map((s) => (
+                          <span key={s} className="rounded bg-gray-200 px-1.5 py-0.5 text-xs">
+                            {s}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {m.inGuestList ? (
+                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Nein</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {m.hasQr ? (
+                        <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Gesendet</span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.email || '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.phone || '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{m.district || '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {m.hasQr ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleWhatsAppShare(m.primaryReg)}
+                              disabled={!selectedEventId}
+                              className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                              title="QR per WhatsApp"
+                            >
+                              WhatsApp
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadQr(m.primaryReg)}
+                              disabled={!selectedEventId}
+                              className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                              title="QR herunterladen"
+                            >
+                              Download
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSendEmailAgain(m.primaryReg)}
+                              disabled={!selectedEventId || sendingEmailId !== null}
+                              className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                              title="PDF per E-Mail"
+                            >
+                              {sendingEmailId === m.primaryReg.id ? '…' : 'E-Mail'}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptParticipation(m.primaryReg.id)}
+                            disabled={!selectedEventId || acceptingId !== null}
+                            className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                            title="QR erstellen"
+                          >
+                            {acceptingId === m.primaryReg.id ? '…' : 'QR erstellen'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
   const renderTable = (rows: Registration[], showSube: boolean, noQrFilterActive = false) => {
     const zusagenCount = rows.filter((r) => r.participating).length
     const qrGesendetCount = rows.filter((r) => r.invitationSentAt).length
@@ -525,6 +752,17 @@ export default function RegistrierungenPage() {
         <div className="mb-6 flex gap-2 border-b border-gray-200">
           <button
             type="button"
+            onClick={() => setActiveTab('uebersicht')}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
+              activeTab === 'uebersicht'
+                ? 'border border-b-0 border-gray-200 bg-white text-indigo-600'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Übersicht ({mergedList.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('uid-iftar')}
             className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
               activeTab === 'uid-iftar'
@@ -649,16 +887,20 @@ export default function RegistrierungenPage() {
               </div>
               <button
                 type="button"
-                onClick={() => handleImportToGuests(activeTab)}
+                onClick={() => handleImportToGuests(activeTab === 'uebersicht' ? 'all' : activeTab)}
                 disabled={!selectedEventId || importing !== null}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {importing === activeTab ? 'Import läuft …' : 'In Gästeliste übernehmen'}
+                {importing === (activeTab === 'uebersicht' ? 'all' : activeTab)
+                  ? 'Import läuft …'
+                  : activeTab === 'uebersicht'
+                    ? 'Alle in Gästeliste übernehmen'
+                    : 'In Gästeliste übernehmen'}
               </button>
               <button
                 type="button"
-                onClick={() => handleFixImportedGuests(activeTab)}
-                disabled={!selectedEventId || fixing !== null}
+                onClick={() => handleFixImportedGuests(activeTab === 'uebersicht' ? 'uid-iftar' : activeTab)}
+                disabled={!selectedEventId || fixing !== null || activeTab === 'uebersicht'}
                 className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Vorname und Nachname in die richtigen Spalten übertragen (für bereits importierte Gäste)"
               >
@@ -677,7 +919,20 @@ export default function RegistrierungenPage() {
                 Doppelte Namen werden übersprungen.
               </span>
             </div>
-            {activeTab === 'uid-iftar' ? (
+            {activeTab === 'uebersicht' ? (
+              <>
+                <h2 className="mb-4 text-lg font-semibold text-gray-900">
+                  Übersicht – alle Listen zusammengeführt (Duplikate nach Name zusammengefasst)
+                </h2>
+                {!selectedEventId ? (
+                  <p className="text-amber-600">Bitte wählen Sie ein Ziel-Event für den Gästelisten-Vergleich.</p>
+                ) : loadingGuests ? (
+                  <p className="text-gray-500">Lade Gästeliste …</p>
+                ) : (
+                  renderMergedTable(mergedFiltered)
+                )}
+              </>
+            ) : activeTab === 'uid-iftar' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
                 {renderTable(filterByNoQr(filterBySearch(uidIftar, searchQuery), filterNoQr), false, filterNoQr)}
