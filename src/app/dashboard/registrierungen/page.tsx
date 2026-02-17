@@ -54,6 +54,7 @@ export default function RegistrierungenPage() {
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
+  const [removingDuplicates, setRemovingDuplicates] = useState(false)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
 
   const loadRegistrations = async () => {
@@ -293,6 +294,37 @@ export default function RegistrierungenPage() {
       alert('E-Mail konnte nicht gesendet werden.')
     } finally {
       setSendingEmailId(null)
+    }
+  }
+
+  const handleRemoveDuplicates = async () => {
+    if (!confirm('Doppelteinträge (gleicher Vorname + Name) werden entfernt. Die betroffenen Personen erhalten eine E-Mail. Fortfahren?')) return
+    setRemovingDuplicates(true)
+    try {
+      const res = await fetch('/api/registrations/remove-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventSlug: activeTab }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'Duplikate konnten nicht entfernt werden.')
+        return
+      }
+      await loadRegistrations()
+      const msg = [
+        `${data.deleted} Duplikat(e) entfernt.`,
+        data.emailsSent > 0 ? `${data.emailsSent} E-Mail(s) gesendet.` : '',
+        data.errors?.length ? `Fehler beim E-Mail-Versand: ${data.errors.slice(0, 3).join('; ')}${data.errors.length > 3 ? ' …' : ''}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+      alert(msg)
+    } catch (e) {
+      console.error(e)
+      alert('Duplikate konnten nicht entfernt werden.')
+    } finally {
+      setRemovingDuplicates(false)
     }
   }
 
@@ -631,6 +663,15 @@ export default function RegistrierungenPage() {
                 title="Vorname und Nachname in die richtigen Spalten übertragen (für bereits importierte Gäste)"
               >
                 {fixing === activeTab ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveDuplicates}
+                disabled={removingDuplicates}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Doppelteinträge (gleicher Vorname + Name) entfernen und E-Mail senden"
+              >
+                {removingDuplicates ? 'Duplikate werden entfernt …' : 'Duplikate entfernen'}
               </button>
               <span className="text-sm text-gray-500">
                 Doppelte Namen werden übersprungen.
