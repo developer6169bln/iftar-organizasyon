@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     if (district) additionalData['Bezirk'] = district
     if (notes) additionalData['Notizen'] = notes
 
-    let guest = await prisma.guest.findFirst({
+    const existingGuest = await prisma.guest.findFirst({
       where: {
         eventId,
         OR: [
@@ -94,8 +94,8 @@ export async function POST(request: NextRequest) {
       include: { invitations: { where: { eventId }, take: 1 } },
     })
 
-    if (guest && guest.invitations?.[0]) {
-      const inv = guest.invitations[0]
+    if (existingGuest?.invitations?.[0]) {
+      const inv = existingGuest.invitations[0]
       await prisma.eventRegistration.update({
         where: { id: registration.id },
         data: { invitationSentAt: new Date() },
@@ -104,14 +104,15 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Einladung existiert bereits.',
         acceptToken: inv.acceptToken,
-        checkInToken: guest.checkInToken ?? mainGuestCheckInToken,
+        checkInToken: existingGuest.checkInToken ?? mainGuestCheckInToken,
         eventTitle: event.title,
         fullName,
       })
     }
 
-    if (!guest) {
-      guest = await prisma.guest.create({
+    let guestId: string
+    if (!existingGuest) {
+      const created = await prisma.guest.create({
         data: {
           eventId,
           name: fullName,
@@ -124,15 +125,17 @@ export async function POST(request: NextRequest) {
           additionalData: JSON.stringify(additionalData),
         },
       })
+      guestId = created.id
     } else {
       await prisma.guest.update({
-        where: { id: guest.id },
+        where: { id: existingGuest.id },
         data: {
           status: 'CONFIRMED',
           checkInToken: mainGuestCheckInToken,
           additionalData: JSON.stringify(additionalData),
         },
       })
+      guestId = existingGuest.id
     }
 
     const acceptToken = randomBytes(32).toString('hex')
@@ -150,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     await prisma.invitation.create({
       data: {
-        guestId: guest.id,
+        guestId,
         eventId,
         templateId: template?.id ?? null,
         language: 'de',
