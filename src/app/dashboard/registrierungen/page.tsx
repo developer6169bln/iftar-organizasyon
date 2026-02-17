@@ -45,7 +45,8 @@ export default function RegistrierungenPage() {
   const [importing, setImporting] = useState<string | null>(null)
   const [fixing, setFixing] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
-  const [qrModal, setQrModal] = useState<{ checkInToken: string; fullName: string; eventTitle: string } | null>(null)
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+  const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
 
   const loadRegistrations = async () => {
     try {
@@ -214,6 +215,7 @@ export default function RegistrierungenPage() {
       if (data.checkInToken) {
         setQrModal({
           checkInToken: data.checkInToken,
+          acceptToken: data.acceptToken,
           fullName: data.fullName ?? '',
           eventTitle: data.eventTitle ?? '',
         })
@@ -223,6 +225,66 @@ export default function RegistrierungenPage() {
       alert('Teilnahme konnte nicht bestätigt werden.')
     } finally {
       setAcceptingId(null)
+    }
+  }
+
+  const fetchQrInfo = async (registrationId: string) => {
+    if (!selectedEventId) return null
+    const res = await fetch(`/api/registrations/${encodeURIComponent(registrationId)}/qr-info?eventId=${encodeURIComponent(selectedEventId)}`)
+    if (!res.ok) return null
+    return res.json() as Promise<{ acceptToken: string; checkInToken: string; fullName: string }>
+  }
+
+  const handleDownloadQr = async (r: Registration) => {
+    if (!selectedEventId) return
+    const info = await fetchQrInfo(r.id)
+    if (!info?.checkInToken) {
+      alert('QR-Code konnte nicht geladen werden.')
+      return
+    }
+    try {
+      const base = typeof window !== 'undefined' ? window.location.origin : ''
+      const res = await fetch(`${base}/api/checkin/qr?t=${encodeURIComponent(info.checkInToken)}`)
+      if (!res.ok) throw new Error('Download fehlgeschlagen')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `QR-${(info.fullName || `${r.firstName} ${r.lastName}`).replace(/\s+/g, '-')}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert('Download fehlgeschlagen.')
+    }
+  }
+
+  const handleSendEmailAgain = async (r: Registration) => {
+    if (!selectedEventId) return
+    setSendingEmailId(r.id)
+    try {
+      const info = await fetchQrInfo(r.id)
+      if (!info?.acceptToken) {
+        alert('Einladung konnte nicht geladen werden.')
+        return
+      }
+      const res = await fetch(`/api/invitations/accept/${encodeURIComponent(info.acceptToken)}/send-qr-pdf`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || 'E-Mail konnte nicht gesendet werden.')
+        return
+      }
+      alert('PDF wurde an die E-Mail-Adresse gesendet.')
+      window.dispatchEvent(new Event('email-sent'))
+    } catch (e) {
+      console.error(e)
+      alert('E-Mail konnte nicht gesendet werden.')
+    } finally {
+      setSendingEmailId(null)
     }
   }
 
@@ -290,7 +352,26 @@ export default function RegistrierungenPage() {
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-center">
                   {r.invitationSentAt ? (
-                    <span className="text-xs text-green-600">QR erstellt</span>
+                    <div className="flex flex-wrap justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadQr(r)}
+                        disabled={!selectedEventId}
+                        className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        title="QR-Code als Bild herunterladen"
+                      >
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendEmailAgain(r)}
+                        disabled={!selectedEventId || sendingEmailId !== null}
+                        className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="PDF per E-Mail erneut senden"
+                      >
+                        {sendingEmailId === r.id ? '…' : 'E-Mail senden'}
+                      </button>
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -574,16 +655,47 @@ export default function RegistrierungenPage() {
                 className="h-48 w-48 rounded border border-gray-200 bg-white object-contain"
               />
             </div>
-            <div className="flex justify-center gap-2">
-              <a
-                href={`/api/checkin/qr?t=${encodeURIComponent(qrModal.checkInToken)}`}
-                download={`QR-${qrModal.fullName.replace(/\s+/g, '-')}.png`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/checkin/qr?t=${encodeURIComponent(qrModal.checkInToken)}`)
+                    if (!res.ok) throw new Error()
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `QR-${qrModal.fullName.replace(/\s+/g, '-')}.png`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  } catch {
+                    alert('Download fehlgeschlagen.')
+                  }
+                }}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
               >
-                QR-Code als Bild speichern
-              </a>
+                Download
+              </button>
+              {qrModal.acceptToken && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/invitations/accept/${encodeURIComponent(qrModal!.acceptToken!)}/send-qr-pdf`, { method: 'POST' })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data.error)
+                      alert('PDF wurde an die E-Mail-Adresse gesendet.')
+                      window.dispatchEvent(new Event('email-sent'))
+                    } catch {
+                      alert('E-Mail konnte nicht gesendet werden.')
+                    }
+                  }}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  E-Mail senden
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setQrModal(null)}
