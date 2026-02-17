@@ -4,8 +4,8 @@ import { requirePageAccess } from '@/lib/permissions'
 import { sendEmail } from '@/lib/email'
 
 /**
- * POST – Doppelteinträge (gleicher Vorname + Name) finden, Duplikate löschen und E-Mail senden.
- * Body: { eventSlug: string }
+ * POST – Doppelteinträge (gleicher Vorname + Name) über alle Gruppen hinweg finden, Duplikate löschen und E-Mail senden.
+ * Vergleicht alle Anmeldelisten (UID Iftar, Fatihgruppe, Ömerliste, etc.).
  * Behält die erste Anmeldung (älteste), löscht die übrigen und sendet E-Mail an die gelöschten.
  */
 export async function POST(request: NextRequest) {
@@ -13,18 +13,7 @@ export async function POST(request: NextRequest) {
   if (access instanceof NextResponse) return access
 
   try {
-    const body = await request.json()
-    const eventSlug = typeof body?.eventSlug === 'string' ? body.eventSlug.trim() : ''
-
-    if (!eventSlug) {
-      return NextResponse.json(
-        { error: 'eventSlug ist erforderlich.' },
-        { status: 400 }
-      )
-    }
-
     const registrations = await prisma.eventRegistration.findMany({
-      where: { eventSlug },
       orderBy: { createdAt: 'asc' },
     })
 

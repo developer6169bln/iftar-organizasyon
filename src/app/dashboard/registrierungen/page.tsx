@@ -298,13 +298,13 @@ export default function RegistrierungenPage() {
   }
 
   const handleRemoveDuplicates = async () => {
-    if (!confirm('Doppelteinträge (gleicher Vorname + Name) werden entfernt. Die betroffenen Personen erhalten eine E-Mail. Fortfahren?')) return
+    if (!confirm('Doppelteinträge (gleicher Vorname + Name) werden über alle Gruppen hinweg geprüft und entfernt. Die betroffenen Personen erhalten eine E-Mail. Fortfahren?')) return
     setRemovingDuplicates(true)
     try {
       const res = await fetch('/api/registrations/remove-duplicates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventSlug: activeTab }),
+        body: JSON.stringify({}),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -669,7 +669,7 @@ export default function RegistrierungenPage() {
                 onClick={handleRemoveDuplicates}
                 disabled={removingDuplicates}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Doppelteinträge (gleicher Vorname + Name) entfernen und E-Mail senden"
+                title="Doppelteinträge über alle Gruppen prüfen, entfernen und E-Mail senden"
               >
                 {removingDuplicates ? 'Duplikate werden entfernt …' : 'Duplikate entfernen'}
               </button>
