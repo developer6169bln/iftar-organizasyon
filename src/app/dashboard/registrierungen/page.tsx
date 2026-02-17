@@ -45,6 +45,29 @@ type GuestEntry = {
   additionalData?: string | null
 }
 
+function getGuestVornameNachname(guest: GuestEntry): { vorname: string; nachname: string } {
+  let vorname = ''
+  let nachname = ''
+  const additional = guest.additionalData
+  if (additional) {
+    try {
+      const add = typeof additional === 'string' ? JSON.parse(additional) : additional
+      if (add && typeof add === 'object') {
+        vorname = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
+        nachname = String(add['Nachname'] ?? add['nachname'] ?? add['Name'] ?? '').trim()
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!vorname && !nachname && guest.name) {
+    const parts = String(guest.name).trim().split(/\s+/).filter(Boolean)
+    vorname = parts[0] ?? ''
+    nachname = parts.slice(1).join(' ') ?? ''
+  }
+  return { vorname, nachname }
+}
+
 function hasEinladungsliste(guest: GuestEntry): boolean {
   const additional = guest.additionalData
   if (!additional) return false
@@ -149,16 +172,17 @@ function mergeGesamtList(mergedList: MergedEntry[], guests: GuestEntry[]): Gesam
   }
 
   for (const g of guests) {
-    const k = nameKey(g.name)
+    const { vorname: guestFirstName, nachname: guestLastName } = getGuestVornameNachname(g)
+    const fullName = [guestFirstName, guestLastName].filter(Boolean).join(' ').trim() || g.name
+    const k = nameKey(fullName) || nameKey(g.name)
     if (!k) continue
-    const parts = (g.name || '').trim().split(/\s+/)
-    const guestFirstName = parts.length > 1 ? parts[0] : ''
-    const guestLastName = parts.length > 1 ? parts.slice(1).join(' ') : g.name
     const existing = map.get(k)
     if (existing) {
       existing.fromGuestList = true
       if (!existing.sources.includes('Gästeliste')) existing.sources.push('Gästeliste')
       existing.guest = g
+      if (!existing.firstName && guestFirstName) existing.firstName = guestFirstName
+      if (!existing.lastName && guestLastName) existing.lastName = guestLastName
       existing.email = existing.email || g.email
       existing.phone = existing.phone || g.phone
       existing.district = existing.district || g.organization
@@ -166,8 +190,8 @@ function mergeGesamtList(mergedList: MergedEntry[], guests: GuestEntry[]): Gesam
       map.set(k, {
         key: k,
         firstName: guestFirstName,
-        lastName: guestLastName,
-        fullName: g.name,
+        lastName: guestLastName || g.name,
+        fullName: fullName || g.name,
         email: g.email,
         phone: g.phone,
         district: g.organization,
