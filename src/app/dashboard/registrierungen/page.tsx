@@ -36,10 +36,16 @@ function filterBySearch(rows: Registration[], query: string): Registration[] {
   )
 }
 
+function filterByNoQr(rows: Registration[], filterNoQr: boolean): Registration[] {
+  if (!filterNoQr) return rows
+  return rows.filter((r) => !r.invitationSentAt)
+}
+
 export default function RegistrierungenPage() {
   const [list, setList] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filterNoQr, setFilterNoQr] = useState(false)
   const [activeTab, setActiveTab] = useState<'uid-iftar' | 'sube-baskanlari' | 'kadin-kollari' | 'genclik-kollari' | 'fatihgruppe' | 'omerliste' | 'kemalettingruppe'>('uid-iftar')
   const [events, setEvents] = useState<EventOption[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
@@ -325,14 +331,17 @@ export default function RegistrierungenPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 
-  const renderTable = (rows: Registration[], showSube: boolean) => {
+  const renderTable = (rows: Registration[], showSube: boolean, noQrFilterActive = false) => {
     const zusagenCount = rows.filter((r) => r.participating).length
+    const qrGesendetCount = rows.filter((r) => r.invitationSentAt).length
     return (
     <div>
       <p className="mb-3 text-sm text-gray-600">
         <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
         {' · '}
         <span className="font-medium text-green-700">Zusagen: {zusagenCount}</span>
+        {' · '}
+        <span className="font-medium text-indigo-700">QR-Codes gesendet: {qrGesendetCount}</span>
       </p>
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200">
@@ -358,7 +367,11 @@ export default function RegistrierungenPage() {
           {rows.length === 0 ? (
             <tr>
               <td colSpan={showSube ? 12 : 11} className="px-4 py-8 text-center text-sm text-gray-500">
-                {searchQuery.trim() ? 'Keine Anmeldungen entsprechen der Suche.' : 'Noch keine Anmeldungen.'}
+                {searchQuery.trim()
+                  ? 'Keine Anmeldungen entsprechen der Suche.'
+                  : noQrFilterActive
+                    ? 'Keine Anmeldungen ohne QR-Code.'
+                    : 'Noch keine Anmeldungen.'}
               </td>
             </tr>
           ) : (
@@ -575,6 +588,15 @@ export default function RegistrierungenPage() {
                   className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full max-w-xs"
                 />
               </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filterNoQr}
+                  onChange={(e) => setFilterNoQr(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700">Nur ohne QR-Code</span>
+              </label>
               <div className="flex items-center gap-2">
                 <label htmlFor="import-event" className="text-sm font-medium text-gray-700">
                   Ziel-Event für Import:
@@ -617,37 +639,37 @@ export default function RegistrierungenPage() {
             {activeTab === 'uid-iftar' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">UID Iftar</h2>
-                {renderTable(filterBySearch(uidIftar, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(uidIftar, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             ) : activeTab === 'sube-baskanlari' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Şube Başkanları</h2>
-                {renderTable(filterBySearch(subeBaskanlari, searchQuery), true)}
+                {renderTable(filterByNoQr(filterBySearch(subeBaskanlari, searchQuery), filterNoQr), true, filterNoQr)}
               </>
             ) : activeTab === 'kadin-kollari' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Kadın Kolları</h2>
-                {renderTable(filterBySearch(kadinKollari, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(kadinKollari, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             ) : activeTab === 'fatihgruppe' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Fatihgruppe</h2>
-                {renderTable(filterBySearch(fatihgruppe, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(fatihgruppe, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             ) : activeTab === 'omerliste' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Ömerliste</h2>
-                {renderTable(filterBySearch(omerliste, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(omerliste, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             ) : activeTab === 'kemalettingruppe' ? (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Kemalettingruppe</h2>
-                {renderTable(filterBySearch(kemalettingruppe, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(kemalettingruppe, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             ) : (
               <>
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">Gençlik Kolları</h2>
-                {renderTable(filterBySearch(genclikKollari, searchQuery), false)}
+                {renderTable(filterByNoQr(filterBySearch(genclikKollari, searchQuery), filterNoQr), false, filterNoQr)}
               </>
             )}
           </>
