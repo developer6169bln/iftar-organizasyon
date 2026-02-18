@@ -2758,7 +2758,7 @@ export default function InvitationsPage() {
                       </td>
                     </tr>
                     )
-                  })}
+                  }) )}
                 </tbody>
               </table>
             </div>
