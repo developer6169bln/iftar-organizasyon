@@ -158,6 +158,8 @@ export default function InvitationsPage() {
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc')
   const [listResponseFilter, setListResponseFilter] = useState<'all' | 'ACCEPTED' | 'DECLINED' | 'PENDING'>('all')
   const [listSearchQuery, setListSearchQuery] = useState('')
+  const [listPage, setListPage] = useState(1)
+  const [listPageSize, setListPageSize] = useState(25)
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [templateForm, setTemplateForm] = useState({
@@ -1633,6 +1635,17 @@ export default function InvitationsPage() {
     })
   }, [listFilteredInvitations, listSortBy, listSortDir])
 
+  const totalPages = Math.max(1, Math.ceil(sortedInvitations.length / listPageSize))
+  const paginatedInvitations = useMemo(() => {
+    const start = (listPage - 1) * listPageSize
+    return sortedInvitations.slice(start, start + listPageSize)
+  }, [sortedInvitations, listPage, listPageSize])
+
+  // Seite zurücksetzen wenn Filter/Suche/Sortierung sich ändert
+  useEffect(() => {
+    setListPage(1)
+  }, [listResponseFilter, listSearchQuery, listSortBy, listSortDir])
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -2370,7 +2383,7 @@ export default function InvitationsPage() {
                       </td>
                     </tr>
                   ) : (
-                    sortedInvitations.map((invitation) => {
+                    paginatedInvitations.map((invitation) => {
                     const guestPhone = getGuestDisplayPhone(invitation.guest)
                     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
                     const qrPdfUrl = invitation.acceptToken ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf` : ''
@@ -2787,6 +2800,51 @@ export default function InvitationsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Paginierung */}
+            {sortedInvitations.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600">
+                    Zeige {(listPage - 1) * listPageSize + 1}–{Math.min(listPage * listPageSize, sortedInvitations.length)} von {sortedInvitations.length}
+                  </span>
+                  <select
+                    value={listPageSize}
+                    onChange={(e) => {
+                      setListPageSize(Number(e.target.value))
+                      setListPage(1)
+                    }}
+                    className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    <option value={15}>15 pro Seite</option>
+                    <option value={25}>25 pro Seite</option>
+                    <option value={50}>50 pro Seite</option>
+                    <option value={100}>100 pro Seite</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                    disabled={listPage <= 1}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ← Zurück
+                  </button>
+                  <span className="text-sm text-gray-600">
+                    Seite {listPage} von {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setListPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={listPage >= totalPages}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Weiter →
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Modal: Mailvorschau */}
             {previewModal && (
