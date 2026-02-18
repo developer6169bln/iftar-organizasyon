@@ -7,6 +7,7 @@ function InvitationSuccessContent() {
   const searchParams = useSearchParams()
   const type = searchParams.get('type')
   const already = searchParams.get('already') === 'true'
+  const yedek = searchParams.get('yedek') === 'true'
 
   const isAccepted = type === 'accepted'
   const isDeclined = type === 'declined'
@@ -38,7 +39,9 @@ function InvitationSuccessContent() {
               <p className="text-gray-600">
                 {already
                   ? 'Ihre Teilnahme wurde bereits bestätigt.'
-                  : 'Ihr Dankeschön für die Teilnahme ist bei uns angekommen. Wir freuen uns sehr, Sie bei der Veranstaltung begrüßen zu dürfen!'}
+                  : yedek
+                    ? 'Yedek listesindesiniz. Yer açıldığında size onay kodunuzu e-posta veya WhatsApp yoluyla ileteceğiz.'
+                    : 'Ihr Dankeschön für die Teilnahme ist bei uns angekommen. Wir freuen uns sehr, Sie bei der Veranstaltung begrüßen zu dürfen!'}
               </p>
             </div>
           </>

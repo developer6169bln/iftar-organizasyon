@@ -18,12 +18,6 @@ type AccompanyingGuestEntry = {
   email: string
 }
 
-type CheckInTokenEntry = {
-  label: string
-  token: string
-  type: 'main' | 'accompanying'
-}
-
 export default function InvitationAcceptPage() {
   const params = useParams()
   const router = useRouter()
@@ -35,12 +29,6 @@ export default function InvitationAcceptPage() {
   const [accompanyingGuests, setAccompanyingGuests] = useState<AccompanyingGuestEntry[]>([])
   const [maxExceededWarning, setMaxExceededWarning] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [showQrPage, setShowQrPage] = useState(false)
-  const [checkInTokens, setCheckInTokens] = useState<CheckInTokenEntry[]>([])
-  const [redirectUrl, setRedirectUrl] = useState('')
-  const [eventTitle, setEventTitle] = useState('')
-  const [sendingPdfEmail, setSendingPdfEmail] = useState(false)
-  const [pdfEmailMessage, setPdfEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     if (!token) {
@@ -130,14 +118,8 @@ export default function InvitationAcceptPage() {
       .then(async (res) => {
         const data = await res.json()
         if (data.success) {
-          setRedirectUrl(data.redirectUrl || '/invitation/success?type=accepted')
-          setEventTitle(data.eventTitle || info.eventTitle || '')
-          if (Array.isArray(data.checkInTokens) && data.checkInTokens.length > 0) {
-            setCheckInTokens(data.checkInTokens)
-            setShowQrPage(true)
-          } else {
-            window.location.href = data.redirectUrl || '/invitation/success?type=accepted'
-          }
+          // Yedek Liste: Kein QR-Code anzeigen. Admin sendet bei freiem Platz.
+          window.location.href = '/invitation/success?type=accepted&yedek=true'
           return
         }
         if (data.error && res.status === 400) {
@@ -200,114 +182,13 @@ export default function InvitationAcceptPage() {
     )
   }
 
-  if (showQrPage && checkInTokens.length > 0) {
-    const base = typeof window !== 'undefined' ? window.location.origin : ''
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
-        <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h1 className="mb-2 text-xl font-bold text-gray-900">Vielen Dank für Ihre Teilnahme!</h1>
-            <p className="mb-4 text-gray-600">
-              Bitte zeigen Sie am Eventtag beim Einlass Ihren QR-Code zum Scannen. Jede Person hat einen eigenen Code.
-            </p>
-            {eventTitle && <p className="text-sm text-gray-500">{eventTitle}</p>}
-          </div>
-          <div className="space-y-6">
-            {checkInTokens.map((entry, idx) => (
-              <div key={entry.token} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="mb-2 text-sm font-medium text-gray-700">
-                  {entry.type === 'main' ? 'Hauptgast' : 'Begleitperson'} – {entry.label}
-                </p>
-                <div className="flex justify-center">
-                  <img
-                    src={`${base}/api/checkin/qr?t=${encodeURIComponent(entry.token)}`}
-                    alt={`QR-Code für ${entry.label}`}
-                    className="h-48 w-48 rounded border border-gray-300 bg-white object-contain"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <div className="flex flex-wrap justify-center gap-3">
-              <a
-                href={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/invitations/accept/${encodeURIComponent(token)}/qr-pdf`}
-                download="Check-in-Eventinformationen.pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white hover:bg-emerald-700"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                PDF herunterladen
-              </a>
-              <button
-                type="button"
-                disabled={sendingPdfEmail}
-                onClick={async () => {
-                  setPdfEmailMessage(null)
-                  setSendingPdfEmail(true)
-                  try {
-                    const res = await fetch(`/api/invitations/accept/${encodeURIComponent(token)}/send-qr-pdf`, {
-                      method: 'POST',
-                    })
-                    const data = await res.json()
-                    if (res.ok && data.success) {
-                      setPdfEmailMessage({ type: 'success', text: data.message || 'PDF wurde an Ihre E-Mail gesendet.' })
-                    } else {
-                      setPdfEmailMessage({ type: 'error', text: data.error || 'E-Mail konnte nicht gesendet werden.' })
-                    }
-                  } catch (e) {
-                    setPdfEmailMessage({ type: 'error', text: e instanceof Error ? e.message : 'Fehler beim Senden.' })
-                  } finally {
-                    setSendingPdfEmail(false)
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-lg border-2 border-indigo-600 bg-white px-5 py-2.5 font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
-              >
-                {sendingPdfEmail ? (
-                  <>
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
-                    Wird gesendet …
-                  </>
-                ) : (
-                  <>
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                    PDF per E-Mail senden
-                  </>
-                )}
-              </button>
-            </div>
-            {pdfEmailMessage && (
-              <p className={`text-sm ${pdfEmailMessage.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
-                {pdfEmailMessage.text}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => (window.location.href = redirectUrl)}
-              className="rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700"
-            >
-              Weiter
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
       <div className="invitation-form w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-xl font-bold text-gray-900">Teilnahme bestätigen</h1>
+        <h1 className="mb-2 text-xl font-bold text-gray-900">Iftar - Yedek Liste</h1>
+        <p className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          İftar yemeği için kontenjanımız sınırlı olduğundan bir yedek liste oluşturduk. Yer açıldığında size onay kodunuzu ileteceğiz.
+        </p>
         <p className="mb-6 text-gray-600">
           Guten Tag {info.guestName}, Sie sind zu „{info.eventTitle}“ eingeladen. Bitte bestätigen Sie Ihre Teilnahme
           und geben Sie an, wie viele Personen mit Ihnen kommen.

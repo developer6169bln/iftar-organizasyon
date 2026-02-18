@@ -56,12 +56,6 @@ function KadinKollariAnmeldungContent() {
         setError(data.error || 'Ein Fehler ist aufgetreten.')
         return
       }
-      if (data.participating && data.acceptToken) {
-        const params = new URLSearchParams({ token: data.acceptToken })
-        if (eventId) params.set('eventId', eventId)
-        window.location.href = `/anmeldung/kadin-kollari/erfolg?${params.toString()}`
-        return
-      }
       setSuccess(true)
       setFirstName('')
       setLastName('')
@@ -88,7 +82,7 @@ function KadinKollariAnmeldungContent() {
           </div>
           <h1 className="mb-2 text-2xl font-bold text-gray-900">Vielen Dank!</h1>
           <p className="text-gray-600">
-            Ihre Anmeldung für Kadın Kolları wurde erfolgreich übermittelt. Wir freuen uns auf Ihre Teilnahme.
+            Yedek listesindesiniz. Yer açıldığında size onay kodunuzu e-posta veya WhatsApp yoluyla ileteceğiz.
           </p>
           <button
             type="button"
@@ -105,7 +99,10 @@ function KadinKollariAnmeldungContent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 p-4">
       <div className="anmeldung-form w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Kadın Kolları</h1>
+        <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Iftar - Yedek Liste</h1>
+        <p className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          İftar yemeği için kontenjanımız sınırlı olduğundan bir yedek liste oluşturduk. Yer açıldığında size onay kodunuzu ileteceğiz.
+        </p>
         <p className="mb-6 text-center text-gray-600">
           Registrierung für Kadın Kolları – Teilnahme am Event bekunden
         </p>
@@ -198,12 +195,6 @@ function KadinKollariAnmeldungContent() {
               Ich nehme teil
             </label>
           </div>
-          {participating && !eventId && (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Hinweis: Für sofortigen QR-Code und E-Mail-Versand muss der Anmeldelink die Event-ID enthalten. Bitte verwenden Sie den Link von der Registrierungen-Seite.
-            </p>
-          )}
-
           <div>
             <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">
               Notizen / Vorschläge

@@ -63,7 +63,7 @@ export default function GenclikKollariAnmeldungPage() {
           </div>
           <h1 className="mb-2 text-2xl font-bold text-gray-900">Vielen Dank!</h1>
           <p className="text-gray-600">
-            Ihre Anmeldung für Gençlik Kolları wurde erfolgreich übermittelt. Wir freuen uns auf Ihre Teilnahme.
+            Yedek listesindesiniz. Yer açıldığında size onay kodunuzu e-posta veya WhatsApp yoluyla ileteceğiz.
           </p>
           <button
             type="button"
@@ -80,7 +80,10 @@ export default function GenclikKollariAnmeldungPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 p-4">
       <div className="anmeldung-form w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl">
-        <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Gençlik Kolları</h1>
+        <h1 className="mb-2 text-center text-3xl font-bold text-gray-900">Iftar - Yedek Liste</h1>
+        <p className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          İftar yemeği için kontenjanımız sınırlı olduğundan bir yedek liste oluşturduk. Yer açıldığında size onay kodunuzu ileteceğiz.
+        </p>
         <p className="mb-6 text-center text-gray-600">
           Registrierung für Interessenten – Teilnahme am Event bekunden
         </p>
