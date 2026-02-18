@@ -164,6 +164,7 @@ export default function InvitationsPage() {
   const [maxAccompanyingGuestsInput, setMaxAccompanyingGuestsInput] = useState<string>('5')
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
   const [syncFromRegistrations, setSyncFromRegistrations] = useState(false)
+  const [formattingPhones, setFormattingPhones] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
@@ -1935,6 +1936,34 @@ export default function InvitationsPage() {
                   title="Formular-Ergebnisse mit Einladungsliste abgleichen – Teilnahme bestätigt → Zusage"
                 >
                   {syncFromRegistrations ? 'Abgleich läuft…' : '↔ Mit Formular-Ergebnissen abgleichen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!eventId) return
+                    if (!confirm('Telefonnummern aller Gäste und Anmeldungen ins internationale Format (+49) korrigieren?')) return
+                    setFormattingPhones(true)
+                    try {
+                      const res = await fetch('/api/invitations/format-phone-numbers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data.error || 'Korrektur fehlgeschlagen')
+                      await loadInvitations(eventId)
+                      alert(data.message || `${data.updatedGuests ?? 0} Gäste und ${data.updatedRegistrations ?? 0} Anmeldungen korrigiert.`)
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : 'Korrektur fehlgeschlagen')
+                    } finally {
+                      setFormattingPhones(false)
+                    }
+                  }}
+                  disabled={!eventId || formattingPhones}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
+                  title="Telefonnummern ins internationale Format (+49) formatieren"
+                >
+                  {formattingPhones ? 'Korrektur läuft…' : '📞 Telefonnummern korrigieren'}
                 </button>
                 <button
                   onClick={() => eventId && loadInvitations(eventId)}
