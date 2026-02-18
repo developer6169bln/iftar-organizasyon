@@ -25,6 +25,7 @@ export async function GET(
     }
 
     const alreadyAccepted = invitation.response === 'ACCEPTED'
+    const alreadyDeclined = invitation.response === 'DECLINED'
     const maxAccompanyingGuests = invitation.event?.maxAccompanyingGuests ?? 5
 
     return NextResponse.json({
@@ -32,6 +33,7 @@ export async function GET(
       eventTitle: invitation.event?.title ?? '',
       maxAccompanyingGuests,
       alreadyAccepted,
+      alreadyDeclined,
     })
   } catch (error) {
     console.error('Fehler bei public-info:', error)

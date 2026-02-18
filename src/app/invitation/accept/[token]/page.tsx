@@ -8,6 +8,7 @@ type PublicInfo = {
   eventTitle: string
   maxAccompanyingGuests: number
   alreadyAccepted: boolean
+  alreadyDeclined?: boolean
 }
 
 type AccompanyingGuestEntry = {
@@ -175,6 +176,28 @@ export default function InvitationAcceptPage() {
 
   if (info.alreadyAccepted) {
     return null
+  }
+
+  if (info.alreadyDeclined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+            <svg className="h-7 w-7 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="mb-2 text-xl font-bold text-gray-900">Erneute Zusage nicht möglich</h1>
+          <p className="mb-6 text-gray-600">
+            Sie haben bereits abgesagt. Eine erneute Zusage ist über diesen Link nicht möglich. Für eine neue Zusage
+            wenden Sie sich bitte an UID Berlin.
+          </p>
+          <a href="/invitation/error" className="inline-block rounded-lg bg-indigo-600 px-6 py-3 font-medium text-white hover:bg-indigo-700">
+            Zurück
+          </a>
+        </div>
+      </div>
+    )
   }
 
   if (showQrPage && checkInTokens.length > 0) {

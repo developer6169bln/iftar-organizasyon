@@ -54,6 +54,17 @@ export async function POST(
       })
     }
 
+    if (invitation.response === 'DECLINED') {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Sie haben bereits abgesagt. Eine erneute Zusage ist über diesen Link nicht möglich. Für eine neue Zusage wenden Sie sich bitte an UID Berlin.',
+        },
+        { status: 403 }
+      )
+    }
+
     const maxAccompanyingGuests = invitation.event?.maxAccompanyingGuests ?? 5
     let accompanyingGuestsCount = 1
     let accompanyingGuests: Array<{ firstName: string; lastName: string; funktion?: string; email?: string }> = []
