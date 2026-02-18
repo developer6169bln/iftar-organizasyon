@@ -95,7 +95,7 @@ function getGuestDisplayPhone(guest: any): string {
   return getFromAdditional(add, ['Telefon', 'telefon', 'Phone', 'phone', 'Mobil', 'mobil'])
 }
 
-function getWhatsAppMessage(qrPdfUrl: string): string {
+function getWhatsAppMessage(): string {
   return `UID BERLIN IFTAR HATIRLATMA VE GİRİŞ KODUNUZ:
 
 Tarih: 27 Şubat 2026, Cuma
@@ -110,7 +110,7 @@ Tarih: 27 Şubat 2026, Cuma
 Oranienstraße 140–142
 10969 Berlin
 
-Giriş kodunuz (QR-Code): ${qrPdfUrl}`
+Giriş kodunuz (QR-Code) ist im PDF-Dokument angehängt.`
 }
 
 /** Telefonnummer für wa.me: nur Ziffern, führende 0 durch 49 ersetzen. */
@@ -2349,20 +2349,28 @@ export default function InvitationsPage() {
                     const guestPhone = getGuestDisplayPhone(invitation.guest)
                     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
                     const qrPdfUrl = invitation.acceptToken ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf` : ''
-                    const waUrl = guestPhone ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl))}` : null
+                    const waUrl = guestPhone ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage())}` : null
+                    const handleWhatsAppClick = () => {
+                      if (!waUrl || !qrPdfUrl) return
+                      const link = document.createElement('a')
+                      link.href = qrPdfUrl
+                      link.download = `QR-Code-${(invitation.guest?.name || 'Gast').replace(/[^a-zA-Z0-9äöüÄÖÜß\- ]/g, '')}.pdf`
+                      link.target = '_blank'
+                      link.click()
+                      setTimeout(() => { window.open(waUrl, '_blank') }, 300)
+                    }
                     return (
                     <tr key={invitation.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         {waUrl ? (
-                          <a
-                            href={waUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={handleWhatsAppClick}
                             className="inline-flex items-center justify-center rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700"
-                            title="QR-Code per WhatsApp senden"
+                            title="PDF herunterladen und per WhatsApp senden (PDF anhängen)"
                           >
                             WhatsApp
-                          </a>
+                          </button>
                         ) : (
                           <span className="text-gray-400 text-xs">–</span>
                         )}
