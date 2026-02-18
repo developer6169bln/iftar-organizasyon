@@ -5,6 +5,16 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { getKnownCategoryKeys, getCategoryLabel } from '@/lib/guestCategory'
+import { getAuthHeaders } from '@/lib/authClient'
+
+/** Fetch mit Auth (Cookie + Bearer) für zuverlässige Session. */
+function fetchAuth(url: string, init?: RequestInit) {
+  return fetch(url, {
+    ...init,
+    credentials: 'include',
+    headers: { ...getAuthHeaders(), ...init?.headers },
+  })
+}
 
 function sanitizePdfText(s: string): string {
   return (s || '').replace(/[İıŞşĞğÜüÖöÇç]/g, (c) => ({ İ: 'I', ı: 'i', Ş: 'S', ş: 's', Ğ: 'G', ğ: 'g', Ü: 'U', ü: 'u', Ö: 'O', ö: 'o', Ç: 'C', ç: 'c' }[c] ?? c))
@@ -256,7 +266,7 @@ export default function InvitationsPage() {
       if (!evId) {
         const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
         const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
-        const res = await fetch(eventsUrl)
+        const res = await fetchAuth(eventsUrl)
         if (res.ok) {
           const eventData = await res.json()
           const event = Array.isArray(eventData) ? eventData[0] : eventData
@@ -333,7 +343,7 @@ export default function InvitationsPage() {
       setLoading(true)
       const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
       const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
-      const eventsRes = await fetch(eventsUrl)
+      const eventsRes = await fetchAuth(eventsUrl)
       if (eventsRes.ok) {
         const eventData = await eventsRes.json()
         let event = Array.isArray(eventData) ? (eventData.length > 0 ? eventData[0] : null) : eventData
@@ -372,7 +382,7 @@ export default function InvitationsPage() {
 
   const loadGuests = async (evId: string) => {
     try {
-      const response = await fetch(`/api/guests?eventId=${evId}`)
+      const response = await fetchAuth(`/api/guests?eventId=${evId}`)
       if (response.ok) {
         const data = await response.json()
         setGuests(data.filter((g: any) => getGuestDisplayEmail(g))) // Gäste mit E-Mail (guest.email oder E-Mail kurumsal/privat)
@@ -385,7 +395,7 @@ export default function InvitationsPage() {
   const loadInvitations = async (evId: string) => {
     if (!evId) return
     try {
-      const response = await fetch(`/api/invitations/list?eventId=${evId}`)
+      const response = await fetchAuth(`/api/invitations/list?eventId=${evId}`)
       const data = await response.json().catch(() => [])
       setInvitations(response.ok && Array.isArray(data) ? data : [])
     } catch (error) {
@@ -396,7 +406,7 @@ export default function InvitationsPage() {
 
   const loadTemplates = async () => {
     try {
-      const response = await fetch('/api/email-templates')
+      const response = await fetchAuth('/api/email-templates')
       if (response.ok) {
         const data = await response.json()
         setTemplates(data)
@@ -413,7 +423,7 @@ export default function InvitationsPage() {
 
   const loadEmailConfigs = async () => {
     try {
-      const response = await fetch('/api/email-config')
+      const response = await fetchAuth('/api/email-config')
       if (response.ok) {
         const data = await response.json()
         setEmailConfigs(data)
@@ -1060,7 +1070,7 @@ export default function InvitationsPage() {
       try {
         const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
         const eventsUrl = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
-        const eventsRes = await fetch(eventsUrl)
+        const eventsRes = await fetchAuth(eventsUrl)
         if (!eventsRes.ok) {
           throw new Error('Fehler beim Laden der Events')
         }
@@ -1432,6 +1442,47 @@ export default function InvitationsPage() {
     } catch (error) {
       console.error('Fehler beim Speichern:', error)
       alert('Fehler beim Speichern')
+    }
+  }
+
+  const handleDeleteGuest = async (guestId: string, guestName?: string) => {
+    if (!confirm(`Gast "${guestName || 'unbekannt'}" und zugehörige Einladung wirklich löschen?`)) return
+    try {
+      const response = await fetch(`/api/guests?id=${encodeURIComponent(guestId)}`, { method: 'DELETE' })
+      if (response.ok) {
+        setInvitations(invitations.filter((inv) => inv.guestId !== guestId))
+        setGuests(guests.filter((g) => g.id !== guestId))
+        setSelectedInvitations((prev) => prev.filter((id) => invitations.find((inv) => inv.id === id)?.guestId !== guestId))
+      } else {
+        const err = await response.json()
+        alert('Fehler beim Löschen: ' + (err.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error)
+      alert('Fehler beim Löschen')
+    }
+  }
+
+  const handleBulkDeleteGuests = async () => {
+    if (selectedInvitations.length === 0 || !eventId) return
+    const guestIds = [...new Set(selectedInvitations.map((id) => invitations.find((inv) => inv.id === id)?.guestId).filter(Boolean) as string[])]
+    if (guestIds.length === 0) return
+    if (!confirm(`Wirklich ${guestIds.length} Gast/Gäste und zugehörige Einladungen löschen?`)) return
+    try {
+      let failed = 0
+      for (const gid of guestIds) {
+        const res = await fetch(`/api/guests?id=${encodeURIComponent(gid)}`, { method: 'DELETE' })
+        if (!res.ok) failed++
+      }
+      if (failed > 0) {
+        alert(`${guestIds.length - failed} gelöscht, ${failed} fehlgeschlagen.`)
+      }
+      setSelectedInvitations([])
+      await loadInvitations(eventId)
+      setGuests(guests.filter((g) => !guestIds.includes(g.id)))
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error)
+      alert('Fehler beim Löschen')
     }
   }
 
@@ -2224,6 +2275,12 @@ export default function InvitationsPage() {
                       {resendSending ? 'Wird gesendet...' : 'Erneut senden'}
                     </button>
                     <button
+                      onClick={handleBulkDeleteGuests}
+                      className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+                    >
+                      Ausgewählte löschen
+                    </button>
+                    <button
                       onClick={() => setSelectedInvitations([])}
                       className="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300"
                     >
@@ -2387,12 +2444,15 @@ export default function InvitationsPage() {
                         )}
                       </span>
                     </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Aktionen
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={24} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={25} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -2829,6 +2889,16 @@ export default function InvitationsPage() {
                         ) : (
                           getGuestBemerkungen(invitation.guest) || <span className="text-gray-400 italic">–</span>
                         )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGuest(invitation.guestId, invitation.guest?.name)}
+                          className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+                          title="Gast und Einladung löschen"
+                        >
+                          Löschen
+                        </button>
                       </td>
                     </tr>
                     )

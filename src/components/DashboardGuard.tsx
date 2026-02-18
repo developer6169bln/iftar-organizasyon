@@ -27,6 +27,7 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
   const pathname = usePathname()
   const router = useRouter()
   const [allowed, setAllowed] = useState<boolean | null>(null)
+  const [checkError, setCheckError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!pathname?.startsWith('/dashboard')) {
@@ -34,7 +35,8 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
       return
     }
 
-    const check = async () => {
+    const check = async (retryCount = 0) => {
+      setCheckError(null)
       const token =
         typeof document !== 'undefined' &&
         (document.cookie.match(/auth-token=([^;]+)/)?.[1] || localStorage.getItem('auth-token'))
@@ -52,9 +54,20 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
           cache: 'no-store',
           headers: getAuthHeaders(),
         })
-        if (!res.ok) {
+        // Nur bei 401 (nicht angemeldet) ausloggen – nicht bei 500 oder Netzwerkfehlern
+        if (res.status === 401) {
           router.replace('/login')
           setAllowed(false)
+          return
+        }
+        if (!res.ok) {
+          // Bei 500/Netzwerk: einmal automatisch erneut versuchen
+          if (retryCount < 1) {
+            await new Promise((r) => setTimeout(r, 1500))
+            return check(retryCount + 1)
+          }
+          setCheckError('Verbindungsfehler. Bitte erneut versuchen.')
+          setAllowed(null)
           return
         }
         const data = await res.json()
@@ -112,12 +125,17 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
 
         setAllowed(true)
       } catch {
-        router.replace('/login')
-        setAllowed(false)
+        // Netzwerkfehler etc. – einmal automatisch erneut versuchen, dann Fehler anzeigen
+        if (retryCount < 1) {
+          await new Promise((r) => setTimeout(r, 1500))
+          return check(retryCount + 1)
+        }
+        setCheckError('Verbindungsfehler. Bitte erneut versuchen.')
+        setAllowed(null)
       }
     }
 
-    check()
+    check(0)
     const onProjectChange = () => check()
     if (typeof window !== 'undefined') {
       window.addEventListener('dashboard-project-changed', onProjectChange)
@@ -128,8 +146,17 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
   // Während Prüfung: nichts anzeigen oder kurzer Ladezustand
   if (allowed === null) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-gray-500">Zugriff wird geprüft…</p>
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4">
+        <p className="text-gray-500">{checkError || 'Zugriff wird geprüft…'}</p>
+        {checkError && (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+          >
+            Erneut versuchen
+          </button>
+        )}
       </div>
     )
   }
