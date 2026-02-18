@@ -1329,6 +1329,11 @@ export default function InvitationsPage() {
         body.additionalData = JSON.stringify({ ...ad, 'Anrede 2': editingValue.trim() })
       } else if (field === 'guestEmail') {
         body.email = editingValue.trim() || null
+      } else if (field === 'guestPhone') {
+        body.phone = editingValue.trim() || null
+      } else if (field === 'guestNachname') {
+        const ad = parseAdditionalData(invitation.guest)
+        body.additionalData = JSON.stringify({ ...ad, Nachname: editingValue.trim() })
       } else if (field === 'guestBemerkungen') {
         body.notes = editingValue.trim() || null
       }
@@ -2314,6 +2319,9 @@ export default function InvitationsPage() {
                       Vorname
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Nachname
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Staat/Institution
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
@@ -2384,7 +2392,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={23} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={24} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -2470,6 +2478,16 @@ export default function InvitationsPage() {
                       </td>
                       <td
                         className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestNachname', getGuestNachname(invitation.guest))}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestNachname' ? (
+                          renderEditableInput(invitation.id, 'guestNachname')
+                        ) : (
+                          getGuestNachname(invitation.guest) || invitation.guest?.name || <span className="text-gray-400 italic">–</span>
+                        )}
+                      </td>
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
                         onClick={() => handleCellEdit(invitation.id, 'guestStaatInstitution', getGuestStaatInstitution(invitation.guest))}
                       >
                         {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestStaatInstitution' ? (
@@ -2498,8 +2516,15 @@ export default function InvitationsPage() {
                           getGuestDisplayEmail(invitation.guest) || <span className="text-gray-400 italic">–</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                        {guestPhone || <span className="text-gray-400">–</span>}
+                      <td
+                        className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 cursor-pointer hover:bg-gray-50"
+                        onClick={() => handleCellEdit(invitation.id, 'guestPhone', guestPhone)}
+                      >
+                        {editingCell?.invitationId === invitation.id && editingCell?.field === 'guestPhone' ? (
+                          renderEditableInput(invitation.id, 'guestPhone')
+                        ) : (
+                          guestPhone || <span className="text-gray-400 italic">–</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <select
