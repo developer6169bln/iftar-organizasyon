@@ -236,6 +236,18 @@ export default function InvitationsPage() {
     }
   }, [])
 
+  // Lade Gäste, wenn Tab "send" aktiviert wird (Lazy Loading)
+  useEffect(() => {
+    if (activeTab !== 'send' || !eventId) return
+    loadGuests(eventId)
+  }, [activeTab, eventId])
+
+  // Lade E-Mail-Konfigurationen, wenn Tab "config" aktiviert wird (Lazy Loading)
+  useEffect(() => {
+    if (activeTab !== 'config') return
+    loadEmailConfigs()
+  }, [activeTab])
+
   // Lade Einladungen neu, wenn Tab "list" aktiviert wird (Event ggf. nachladen)
   useEffect(() => {
     if (activeTab !== 'list') return
@@ -259,13 +271,13 @@ export default function InvitationsPage() {
     ensureEventAndLoadList()
   }, [activeTab, eventId])
 
-  // Polling: Lade Einladungen alle 5 Sekunden, wenn Tab "list" aktiv ist
+  // Polling: Lade Einladungen alle 30 Sekunden, wenn Tab "list" aktiv ist (reduziert für Performance)
   useEffect(() => {
     if (activeTab !== 'list' || !eventId) return
 
     const interval = setInterval(() => {
       loadInvitations(eventId)
-    }, 5000) // Alle 5 Sekunden
+    }, 30000) // Alle 30 Sekunden
 
     return () => clearInterval(interval)
   }, [activeTab, eventId])
@@ -307,8 +319,8 @@ export default function InvitationsPage() {
       }
     }
 
-    // Prüfe alle 2 Sekunden auf Updates
-    const updateCheckInterval = setInterval(checkForUpdates, 2000)
+    // Prüfe alle 10 Sekunden auf Updates (reduziert für Performance)
+    const updateCheckInterval = setInterval(checkForUpdates, 10000)
 
     return () => {
       window.removeEventListener('invitation-updated', handleInvitationUpdate)
@@ -329,14 +341,13 @@ export default function InvitationsPage() {
           setEventId(event.id)
           setCurrentEvent(event)
           setMaxAccompanyingGuestsInput(String(event.maxAccompanyingGuests ?? 5))
-          await Promise.all([
-            loadGuests(event.id),
-            loadInvitations(event.id),
-            loadTemplates(),
-            loadEmailConfigs(),
-          ])
+          // Nur Events + Templates initial laden (schneller Start)
+          await loadTemplates()
+          // Gäste und Einladungen lazy bei Tab-Wechsel
+          if (activeTab === 'send') await loadGuests(event.id)
+          if (activeTab === 'list') await loadInvitations(event.id)
+          if (activeTab === 'config') await loadEmailConfigs()
         } else {
-          // Kein Event für dieses Projekt: Einladungsliste und Gäste leeren, damit keine alten Daten angezeigt werden
           setEventId('')
           setCurrentEvent(null)
           setGuests([])
