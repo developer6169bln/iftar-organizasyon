@@ -24,6 +24,10 @@ export async function PUT(request: NextRequest) {
     if (updateData.sentByPost !== undefined) {
       allowedFields.sentByPost = updateData.sentByPost === true || updateData.sentByPost === 'true'
     }
+
+    if (updateData.whatsappSentAt !== undefined) {
+      allowedFields.whatsappSentAt = updateData.whatsappSentAt ? new Date(updateData.whatsappSentAt) : null
+    }
     
     if (updateData.openedAt !== undefined) {
       allowedFields.openedAt = updateData.openedAt ? new Date(updateData.openedAt) : null

@@ -86,6 +86,41 @@ function getGuestStaatInstitution(guest: any): string {
   return ''
 }
 
+/** Telefon aus guest.phone oder additionalData (Telefon, Phone, Mobil). */
+function getGuestDisplayPhone(guest: any): string {
+  if (!guest) return ''
+  const main = guest.phone && String(guest.phone).trim()
+  if (main) return main
+  const add = parseAdditionalData(guest)
+  return getFromAdditional(add, ['Telefon', 'telefon', 'Phone', 'phone', 'Mobil', 'mobil'])
+}
+
+function getWhatsAppMessage(qrPdfUrl: string): string {
+  return `UID BERLIN IFTAR HATIRLATMA VE GİRİŞ KODUNUZ:
+
+Tarih: 27 Şubat 2026, Cuma
+
+🕰 Giriş: 16:30
+
+🕰 Program Başlangıcı: 17:00
+
+🕰 İftar Saati: 17:47
+
+📍 Yer: Moon Events – Festsaal
+Oranienstraße 140–142
+10969 Berlin
+
+Giriş kodunuz (QR-Code): ${qrPdfUrl}`
+}
+
+/** Telefonnummer für wa.me: nur Ziffern, führende 0 durch 49 ersetzen. */
+function phoneForWhatsApp(phone: string): string {
+  const raw = (phone || '').replace(/\D/g, '')
+  if (raw.startsWith('49') && raw.length > 10) return raw
+  if (raw.startsWith('0')) return '49' + raw.slice(1)
+  return '49' + raw
+}
+
 /** Anrede 2 aus guest.additionalData (Gästeliste-Spalte „Anrede 2“). */
 function getGuestAnrede2(guest: any): string {
   if (!guest) return ''
@@ -1330,6 +1365,8 @@ export default function InvitationsPage() {
         if (checked) {
           // response wird bereits auf DECLINED gesetzt, das reicht
         }
+      } else if (field === 'whatsappSentAt') {
+        updateData.whatsappSentAt = checked ? new Date().toISOString() : null
       }
 
       const response = await fetch('/api/invitations/update', {
@@ -2197,6 +2234,12 @@ export default function InvitationsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      WA
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
+                      Angerufen/gesendet WA
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       <input
                         type="checkbox"
                         checked={sortedInvitations.length > 0 && selectedInvitations.length === sortedInvitations.length}
@@ -2229,6 +2272,9 @@ export default function InvitationsPage() {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Email
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
+                      Telefon
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">
                       Template
@@ -2289,7 +2335,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={20} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={23} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -2299,8 +2345,37 @@ export default function InvitationsPage() {
                       </td>
                     </tr>
                   ) : (
-                    sortedInvitations.map((invitation) => (
+                    sortedInvitations.map((invitation) => {
+                    const guestPhone = getGuestDisplayPhone(invitation.guest)
+                    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+                    const qrPdfUrl = invitation.acceptToken ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf` : ''
+                    const waUrl = guestPhone ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl))}` : null
+                    return (
                     <tr key={invitation.id}>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
+                        {waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+                            title="QR-Code per WhatsApp senden"
+                          >
+                            WhatsApp
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-xs">–</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!invitation.whatsappSentAt}
+                          onChange={(e) => handleCheckboxChange(invitation.id, 'whatsappSentAt', e.target.checked)}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          title="Angerufen / QR per WhatsApp gesendet"
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
                         <input
                           type="checkbox"
@@ -2373,6 +2448,9 @@ export default function InvitationsPage() {
                         ) : (
                           getGuestDisplayEmail(invitation.guest) || <span className="text-gray-400 italic">–</span>
                         )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                        {guestPhone || <span className="text-gray-400">–</span>}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <select
@@ -2679,8 +2757,8 @@ export default function InvitationsPage() {
                         )}
                       </td>
                     </tr>
-                    ))
-                  )}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -636,6 +636,7 @@ model Invitation {
   trackingToken String    @unique // Token für Email-Tracking
   sentAt        DateTime? // Wann wurde Email gesendet
   sentByPost    Boolean   @default(false) // Wurde per Post gesendet
+  whatsappSentAt DateTime? // Angerufen / QR per WhatsApp gesendet
   openedAt      DateTime? // Wann wurde Email geöffnet (Tracking)
   respondedAt   DateTime? // Wann wurde geantwortet
   response      String? // ACCEPTED, DECLINED, PENDING
