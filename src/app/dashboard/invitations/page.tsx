@@ -157,6 +157,7 @@ export default function InvitationsPage() {
   const [listSortBy, setListSortBy] = useState<'bemerkungen' | null>(null)
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc')
   const [listResponseFilter, setListResponseFilter] = useState<'all' | 'ACCEPTED' | 'DECLINED' | 'PENDING'>('all')
+  const [listSearchQuery, setListSearchQuery] = useState('')
   const [editingTemplate, setEditingTemplate] = useState<any>(null)
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
   const [templateForm, setTemplateForm] = useState({
@@ -1597,12 +1598,29 @@ export default function InvitationsPage() {
   }
 
   const listFilteredInvitations = useMemo(() => {
-    if (listResponseFilter === 'all') return invitations
-    return invitations.filter((i: any) => {
-      const r = i.response || 'PENDING'
-      return r === listResponseFilter
-    })
-  }, [invitations, listResponseFilter])
+    let list = invitations
+    if (listResponseFilter !== 'all') {
+      list = list.filter((i: any) => {
+        const r = i.response || 'PENDING'
+        return r === listResponseFilter
+      })
+    }
+    const q = listSearchQuery.trim().toLowerCase()
+    if (q) {
+      list = list.filter((i: any) => {
+        const name = (i.guest?.name || '').toLowerCase()
+        const vorname = getGuestVorname(i.guest).toLowerCase()
+        const nachname = getGuestNachname(i.guest).toLowerCase()
+        const email = getGuestDisplayEmail(i.guest).toLowerCase()
+        const phone = getGuestDisplayPhone(i.guest).toLowerCase()
+        const staat = getGuestStaatInstitution(i.guest).toLowerCase()
+        const bemerkungen = getGuestBemerkungen(i.guest).toLowerCase()
+        return name.includes(q) || vorname.includes(q) || nachname.includes(q) ||
+          email.includes(q) || phone.includes(q) || staat.includes(q) || bemerkungen.includes(q)
+      })
+    }
+    return list
+  }, [invitations, listResponseFilter, listSearchQuery])
 
   const sortedInvitations = useMemo(() => {
     const base = listFilteredInvitations
@@ -1938,14 +1956,21 @@ export default function InvitationsPage() {
                 <h2 className="text-xl font-semibold">Einladungsliste</h2>
                 <p className="mt-1 text-sm text-gray-600">
                   Gesamtanzahl: <span className="font-medium text-gray-900">{invitations.length}</span> Gäste
-                  {listResponseFilter !== 'all' && (
+                  {(listResponseFilter !== 'all' || listSearchQuery.trim()) && (
                     <span className="ml-2 text-gray-500">
                       (angezeigt: {listFilteredInvitations.length})
                     </span>
                   )}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="search"
+                  placeholder="Suchen (Name, E-Mail, Telefon, Institution…)"
+                  value={listSearchQuery}
+                  onChange={(e) => setListSearchQuery(e.target.value)}
+                  className="min-w-[220px] rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
                 <button
                   type="button"
                   onClick={async () => {
