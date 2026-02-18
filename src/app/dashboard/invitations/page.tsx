@@ -123,10 +123,17 @@ Oranienstraße 140–142
 Ihr QR-Code (PDF zum Download): ${qrPdfUrl}`
 }
 
-/** Telefonnummer für wa.me: nur Ziffern, führende 0 durch 49 ersetzen. */
+/** Telefonnummer für wa.me: Ziffern für WhatsApp-Link. Ausländische Nummern (+/00) nicht mit 49 versehen. */
 function phoneForWhatsApp(phone: string): string {
-  const raw = (phone || '').replace(/\D/g, '')
-  if (raw.startsWith('49') && raw.length > 10) return raw
+  const trimmed = (phone || '').trim()
+  const raw = trimmed.replace(/\D/g, '')
+  if (raw.length === 0) return ''
+  // Ausländische Nummer: + oder 00 am Anfang → Ländervorwahl bereits enthalten
+  if (trimmed.startsWith('+') || trimmed.startsWith('00')) {
+    return raw.replace(/^0+/, '') // 0049... → 49..., +90... → 90...
+  }
+  // Deutsche Nummer: 0 durch 49 ersetzen
+  if (raw.startsWith('49') && raw.length >= 10) return raw
   if (raw.startsWith('0')) return '49' + raw.slice(1)
   return '49' + raw
 }
@@ -1340,7 +1347,11 @@ export default function InvitationsPage() {
       } else if (field === 'guestEmail') {
         body.email = editingValue.trim() || null
       } else if (field === 'guestPhone') {
-        body.phone = editingValue.trim() || null
+        const phoneVal = editingValue.trim() || null
+        body.phone = phoneVal
+        // Auch additionalData.Telefon aktualisieren für Gästeliste-Sync
+        const ad = parseAdditionalData(invitation.guest)
+        body.additionalData = JSON.stringify({ ...ad, Telefon: phoneVal })
       } else if (field === 'guestNachname') {
         const ad = parseAdditionalData(invitation.guest)
         body.additionalData = JSON.stringify({ ...ad, Nachname: editingValue.trim() })
