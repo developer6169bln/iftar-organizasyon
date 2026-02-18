@@ -223,6 +223,7 @@ export default function InvitationsPage() {
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
+  const [regeneratingQrId, setRegeneratingQrId] = useState<string | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1471,6 +1472,30 @@ export default function InvitationsPage() {
     } catch (error) {
       console.error('Fehler beim Löschen:', error)
       alert('Fehler beim Löschen')
+    }
+  }
+
+  const handleRegenerateQr = async (invitationId: string) => {
+    if (!confirm('Neuen QR-Code generieren? Der alte Link/QR-Code funktioniert danach nicht mehr.')) return
+    setRegeneratingQrId(invitationId)
+    try {
+      const res = await fetchAuth('/api/invitations/regenerate-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setInvitations(invitations.map((inv) => (inv.id === invitationId ? updated : inv)))
+      } else {
+        const err = await res.json()
+        alert('Fehler: ' + (err.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler beim Regenerieren:', error)
+      alert('Fehler beim Regenerieren des QR-Codes')
+    } finally {
+      setRegeneratingQrId(null)
     }
   }
 
@@ -2902,14 +2927,25 @@ export default function InvitationsPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGuest(invitation.guestId, invitation.guest?.name)}
-                          className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
-                          title="Gast und Einladung löschen"
-                        >
-                          Löschen
-                        </button>
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleRegenerateQr(invitation.id)}
+                            disabled={regeneratingQrId === invitation.id}
+                            className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
+                            title="Neuen QR-Code generieren (alter Link wird ungültig)"
+                          >
+                            {regeneratingQrId === invitation.id ? '…' : 'Neuen QR-Code'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGuest(invitation.guestId, invitation.guest?.name)}
+                            className="rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200"
+                            title="Gast und Einladung löschen"
+                          >
+                            Löschen
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     )
