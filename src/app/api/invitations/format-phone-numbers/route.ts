@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 function formatToInternational(number: string | null | undefined): string | null {
-  if (!number || typeof number !== 'string') return number
+  if (!number || typeof number !== 'string') return null
   const raw = (number as string).replace(/[^\d+]/g, '')
 
   if (raw.startsWith('+49')) return number
