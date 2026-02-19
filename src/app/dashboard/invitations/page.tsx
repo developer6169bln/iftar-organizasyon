@@ -228,6 +228,8 @@ export default function InvitationsPage() {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
   const [regeneratingQrId, setRegeneratingQrId] = useState<string | null>(null)
+  const [acceptingOnBehalfId, setAcceptingOnBehalfId] = useState<string | null>(null)
+  const [verifyingQrId, setVerifyingQrId] = useState<string | null>(null)
 
   useEffect(() => {
     const getCookie = (name: string) => {
@@ -1479,6 +1481,68 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleWhatsAppAccepted = async (invitation: any) => {
+    const guestPhone = getGuestDisplayPhone(invitation.guest)
+    if (!guestPhone) {
+      alert('Keine Telefonnummer hinterlegt.')
+      return
+    }
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+    const qrPdfUrl = invitation.acceptToken
+      ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf`
+      : ''
+    if (!qrPdfUrl) {
+      alert('QR-Code-Link nicht verfügbar.')
+      return
+    }
+    setVerifyingQrId(invitation.id)
+    try {
+      const res = await fetchAuth(qrPdfUrl)
+      if (res.ok) {
+        const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl, true))}`
+        window.open(waUrl, '_blank')
+      } else {
+        alert('QR-Code nicht verfügbar. Bitte „Neuen QR-Code generieren“ nutzen.')
+      }
+    } catch {
+      alert('Link-Prüfung fehlgeschlagen. Bitte „Neuen QR-Code generieren“ nutzen.')
+    } finally {
+      setVerifyingQrId(null)
+    }
+  }
+
+  const handleQrErstellenUndWaSenden = async (invitation: any) => {
+    const guestPhone = getGuestDisplayPhone(invitation.guest)
+    if (!guestPhone) {
+      alert('Keine Telefonnummer hinterlegt. Bitte zuerst Telefonnummer eintragen.')
+      return
+    }
+    setAcceptingOnBehalfId(invitation.id)
+    try {
+      const res = await fetchAuth('/api/invitations/accept-on-behalf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId: invitation.id }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        const qrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
+        const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl, true))}`
+        window.open(waUrl, '_blank')
+      } else {
+        const err = await res.json()
+        alert('Fehler: ' + (err.error || 'Unbekannter Fehler'))
+      }
+    } catch (error) {
+      console.error('Fehler:', error)
+      alert('Fehler beim Erstellen des QR-Codes')
+    } finally {
+      setAcceptingOnBehalfId(null)
+    }
+  }
+
   const handleRegenerateQr = async (invitationId: string) => {
     if (!confirm('Neuen QR-Code generieren? Der alte Link/QR-Code funktioniert danach nicht mehr.')) return
     setRegeneratingQrId(invitationId)
@@ -2504,27 +2568,31 @@ export default function InvitationsPage() {
                   ) : (
                     paginatedInvitations.map((invitation) => {
                     const guestPhone = getGuestDisplayPhone(invitation.guest)
-                    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
                     const isAccepted = invitation.response === 'ACCEPTED'
-                    const linkUrl = invitation.acceptToken
-                      ? isAccepted
-                        ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf`
-                        : `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}`
-                      : ''
-                    const waUrl = guestPhone && linkUrl ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(linkUrl, isAccepted))}` : null
+                    const isPending = invitation.response === 'PENDING' || !invitation.response
                     return (
                     <tr key={invitation.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
-                        {waUrl ? (
-                          <a
-                            href={waUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700"
-                            title="QR-Code-Link per WhatsApp senden (Empfänger kann PDF herunterladen)"
+                        {isAccepted && guestPhone ? (
+                          <button
+                            type="button"
+                            onClick={() => handleWhatsAppAccepted(invitation)}
+                            disabled={verifyingQrId === invitation.id}
+                            className="inline-flex items-center justify-center rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                            title="Eventinfo mit QR-Code per WhatsApp senden (Link wird vorher geprüft)"
                           >
-                            WhatsApp
-                          </a>
+                            {verifyingQrId === invitation.id ? '…' : 'WhatsApp'}
+                          </button>
+                        ) : isPending && guestPhone ? (
+                          <button
+                            type="button"
+                            onClick={() => handleQrErstellenUndWaSenden(invitation)}
+                            disabled={acceptingOnBehalfId === invitation.id}
+                            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                            title="QR-Code erstellen und per WhatsApp mit Info-Text senden"
+                          >
+                            {acceptingOnBehalfId === invitation.id ? '…' : 'QR erstellen + WA'}
+                          </button>
                         ) : (
                           <span className="text-gray-400 text-xs">–</span>
                         )}
