@@ -105,8 +105,8 @@ function getGuestDisplayPhone(guest: any): string {
   return getFromAdditional(add, ['Telefon', 'telefon', 'Phone', 'phone', 'Mobil', 'mobil'])
 }
 
-function getWhatsAppMessage(qrPdfUrl: string): string {
-  return `UID BERLIN IFTAR HATIRLATMA VE GİRİŞ KODUNUZ:
+function getWhatsAppMessage(linkUrl: string, isAccepted: boolean): string {
+  const base = `UID BERLIN IFTAR HATIRLATMA VE GİRİŞ KODUNUZ:
 
 Tarih: 27 Şubat 2026, Cuma
 
@@ -120,7 +120,11 @@ Tarih: 27 Şubat 2026, Cuma
 Oranienstraße 140–142
 10969 Berlin
 
-Ihr QR-Code (PDF zum Download): ${qrPdfUrl}`
+`
+  if (isAccepted) {
+    return base + `Ihr QR-Code (PDF zum Download): ${linkUrl}`
+  }
+  return base + `Bitte bestätigen Sie Ihre Teilnahme, um Ihren QR-Code zu erhalten: ${linkUrl}`
 }
 
 /** Telefonnummer für wa.me: Ziffern für WhatsApp-Link. Ausländische Nummern (+/00) nicht mit 49 versehen. */
@@ -2501,8 +2505,13 @@ export default function InvitationsPage() {
                     paginatedInvitations.map((invitation) => {
                     const guestPhone = getGuestDisplayPhone(invitation.guest)
                     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-                    const qrPdfUrl = invitation.acceptToken ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf` : ''
-                    const waUrl = guestPhone ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl))}` : null
+                    const isAccepted = invitation.response === 'ACCEPTED'
+                    const linkUrl = invitation.acceptToken
+                      ? isAccepted
+                        ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf`
+                        : `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}`
+                      : ''
+                    const waUrl = guestPhone && linkUrl ? `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(linkUrl, isAccepted))}` : null
                     return (
                     <tr key={invitation.id}>
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
