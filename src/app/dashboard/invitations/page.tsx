@@ -1502,10 +1502,52 @@ export default function InvitationsPage() {
         const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl, true))}`
         window.open(waUrl, '_blank')
       } else {
-        alert('QR-Code nicht verfügbar. Bitte „Neuen QR-Code generieren“ nutzen.')
+        const regenerate = confirm(
+          'QR-Code-Link funktioniert nicht (404). Neuen QR-Code erzeugen und per WhatsApp senden?'
+        )
+        if (regenerate) {
+          const regRes = await fetchAuth('/api/invitations/regenerate-qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invitationId: invitation.id }),
+          })
+          if (regRes.ok) {
+            const updated = await regRes.json()
+            setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+            const newQrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
+            const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(newQrPdfUrl, true))}`
+            window.open(waUrl, '_blank')
+          } else {
+            const err = await regRes.json()
+            alert('Fehler beim Erzeugen: ' + (err.error || 'Unbekannter Fehler'))
+          }
+        }
       }
     } catch {
-      alert('Link-Prüfung fehlgeschlagen. Bitte „Neuen QR-Code generieren“ nutzen.')
+      const regenerate = confirm(
+        'Link-Prüfung fehlgeschlagen. Neuen QR-Code erzeugen und per WhatsApp senden?'
+      )
+      if (regenerate) {
+        try {
+          const regRes = await fetchAuth('/api/invitations/regenerate-qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invitationId: invitation.id }),
+          })
+          if (regRes.ok) {
+            const updated = await regRes.json()
+            setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+            const newQrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
+            const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(newQrPdfUrl, true))}`
+            window.open(waUrl, '_blank')
+          } else {
+            const err = await regRes.json()
+            alert('Fehler beim Erzeugen: ' + (err.error || 'Unbekannter Fehler'))
+          }
+        } catch (e) {
+          alert('Fehler beim Erzeugen des QR-Codes')
+        }
+      }
     } finally {
       setVerifyingQrId(null)
     }
