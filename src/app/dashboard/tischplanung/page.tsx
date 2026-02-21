@@ -102,6 +102,7 @@ export default function TischplanungPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [nextTableNumber, setNextTableNumber] = useState(1)
@@ -258,6 +259,37 @@ export default function TischplanungPage() {
       alert('Speichern fehlgeschlagen')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleResetAll = async () => {
+    if (!eventId) return
+    if (
+      !confirm(
+        'Alle Tische und Podiums löschen? Der Grundriss bleibt erhalten. Diese Aktion kann nicht rückgängig gemacht werden.'
+      )
+    )
+      return
+    setResetting(true)
+    try {
+      const res = await fetch('/api/table-plan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          floorPlanUrl: floorPlanUrl ?? undefined,
+          planData: { tables: [], podiums: [] },
+        }),
+      })
+      if (!res.ok) throw new Error('Reset fehlgeschlagen')
+      setPlanData({ tables: [], podiums: [] })
+      setNextTableNumber(1)
+      setSelectedId(null)
+    } catch (e) {
+      console.error(e)
+      alert('Reset fehlgeschlagen')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -476,6 +508,14 @@ export default function TischplanungPage() {
             <h1 className="text-2xl font-bold text-gray-900">Tischplanung</h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetAll}
+              disabled={resetting || saving}
+              className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+              title="Alle Tische und Podiums löschen, von null anfangen"
+            >
+              {resetting ? 'Wird gelöscht…' : 'Resetten / Alle löschen'}
+            </button>
             <button
               onClick={savePlan}
               disabled={saving}
