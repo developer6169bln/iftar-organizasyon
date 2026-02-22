@@ -262,6 +262,7 @@ export default function RegistrierungenPage() {
   const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
   const [removingDuplicates, setRemovingDuplicates] = useState(false)
   const [syncingToInvitations, setSyncingToInvitations] = useState(false)
+  const [syncingFromInvitations, setSyncingFromInvitations] = useState(false)
   const [guests, setGuests] = useState<GuestEntry[]>([])
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
@@ -1091,6 +1092,37 @@ export default function RegistrierungenPage() {
                 title="Teilnahme bestätigt in Formular-Ergebnissen → Einladungsliste als Zusage markieren"
               >
                 {syncingToInvitations ? 'Abgleich läuft…' : '↔ Mit Einladungsliste abgleichen'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!selectedEventId) {
+                    alert('Bitte wählen Sie ein Ziel-Event aus.')
+                    return
+                  }
+                  if (!confirm('Zusagen und Absagen aus der Einladungsliste in die Ergebnisse der Anmeldung übernehmen?\n\nAnmeldungen werden per Name zugeordnet; Teilnahme (Ja/Nein) wird aus der Einladungsliste gesetzt.')) return
+                  setSyncingFromInvitations(true)
+                  try {
+                    const res = await fetch('/api/registrations/sync-from-invitations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ eventId: selectedEventId }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error || 'Übernahme fehlgeschlagen')
+                    loadRegistrations()
+                    alert(data.message || `${data.updated ?? 0} Anmeldung(en) aktualisiert.`)
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Übernahme fehlgeschlagen')
+                  } finally {
+                    setSyncingFromInvitations(false)
+                  }
+                }}
+                disabled={!selectedEventId || syncingFromInvitations}
+                className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Zusagen/Absagen aus Einladungsliste in die Spalte Teilnahme (Ergebnisse der Anmeldung) zurückspielen"
+              >
+                {syncingFromInvitations ? 'Übernahme läuft…' : '↩ Zusagen/Absagen aus Einladungsliste wiederherstellen'}
               </button>
               <span className="text-sm text-gray-500">
                 Doppelte Namen werden übersprungen.
