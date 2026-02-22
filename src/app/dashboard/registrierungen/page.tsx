@@ -68,6 +68,31 @@ function getGuestVornameNachname(guest: GuestEntry): { vorname: string; nachname
   return { vorname, nachname }
 }
 
+/** Telefonnummer für wa.me (nur Ziffern, 49 für DE). */
+function phoneForWhatsApp(phone: string | null): string {
+  const trimmed = (phone || '').trim()
+  const raw = trimmed.replace(/\D/g, '')
+  if (raw.length === 0) return ''
+  if (trimmed.startsWith('+') || trimmed.startsWith('00')) return raw.replace(/^0+/, '')
+  if (raw.startsWith('49') && raw.length >= 10) return raw
+  if (raw.startsWith('0')) return '49' + raw.slice(1)
+  return '49' + raw
+}
+
+/** Nachricht für WhatsApp: Eventinfo + Link zum QR-PDF (Gastname, QR-Code, Eventinfos). */
+function getWhatsAppPdfMessage(qrPdfUrl: string, guestName: string, eventTitle: string): string {
+  return `UID BERLIN IFTAR – Ihr Eintritts-QR-Code
+
+Gast: ${guestName}
+Veranstaltung: ${eventTitle}
+
+📅 Datum: 27.02.2026, 16:30 Uhr
+📍 Moon Events – Festsaal, Oranienstraße 140–142, 10969 Berlin
+
+Ihr persönliches PDF mit QR-Code und Eventinfos:
+${qrPdfUrl}`
+}
+
 function hasEinladungsliste(guest: GuestEntry): boolean {
   const additional = guest.additionalData
   if (!additional) return false
@@ -598,14 +623,21 @@ export default function RegistrierungenPage() {
   const handleWhatsAppShare = async (r: Registration) => {
     if (!selectedEventId) return
     const info = await fetchQrInfo(r.id)
-    if (!info?.checkInToken) {
-      alert('QR-Code konnte nicht geladen werden.')
+    if (!info?.acceptToken) {
+      alert('QR-PDF konnte nicht geladen werden.')
       return
     }
     const base = typeof window !== 'undefined' ? window.location.origin : ''
-    const qrUrl = `${base}/api/checkin/qr?t=${encodeURIComponent(info.checkInToken)}`
-    const text = `Ihr Check-in QR-Code für die Veranstaltung:\n\n${qrUrl}`
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    const qrPdfUrl = `${base}/api/invitations/accept/${encodeURIComponent(info.acceptToken)}/qr-pdf`
+    const guestName = info.fullName || [r.firstName, r.lastName].filter(Boolean).join(' ').trim()
+    const eventTitle = events.find((e) => e.id === selectedEventId)?.title || 'Veranstaltung'
+    const text = getWhatsAppPdfMessage(qrPdfUrl, guestName, eventTitle)
+    const phone = phoneForWhatsApp(r.phone)
+    if (phone) {
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
+    }
   }
 
   const renderGesamtTable = (rows: GesamtEntry[]) => {
@@ -633,6 +665,8 @@ export default function RegistrierungenPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Vorname</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Quelle</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Einladungsliste</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Zusage</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
@@ -643,7 +677,7 @@ export default function RegistrierungenPage() {
             <tbody className="divide-y divide-gray-200">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">
                     {searchQuery.trim()
                       ? 'Keine Einträge entsprechen der Suche.'
                       : filterNoQr
@@ -676,6 +710,20 @@ export default function RegistrierungenPage() {
                           </span>
                         ))}
                       </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {g.fromGuestList ? (
+                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {g.hasQr ? (
+                        <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Ja</span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{g.email || '–'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{g.phone || '–'}</td>
@@ -765,6 +813,8 @@ export default function RegistrierungenPage() {
                 {showSube && (
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Şube</th>
                 )}
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Einladungsliste</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Zusage</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
@@ -776,7 +826,7 @@ export default function RegistrierungenPage() {
             <tbody className="divide-y divide-gray-200">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={showSube ? 12 : 11} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={showSube ? 14 : 13} className="px-4 py-8 text-center text-sm text-gray-500">
                     {searchQuery.trim()
                       ? 'Keine Anmeldungen entsprechen der Suche.'
                       : noQrFilterActive
@@ -881,6 +931,20 @@ export default function RegistrierungenPage() {
                     {showSube && (
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.sube ?? '–'}</td>
                     )}
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {r.invitationSentAt ? (
+                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Ja</span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center">
+                      {r.invitationSentAt ? (
+                        <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Ja</span>
+                      ) : (
+                        <span className="text-gray-400">–</span>
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.district ?? '–'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.phone ?? '–'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{r.email}</td>

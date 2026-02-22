@@ -2525,9 +2525,6 @@ export default function InvitationsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
-                      WA
-                    </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
                       Angerufen/gesendet WA
                     </th>
                     <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">
@@ -2632,7 +2629,7 @@ export default function InvitationsPage() {
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {invitations.length === 0 ? (
                     <tr>
-                      <td colSpan={25} className="px-4 py-8 text-center text-sm text-gray-500">
+                      <td colSpan={24} className="px-4 py-8 text-center text-sm text-gray-500">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <p className="text-lg font-medium">Keine Einladungen vorhanden</p>
                           <p className="text-sm text-gray-400">
@@ -2648,31 +2645,6 @@ export default function InvitationsPage() {
                     const isPending = invitation.response === 'PENDING' || !invitation.response
                     return (
                     <tr key={invitation.id}>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-center">
-                        {isAccepted && guestPhone ? (
-                          <button
-                            type="button"
-                            onClick={() => handleWhatsAppAccepted(invitation)}
-                            disabled={verifyingQrId === invitation.id}
-                            className="inline-flex items-center justify-center rounded-lg bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                            title="Eventinfo mit QR-Code per WhatsApp senden (Link wird vorher geprüft)"
-                          >
-                            {verifyingQrId === invitation.id ? '…' : 'WhatsApp'}
-                          </button>
-                        ) : isPending && guestPhone ? (
-                          <button
-                            type="button"
-                            onClick={() => handleQrErstellenUndWaSenden(invitation)}
-                            disabled={acceptingOnBehalfId === invitation.id}
-                            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                            title="QR-Code erstellen und per WhatsApp mit Info-Text senden"
-                          >
-                            {acceptingOnBehalfId === invitation.id ? '…' : 'QR erstellen + WA'}
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 text-xs">–</span>
-                        )}
-                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-center">
                         <input
                           type="checkbox"
