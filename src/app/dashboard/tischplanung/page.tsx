@@ -325,10 +325,19 @@ export default function TischplanungPage() {
     if (!eventId) return
     setSaving(true)
     try {
+      const payload = {
+        eventId,
+        floorPlanUrl: floorPlanUrl ?? undefined,
+        planData: {
+          tables: planData.tables,
+          podiums: planData.podiums,
+          drawings: planData.drawings,
+        },
+      }
       const res = await fetch('/api/table-plan', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, planData }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('Speichern fehlgeschlagen')
     } catch (e) {
