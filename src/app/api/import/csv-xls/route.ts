@@ -107,20 +107,44 @@ export async function POST(request: NextRequest) {
       .map(normalizeKey)
       .filter((h) => h && !shouldIgnoreHeader(h))
 
-    // Beim Anhängen: bestehende Gäste laden und Set (Vorname|Nachname) aufbauen, damit keine Doppelten importiert werden
+    // Beim Anhängen: bestehende Gäste laden; Map (Vorname|Nachname) -> Gast für Doppelprüfung und Aktualisierung fehlender Daten
     const norm = (s: string) => (s ?? '').trim().toLowerCase()
-    let existingVornameNachnameKeys = new Set<string>()
+    type ExistingGuest = {
+      id: string
+      name: string
+      email: string | null
+      phone: string | null
+      title: string | null
+      organization: string | null
+      tableNumber: number | null
+      isVip: boolean
+      notes: string | null
+      additionalData: Record<string, unknown>
+    }
+    const existingByKey = new Map<string, ExistingGuest>()
     if (append) {
       const existingGuests = await prisma.guest.findMany({
         where: { eventId },
-        select: { name: true, additionalData: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          title: true,
+          organization: true,
+          tableNumber: true,
+          isVip: true,
+          notes: true,
+          additionalData: true,
+        },
       })
       for (const g of existingGuests) {
         let v = ''
         let n = ''
+        let add: Record<string, unknown> = {}
         if (g.additionalData) {
           try {
-            const add = JSON.parse(g.additionalData) as Record<string, unknown>
+            add = JSON.parse(g.additionalData) as Record<string, unknown>
             v = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
             n = String(add['Nachname'] ?? add['nachname'] ?? '').trim()
             if (!v && !n) {
@@ -141,14 +165,27 @@ export async function POST(request: NextRequest) {
           v = parts[0] ?? ''
           n = parts.slice(1).join(' ') ?? ''
         }
-        existingVornameNachnameKeys.add(`${norm(v)}|${norm(n)}`)
+        const key = `${norm(v)}|${norm(n)}`
+        if (!existingByKey.has(key)) {
+          existingByKey.set(key, {
+            id: g.id,
+            name: g.name ?? '',
+            email: g.email ?? null,
+            phone: g.phone ?? null,
+            title: g.title ?? null,
+            organization: g.organization ?? null,
+            tableNumber: g.tableNumber ?? null,
+            isVip: g.isVip ?? false,
+            notes: g.notes ?? null,
+            additionalData: add,
+          })
+        }
       }
     }
 
-    // Append: nur neue Einträge hinzufügen; sonst: alte Liste löschen und neu importieren
+    // Beim Anhängen: Doppelte aktualisieren (fehlende Daten aus Import ergänzen); neue Einträge anlegen
     const addedInThisImport = new Set<string>()
-    const skippedDuplicate = { count: 0 }
-    const created = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       if (!append) {
         await tx.invitation.deleteMany({ where: { eventId } })
         await tx.guest.deleteMany({ where: { eventId } })
@@ -156,6 +193,30 @@ export async function POST(request: NextRequest) {
 
       const batchSize = 500
       let totalCreated = 0
+      let totalUpdated = 0
+
+      /** Bestehenden Gast mit Werten aus der Import-Zeile ergänzen (nur wo in der Gästeliste noch leer) */
+      const mergeIntoExisting = (existing: ExistingGuest, rowData: {
+        name: string
+        email: string | null
+        phone: string | null
+        isVip: boolean
+        additionalData: Record<string, unknown>
+      }): { name: string; email: string | null; phone: string | null; isVip: boolean; additionalData: string } => {
+        const name = (existing.name && existing.name !== 'Unbekannt') ? existing.name : rowData.name
+        const email = (existing.email && String(existing.email).trim()) ? existing.email : (rowData.email && String(rowData.email).trim()) ? rowData.email : null
+        const phone = (existing.phone && String(existing.phone).trim()) ? existing.phone : (rowData.phone && String(rowData.phone).trim()) ? rowData.phone : null
+        const isVip = existing.isVip || rowData.isVip
+        const mergedAdd: Record<string, unknown> = { ...existing.additionalData }
+        for (const [k, v] of Object.entries(rowData.additionalData)) {
+          const existingVal = mergedAdd[k]
+          const isEmpty = existingVal === null || existingVal === undefined || String(existingVal).trim() === ''
+          if (isEmpty && v != null && String(v).trim() !== '') {
+            mergedAdd[k] = v
+          }
+        }
+        return { name, email, phone, isVip, additionalData: JSON.stringify(mergedAdd) }
+      }
 
       for (let i = 0; i < rows.length; i += batchSize) {
         const batch = rows.slice(i, i + batchSize)
@@ -168,6 +229,8 @@ export async function POST(request: NextRequest) {
           status: string
           additionalData: string
         }> = []
+        const updatesById = new Map<string, ReturnType<typeof mergeIntoExisting>>()
+
         for (const row of batch) {
           const shouldIgnoreField = (key: string): boolean => {
             const normalized = key.toLowerCase().trim()
@@ -201,7 +264,6 @@ export async function POST(request: NextRequest) {
           let nachname =
             firstNonEmpty(row, ['Nachname', 'nachname', 'Nachname ', 'LastName', 'Familienname']) ||
             firstNonEmptyByHeaderPattern(row, headers, /nachname|lastname|familienname/i)
-          // Fallback: wenn nur "Name"-Spalte vorhanden (z. B. "Ali Koc"), daraus ableiten
           if (!vorname && !nachname) {
             const nameVal =
               firstNonEmpty(row, ['Name', 'name', 'NAME', 'Gast', 'GAST']) ||
@@ -233,19 +295,36 @@ export async function POST(request: NextRequest) {
             ]) || null
 
           const phone =
-            firstNonEmpty(row, ['Telefon', 'telefon', 'Mobil', 'mobil', 'phone']) || null
+            firstNonEmpty(row, ['Telefon', 'telefon', 'Mobil', 'mobil', 'phone', 'Mobilfunk']) || null
 
           const isVip = truthy(
             (row as any)['VIP'] ?? (row as any)['vip'] ?? (row as any)['IsVip'] ?? (row as any)['isVip']
           )
 
-          // Beim Anhängen: nur übernehmen wenn Vorname+Nachname noch nicht in Liste (und nicht bereits in dieser Datei)
+          const key = `${norm(vorname ?? '')}|${norm(nachname ?? '')}`
+
           if (append) {
-            const key = `${norm(vorname ?? '')}|${norm(nachname ?? '')}`
-            if (existingVornameNachnameKeys.has(key) || addedInThisImport.has(key)) {
-              skippedDuplicate.count += 1
+            const existing = existingByKey.get(key)
+            if (existing) {
+              const payload = mergeIntoExisting(existing, {
+                name: name ?? 'Unbekannt',
+                email,
+                phone,
+                isVip,
+                additionalData,
+              })
+              updatesById.set(existing.id, payload)
+              existingByKey.set(key, {
+                ...existing,
+                name: payload.name,
+                email: payload.email,
+                phone: payload.phone,
+                isVip: payload.isVip,
+                additionalData: JSON.parse(payload.additionalData) as Record<string, unknown>,
+              })
               continue
             }
+            if (addedInThisImport.has(key)) continue
             addedInThisImport.add(key)
           }
 
@@ -260,23 +339,46 @@ export async function POST(request: NextRequest) {
           })
         }
 
+        for (const [id, payload] of updatesById) {
+          await tx.guest.update({
+            where: { id },
+            data: {
+              name: payload.name,
+              email: payload.email,
+              phone: payload.phone,
+              isVip: payload.isVip,
+              additionalData: payload.additionalData,
+            },
+          })
+          totalUpdated += 1
+        }
         if (data.length > 0) {
           const res = await tx.guest.createMany({ data })
           totalCreated += res.count
         }
       }
 
-      return totalCreated
+      return { created: totalCreated, updated: totalUpdated }
     })
+
+    const created = result.created
+    const updated = result.updated
+    const messageParts: string[] = []
+    if (append) {
+      if (created > 0) messageParts.push(`${created} Einträge angehängt`)
+      if (updated > 0) messageParts.push(`${updated} Doppelte mit fehlenden Daten aktualisiert`)
+      if (messageParts.length === 0) messageParts.push('Keine neuen Einträge; keine Aktualisierungen.')
+    } else {
+      messageParts.push(`${created} Gäste erfolgreich importiert`)
+    }
 
     return NextResponse.json({
       success: true,
-      message: append
-        ? `${created} Einträge angehängt${skippedDuplicate.count > 0 ? `, ${skippedDuplicate.count} Doppelte übersprungen` : ''}`
-        : `${created} Gäste erfolgreich importiert`,
+      message: messageParts.join('; '),
       imported: created,
+      updated: updated ?? 0,
       total: rows.length,
-      skipped: append ? skippedDuplicate.count : 0,
+      skipped: 0,
       headers,
       append: !!append,
     })
