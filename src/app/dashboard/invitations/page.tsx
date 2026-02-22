@@ -229,6 +229,7 @@ export default function InvitationsPage() {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
   const [regeneratingQrId, setRegeneratingQrId] = useState<string | null>(null)
+  const [linkPreviewInvitation, setLinkPreviewInvitation] = useState<{ acceptToken: string; guestName?: string } | null>(null)
   const [acceptingOnBehalfId, setAcceptingOnBehalfId] = useState<string | null>(null)
   const [verifyingQrId, setVerifyingQrId] = useState<string | null>(null)
 
@@ -3081,9 +3082,17 @@ export default function InvitationsPage() {
                             onClick={() => handleRegenerateQr(invitation.id)}
                             disabled={regeneratingQrId === invitation.id}
                             className="rounded bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-200 disabled:opacity-50"
-                            title="Neuen QR-Code generieren (alter Link wird ungültig)"
+                            title="QR-Link aktualisieren (alter Link wird ungültig)"
                           >
-                            {regeneratingQrId === invitation.id ? '…' : 'Neuen QR-Code'}
+                            {regeneratingQrId === invitation.id ? '…' : 'QR-Link aktualisieren'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setLinkPreviewInvitation({ acceptToken: invitation.acceptToken, guestName: invitation.guest?.name })}
+                            className="rounded bg-sky-100 px-2 py-1 text-xs font-medium text-sky-700 hover:bg-sky-200"
+                            title="Zusage-Link und QR-PDF-Link anzeigen"
+                          >
+                            Link-Vorschau
                           </button>
                           <button
                             type="button"
@@ -3198,6 +3207,95 @@ export default function InvitationsPage() {
                 </div>
               </div>
             )}
+
+            {/* Modal: Link-Vorschau (Zusage-Link + QR-PDF-Link) */}
+            {linkPreviewInvitation && (() => {
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+              const acceptLink = `${baseUrl}/invitation/accept/${encodeURIComponent(linkPreviewInvitation.acceptToken)}`
+              const qrPdfLink = `${baseUrl}/api/invitations/accept/${encodeURIComponent(linkPreviewInvitation.acceptToken)}/qr-pdf`
+              const copy = (text: string, label: string) => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(text).then(() => alert(`${label} in Zwischenablage kopiert.`)).catch(() => alert('Kopieren fehlgeschlagen.'))
+                } else {
+                  alert(`${label}:\n${text}`)
+                }
+              }
+              return (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                  onClick={() => setLinkPreviewInvitation(null)}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Link-Vorschau"
+                >
+                  <div
+                    className="w-full max-w-lg rounded-lg bg-white shadow-xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Link-Vorschau{linkPreviewInvitation.guestName ? ` – ${linkPreviewInvitation.guestName}` : ''}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setLinkPreviewInvitation(null)}
+                        className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+                        aria-label="Schließen"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-4 p-4">
+                      <div>
+                        <label className="block text-xs font-medium uppercase text-gray-500">Zusage-Link</label>
+                        <div className="mt-1 flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={acceptLink}
+                            className="flex-1 rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-xs text-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copy(acceptLink, 'Zusage-Link')}
+                            className="shrink-0 rounded bg-sky-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-700"
+                          >
+                            Kopieren
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium uppercase text-gray-500">QR-PDF-Link</label>
+                        <div className="mt-1 flex gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={qrPdfLink}
+                            className="flex-1 rounded border border-gray-300 bg-gray-50 px-2 py-1.5 text-xs text-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copy(qrPdfLink, 'QR-PDF-Link')}
+                            className="shrink-0 rounded bg-sky-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-sky-700"
+                          >
+                            Kopieren
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border-t border-gray-200 bg-gray-50 px-4 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setLinkPreviewInvitation(null)}
+                        className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                      >
+                        Schließen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         )}
 
