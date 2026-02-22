@@ -258,6 +258,7 @@ export default function RegistrierungenPage() {
   const [importing, setImporting] = useState<string | null>(null)
   const [fixing, setFixing] = useState<string | null>(null)
   const [acceptingId, setAcceptingId] = useState<string | null>(null)
+  const [addingToInvitationListId, setAddingToInvitationListId] = useState<string | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null)
   const [removingDuplicates, setRemovingDuplicates] = useState(false)
@@ -790,47 +791,77 @@ export default function RegistrierungenPage() {
                     className={`hover:bg-gray-50 ${r.invitationSentAt ? 'bg-green-50' : ''}`}
                   >
                     <td className="whitespace-nowrap px-4 py-3 text-center">
-                      {r.invitationSentAt ? (
-                        <div className="flex flex-wrap justify-center gap-1">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        {r.invitationSentAt ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleWhatsAppShare(r)}
+                              disabled={!selectedEventId}
+                              className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                              title="QR-Code per WhatsApp senden"
+                            >
+                              WhatsApp
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadQr(r)}
+                              disabled={!selectedEventId}
+                              className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                              title="QR-Code als Bild herunterladen"
+                            >
+                              Download
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSendEmailAgain(r)}
+                              disabled={!selectedEventId || sendingEmailId !== null}
+                              className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="PDF per E-Mail erneut senden"
+                            >
+                              {sendingEmailId === r.id ? '…' : 'E-Mail'}
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => handleWhatsAppShare(r)}
-                            disabled={!selectedEventId}
-                            className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                            title="QR-Code per WhatsApp senden"
-                          >
-                            WhatsApp
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadQr(r)}
-                            disabled={!selectedEventId}
-                            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                            title="QR-Code als Bild herunterladen"
-                          >
-                            Download
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleSendEmailAgain(r)}
-                            disabled={!selectedEventId || sendingEmailId !== null}
+                            onClick={() => handleAcceptParticipation(r.id)}
+                            disabled={!selectedEventId || acceptingId !== null}
                             className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="PDF per E-Mail erneut senden"
+                            title="Teilnahme akzeptieren und QR-Code generieren"
                           >
-                            {sendingEmailId === r.id ? '…' : 'E-Mail'}
+                            {acceptingId === r.id ? '…' : 'QR erstellen'}
                           </button>
-                        </div>
-                      ) : (
+                        )}
                         <button
                           type="button"
-                          onClick={() => handleAcceptParticipation(r.id)}
-                          disabled={!selectedEventId || acceptingId !== null}
-                          className="rounded bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Teilnahme akzeptieren und QR-Code generieren"
+                          onClick={async () => {
+                            if (!selectedEventId) return
+                            setAddingToInvitationListId(r.id)
+                            try {
+                              const res = await fetch('/api/registrations/add-to-invitation-list', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ registrationId: r.id, eventId: selectedEventId }),
+                              })
+                              const data = await res.json()
+                              if (!res.ok) throw new Error(data.error || 'Übernahme fehlgeschlagen')
+                              loadRegistrations()
+                              setGuestsRefreshKey((k) => k + 1)
+                              alert(data.message || 'In Einladungsliste übernommen.')
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : 'Übernahme fehlgeschlagen')
+                            } finally {
+                              setAddingToInvitationListId(null)
+                            }
+                          }}
+                          disabled={!selectedEventId || addingToInvitationListId !== null}
+                          className="rounded bg-amber-600 px-2 py-1 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Diesen Eintrag in die Gästeliste und Einladungsliste übernehmen (z. B. wenn Name nicht automatisch zugeordnet wurde)"
                         >
-                          {acceptingId === r.id ? '…' : 'QR erstellen'}
+                          {addingToInvitationListId === r.id ? '…' : 'In Einladungsliste'}
                         </button>
-                      )}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-center">
                       <label className="flex items-center justify-center gap-1 cursor-pointer">
