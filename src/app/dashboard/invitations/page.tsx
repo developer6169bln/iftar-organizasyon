@@ -1515,7 +1515,7 @@ export default function InvitationsPage() {
           })
           if (regRes.ok) {
             const updated = await regRes.json()
-            setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+            setInvitations((prev) => prev.map((inv) => (inv.id === invitation.id ? updated : inv)))
             const newQrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
             const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(newQrPdfUrl, true))}`
             window.open(waUrl, '_blank')
@@ -1538,7 +1538,7 @@ export default function InvitationsPage() {
           })
           if (regRes.ok) {
             const updated = await regRes.json()
-            setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+            setInvitations((prev) => prev.map((inv) => (inv.id === invitation.id ? updated : inv)))
             const newQrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
             const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(newQrPdfUrl, true))}`
             window.open(waUrl, '_blank')
@@ -1570,7 +1570,7 @@ export default function InvitationsPage() {
       })
       if (res.ok) {
         const updated = await res.json()
-        setInvitations(invitations.map((inv) => (inv.id === invitation.id ? updated : inv)))
+        setInvitations((prev) => prev.map((inv) => (inv.id === invitation.id ? updated : inv)))
         const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
         const qrPdfUrl = `${baseUrl}/api/invitations/accept/${encodeURIComponent(updated.acceptToken)}/qr-pdf`
         const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl, true))}`
@@ -1598,7 +1598,7 @@ export default function InvitationsPage() {
       })
       if (res.ok) {
         const updated = await res.json()
-        setInvitations(invitations.map((inv) => (inv.id === invitationId ? updated : inv)))
+        setInvitations((prev) => prev.map((inv) => (inv.id === invitationId ? updated : inv)))
       } else {
         const err = await res.json()
         alert('Fehler: ' + (err.error || 'Unbekannter Fehler'))
