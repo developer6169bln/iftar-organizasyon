@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
@@ -161,6 +161,8 @@ export default function InvitationsPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [invitations, setInvitations] = useState<any[]>([])
+  const invitationsRef = useRef<any[]>([])
+  invitationsRef.current = invitations
   const [guests, setGuests] = useState<any[]>([])
   const [templates, setTemplates] = useState<any[]>([])
   const [emailConfigs, setEmailConfigs] = useState<any[]>([])
@@ -1484,14 +1486,15 @@ export default function InvitationsPage() {
   }
 
   const handleWhatsAppAccepted = async (invitation: any) => {
-    const guestPhone = getGuestDisplayPhone(invitation.guest)
+    const inv = invitationsRef.current.find((i: any) => i.id === invitation.id) ?? invitation
+    const guestPhone = getGuestDisplayPhone(inv.guest)
     if (!guestPhone) {
       alert('Keine Telefonnummer hinterlegt.')
       return
     }
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const qrPdfUrl = invitation.acceptToken
-      ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(invitation.acceptToken)}/qr-pdf`
+    const qrPdfUrl = inv.acceptToken
+      ? `${baseUrl}/api/invitations/accept/${encodeURIComponent(inv.acceptToken)}/qr-pdf`
       : ''
     if (!qrPdfUrl) {
       alert('QR-Code-Link nicht verfügbar.')
