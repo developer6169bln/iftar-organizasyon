@@ -2,16 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireEventAccess } from '@/lib/permissions'
 
-function safeParsePlanData(raw: string | null): { tables: unknown[]; podiums: unknown[] } {
-  if (!raw || typeof raw !== 'string') return { tables: [], podiums: [] }
+function safeParsePlanData(raw: string | null): {
+  tables: unknown[]
+  podiums: unknown[]
+  drawings: unknown[]
+} {
+  if (!raw || typeof raw !== 'string') return { tables: [], podiums: [], drawings: [] }
   try {
-    const parsed = JSON.parse(raw) as { tables?: unknown[]; podiums?: unknown[] }
+    const parsed = JSON.parse(raw) as {
+      tables?: unknown[]
+      podiums?: unknown[]
+      drawings?: unknown[]
+    }
     return {
       tables: Array.isArray(parsed?.tables) ? parsed.tables : [],
       podiums: Array.isArray(parsed?.podiums) ? parsed.podiums : [],
+      drawings: Array.isArray(parsed?.drawings) ? parsed.drawings : [],
     }
   } catch {
-    return { tables: [], podiums: [] }
+    return { tables: [], podiums: [], drawings: [] }
   }
 }
 
@@ -34,7 +43,7 @@ export async function GET(request: NextRequest) {
     if (!plan) {
       return NextResponse.json({
         floorPlanUrl: null,
-        planData: { tables: [], podiums: [] },
+        planData: { tables: [], podiums: [], drawings: [] },
       })
     }
 
@@ -82,7 +91,7 @@ export async function PUT(request: NextRequest) {
     if (planData !== undefined) {
       try {
         data.planData =
-          typeof planData === 'string' ? planData : JSON.stringify(planData || { tables: [], podiums: [] })
+          typeof planData === 'string' ? planData : JSON.stringify(planData || { tables: [], podiums: [], drawings: [] })
       } catch (e) {
         console.error('Table plan PUT: planData stringify failed', e)
         return NextResponse.json(

@@ -26,7 +26,46 @@ type PodiumItem = {
   height: number // 1:2 => height = width * 2
 }
 
+type DrawingLine = {
+  id: string
+  type: 'line'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  stroke: string
+  strokeWidth: number
+  fill: string
+}
+
+type DrawingRect = {
+  id: string
+  type: 'rect'
+  x: number
+  y: number
+  width: number
+  height: number
+  stroke: string
+  strokeWidth: number
+  fill: string
+}
+
+type DrawingCircle = {
+  id: string
+  type: 'circle'
+  cx: number
+  cy: number
+  r: number
+  stroke: string
+  strokeWidth: number
+  fill: string
+}
+
+type DrawingItem = DrawingLine | DrawingRect | DrawingCircle
+
 type PlanItem = TableItem | PodiumItem
+
+type DrawingTool = 'select' | 'line' | 'rect' | 'circle'
 
 function parseAdditionalData(additionalData: any): Record<string, unknown> {
   if (!additionalData) return {}
@@ -95,9 +134,14 @@ export default function TischplanungPage() {
   const [floorPlanUrl, setFloorPlanUrl] = useState<string | null>(null)
   const [floorPlanDisplayUrl, setFloorPlanDisplayUrl] = useState<string | null>(null)
   const [floorPlanLoadError, setFloorPlanLoadError] = useState(false)
-  const [planData, setPlanData] = useState<{ tables: TableItem[]; podiums: PodiumItem[] }>({
+  const [planData, setPlanData] = useState<{
+    tables: TableItem[]
+    podiums: PodiumItem[]
+    drawings: DrawingItem[]
+  }>({
     tables: [],
     podiums: [],
+    drawings: [],
   })
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -111,7 +155,38 @@ export default function TischplanungPage() {
   const [guestNameMap, setGuestNameMap] = useState<Record<string, string>>({})
   const [assigningSeats, setAssigningSeats] = useState<(string | null)[]>([])
   const [assigning, setAssigning] = useState(false)
+  const [drawingTool, setDrawingTool] = useState<DrawingTool>('select')
+  const [strokeWidth, setStrokeWidth] = useState(2)
+  const [strokeColor, setStrokeColor] = useState('#000000')
+  const [fillColor, setFillColor] = useState('#e5e7eb')
+  const [drawingPreview, setDrawingPreview] = useState<{
+    type: 'line' | 'rect' | 'circle'
+    x1: number
+    y1: number
+    x2?: number
+    y2?: number
+    width?: number
+    height?: number
+    cx?: number
+    cy?: number
+    r?: number
+  } | null>(null)
+  const drawStartRef = useRef<{ x: number; y: number } | null>(null)
+  const drawTypeRef = useRef<'line' | 'rect' | 'circle' | null>(null)
+  const drawingPreviewRef = useRef(drawingPreview)
+  drawingPreviewRef.current = drawingPreview
+  const overlayRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const [containerSize, setContainerSize] = useState({ w: 1200, h: 800 })
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => setContainerSize({ w: el.clientWidth || 1200, h: el.clientHeight || 800 })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const dragRef = useRef<{
     id: string
     mouseStartX: number
@@ -151,9 +226,11 @@ export default function TischplanungPage() {
       setFloorPlanLoadError(false)
       const rawTables = (data.planData?.tables || []) as Record<string, unknown>[]
       const rawPodiums = (data.planData?.podiums || []) as PodiumItem[]
+      const rawDrawings = (data.planData?.drawings || []) as DrawingItem[]
       setPlanData({
         tables: rawTables.map(normalizeTable),
         podiums: rawPodiums,
+        drawings: rawDrawings.filter((d): d is DrawingItem => Boolean(d?.id && d?.type)),
       })
       const maxNum =
         (data.planData?.tables?.length &&
@@ -278,11 +355,11 @@ export default function TischplanungPage() {
         body: JSON.stringify({
           eventId,
           floorPlanUrl: floorPlanUrl ?? undefined,
-          planData: { tables: [], podiums: [] },
+          planData: { tables: [], podiums: [], drawings: [] },
         }),
       })
       if (!res.ok) throw new Error('Reset fehlgeschlagen')
-      setPlanData({ tables: [], podiums: [] })
+      setPlanData({ tables: [], podiums: [], drawings: [] })
       setNextTableNumber(1)
       setSelectedId(null)
     } catch (e) {
@@ -351,10 +428,59 @@ export default function TischplanungPage() {
     if (!selectedId) return
     if (selectedId.startsWith('table-')) {
       setPlanData((prev) => ({ ...prev, tables: prev.tables.filter((t) => t.id !== selectedId) }))
-    } else {
+    } else if (selectedId.startsWith('podium-')) {
       setPlanData((prev) => ({ ...prev, podiums: prev.podiums.filter((p) => p.id !== selectedId) }))
+    } else if (selectedId.startsWith('draw-')) {
+      setPlanData((prev) => ({ ...prev, drawings: prev.drawings.filter((d) => d.id !== selectedId) }))
     }
     setSelectedId(null)
+  }
+
+  const getContainerCoords = (e: { clientX: number; clientY: number }) => {
+    const el = containerRef.current
+    if (!el) return null
+    const rect = el.getBoundingClientRect()
+    return {
+      x: e.clientX - rect.left + el.scrollLeft,
+      y: e.clientY - rect.top + el.scrollTop,
+    }
+  }
+
+  const handleDrawingPadMouseDown = (e: React.MouseEvent) => {
+    if (drawingTool === 'select') return
+    e.preventDefault()
+    const coords = getContainerCoords(e)
+    if (!coords) return
+    drawStartRef.current = { x: coords.x, y: coords.y }
+    drawTypeRef.current = drawingTool
+    setDrawingPreview({
+      type: drawingTool,
+      x1: coords.x,
+      y1: coords.y,
+    })
+  }
+
+  const handleDrawingPadMouseMove = (e: React.MouseEvent) => {
+    if (!drawStartRef.current || !drawingPreview) return
+    const coords = getContainerCoords(e)
+    if (!coords) return
+    const { x: x1, y: y1 } = drawStartRef.current
+    const x2 = coords.x
+    const y2 = coords.y
+    if (drawingPreview.type === 'line') {
+      setDrawingPreview({ type: 'line', x1, y1, x2, y2 })
+    } else if (drawingPreview.type === 'rect') {
+      const width = x2 - x1
+      const height = y2 - y1
+      setDrawingPreview({ type: 'rect', x1, y1, x2, y2, width, height })
+    } else if (drawingPreview.type === 'circle') {
+      const r = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+      setDrawingPreview({ type: 'circle', x1, y1, cx: x1, cy: y1, r })
+    }
+  }
+
+  const handleDrawingPadMouseUp = () => {
+    if (drawStartRef.current) finishDrawing()
   }
 
   const handleMouseDown = (e: React.MouseEvent, item: PlanItem) => {
@@ -371,6 +497,23 @@ export default function TischplanungPage() {
 
   const handleMouseMove = useCallback(
     (e: MouseEvent) => {
+      if (drawStartRef.current && drawTypeRef.current) {
+        const el = containerRef.current
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          const x = e.clientX - rect.left + el.scrollLeft
+          const y = e.clientY - rect.top + el.scrollTop
+          const { x: x1, y: y1 } = drawStartRef.current
+          const t = drawTypeRef.current
+          setDrawingPreview((prev) => {
+            if (!prev || prev.type !== t) return prev
+            if (t === 'line') return { ...prev, x2: x, y2: y }
+            if (t === 'rect') return { ...prev, width: x - x1, height: y - y1 }
+            if (t === 'circle') return { ...prev, r: Math.sqrt((x - x1) ** 2 + (y - y1) ** 2) }
+            return prev
+          })
+        }
+      }
       if (dragRef.current) {
         const dx = e.clientX - dragRef.current.mouseStartX
         const dy = e.clientY - dragRef.current.mouseStartY
@@ -415,10 +558,70 @@ export default function TischplanungPage() {
     []
   )
 
+  const finishDrawing = useCallback(() => {
+    const preview = drawingPreviewRef.current
+    if (!drawStartRef.current || !preview) {
+      drawStartRef.current = null
+      drawTypeRef.current = null
+      setDrawingPreview(null)
+      return
+    }
+    const { x: x1, y: y1 } = drawStartRef.current
+    const id = `draw-${Date.now()}`
+    if (preview.type === 'line' && preview.x2 != null && preview.y2 != null) {
+      const newLine: DrawingLine = {
+        id,
+        type: 'line',
+        x1,
+        y1,
+        x2: preview.x2,
+        y2: preview.y2,
+        stroke: strokeColor,
+        strokeWidth,
+        fill: 'none',
+      }
+      setPlanData((prev) => ({ ...prev, drawings: [...prev.drawings, newLine] }))
+    } else if (preview.type === 'rect' && preview.width != null && preview.height != null) {
+      const w = preview.width
+      const h = preview.height
+      const newRect: DrawingRect = {
+        id,
+        type: 'rect',
+        x: w >= 0 ? x1 : x1 + w,
+        y: h >= 0 ? y1 : y1 + h,
+        width: Math.abs(w),
+        height: Math.abs(h),
+        stroke: strokeColor,
+        strokeWidth,
+        fill: fillColor,
+      }
+      setPlanData((prev) => ({ ...prev, drawings: [...prev.drawings, newRect] }))
+    } else if (preview.type === 'circle' && preview.r != null && preview.r >= 2) {
+      const newCircle: DrawingCircle = {
+        id,
+        type: 'circle',
+        cx: x1,
+        cy: y1,
+        r: preview.r,
+        stroke: strokeColor,
+        strokeWidth,
+        fill: fillColor,
+      }
+      setPlanData((prev) => ({ ...prev, drawings: [...prev.drawings, newCircle] }))
+    }
+    drawStartRef.current = null
+    drawTypeRef.current = null
+    setDrawingPreview(null)
+  }, [strokeColor, strokeWidth, fillColor])
+
   const handleMouseUp = useCallback(() => {
+    if (drawStartRef.current) {
+      finishDrawing()
+      return
+    }
     dragRef.current = null
     resizeRef.current = null
-  }, [])
+  }, [finishDrawing])
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove)
@@ -662,6 +865,73 @@ export default function TischplanungPage() {
               </button>
             </>
           )}
+          <div className="ml-4 flex items-center gap-2 border-l border-gray-300 pl-4">
+            <span className="text-sm font-medium text-gray-600">Zeichenwerkzeuge:</span>
+            <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+              <button
+                type="button"
+                title="Auswählen / Verschieben"
+                onClick={() => setDrawingTool('select')}
+                className={`rounded px-2 py-1.5 text-sm ${drawingTool === 'select' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-200'}`}
+              >
+                Auswählen
+              </button>
+              <button
+                type="button"
+                title="Linie"
+                onClick={() => setDrawingTool('line')}
+                className={`rounded px-2 py-1.5 text-sm ${drawingTool === 'line' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-200'}`}
+              >
+                Linie
+              </button>
+              <button
+                type="button"
+                title="Rechteck"
+                onClick={() => setDrawingTool('rect')}
+                className={`rounded px-2 py-1.5 text-sm ${drawingTool === 'rect' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-200'}`}
+              >
+                Rechteck
+              </button>
+              <button
+                type="button"
+                title="Kreis"
+                onClick={() => setDrawingTool('circle')}
+                className={`rounded px-2 py-1.5 text-sm ${drawingTool === 'circle' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-200'}`}
+              >
+                Kreis
+              </button>
+            </div>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              Stärke
+              <select
+                value={strokeWidth}
+                onChange={(e) => setStrokeWidth(Number(e.target.value))}
+                className="w-14 rounded border border-gray-300 px-1.5 py-1 text-sm"
+              >
+                {[1, 2, 4, 6, 8, 12].map((n) => (
+                  <option key={n} value={n}>{n}px</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              Kontur
+              <input
+                type="color"
+                value={strokeColor}
+                onChange={(e) => setStrokeColor(e.target.value)}
+                className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-gray-600">
+              Füllung
+              <input
+                type="color"
+                value={fillColor}
+                onChange={(e) => setFillColor(e.target.value)}
+                className="h-7 w-9 cursor-pointer rounded border border-gray-300"
+              />
+            </label>
+          </div>
         </div>
 
         <div
@@ -704,9 +974,122 @@ export default function TischplanungPage() {
             </div>
           )}
 
-          <div className="absolute left-0 top-0 h-full w-full" style={{ pointerEvents: 'auto' }}>
+          <div ref={overlayRef} className="absolute left-0 top-0 h-full w-full" style={{ pointerEvents: 'auto' }}>
             {floorPlanUrl && (
               <>
+                {/* Zeichen-Layer (SVG) – hinter Tischen/Podien */}
+                <svg
+                  width={containerSize.w}
+                  height={containerSize.h}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  <g pointerEvents="stroke">
+                    <rect
+                      x={0}
+                      y={0}
+                      width={containerSize.w}
+                      height={containerSize.h}
+                      fill="transparent"
+                      style={{ cursor: 'default' }}
+                      onClick={() => setSelectedId(null)}
+                    />
+                    {planData.drawings.map((d) => {
+                      if (d.type === 'line') {
+                        return (
+                          <line
+                            key={d.id}
+                            x1={d.x1}
+                            y1={d.y1}
+                            x2={d.x2}
+                            y2={d.y2}
+                            stroke={d.stroke}
+                            strokeWidth={d.strokeWidth}
+                            fill="none"
+                            style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(d.id) }}
+                          />
+                        )
+                      }
+                      if (d.type === 'rect') {
+                        return (
+                          <rect
+                            key={d.id}
+                            x={d.x}
+                            y={d.y}
+                            width={d.width}
+                            height={d.height}
+                            fill={d.fill}
+                            stroke={d.stroke}
+                            strokeWidth={d.strokeWidth}
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(d.id) }}
+                          />
+                        )
+                      }
+                      if (d.type === 'circle') {
+                        return (
+                          <circle
+                            key={d.id}
+                            cx={d.cx}
+                            cy={d.cy}
+                            r={d.r}
+                            fill={d.fill}
+                            stroke={d.stroke}
+                            strokeWidth={d.strokeWidth}
+                            style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedId(d.id) }}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                    {/* Vorschau beim Ziehen */}
+                    {drawingPreview && (
+                      <>
+                        {drawingPreview.type === 'line' && drawingPreview.x2 != null && drawingPreview.y2 != null && (
+                          <line
+                            x1={drawingPreview.x1}
+                            y1={drawingPreview.y1}
+                            x2={drawingPreview.x2}
+                            y2={drawingPreview.y2}
+                            stroke={strokeColor}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray="4 2"
+                            fill="none"
+                          />
+                        )}
+                        {drawingPreview.type === 'rect' && drawingPreview.width != null && drawingPreview.height != null && (
+                          <rect
+                            x={drawingPreview.width >= 0 ? drawingPreview.x1 : drawingPreview.x1 + drawingPreview.width}
+                            y={drawingPreview.height >= 0 ? drawingPreview.y1 : drawingPreview.y1 + drawingPreview.height}
+                            width={Math.abs(drawingPreview.width)}
+                            height={Math.abs(drawingPreview.height)}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray="4 2"
+                          />
+                        )}
+                        {drawingPreview.type === 'circle' && drawingPreview.r != null && drawingPreview.r >= 1 && (
+                          <circle
+                            cx={drawingPreview.x1}
+                            cy={drawingPreview.y1}
+                            r={drawingPreview.r}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray="4 2"
+                          />
+                        )}
+                      </>
+                    )}
+                  </g>
+                </svg>
                 {planData.tables.map((t) => {
                   const chairExtent = Math.max(chairWidth, chairHeight) / 2
                   const totalR = t.radius + chairExtent
@@ -807,6 +1190,24 @@ export default function TischplanungPage() {
                     Podest
                   </div>
                 ))}
+                {/* Zeichen-Pad: bei aktivem Zeichenwerkzeug Maus abfangen */}
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: drawingTool === 'select' ? 'none' : 'auto',
+                    cursor: drawingTool === 'select' ? 'default' : 'crosshair',
+                    zIndex: 10,
+                  }}
+                  onMouseDown={handleDrawingPadMouseDown}
+                  onMouseMove={handleDrawingPadMouseMove}
+                  onMouseUp={handleDrawingPadMouseUp}
+                  onMouseLeave={handleDrawingPadMouseUp}
+                />
               </>
             )}
           </div>
