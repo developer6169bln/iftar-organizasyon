@@ -1502,7 +1502,8 @@ export default function InvitationsPage() {
     }
     setVerifyingQrId(invitation.id)
     try {
-      const res = await fetchAuth(qrPdfUrl)
+      // Dashboard-Endpoint (Auth + Einladungs-ID): funktioniert unabhängig von Token/response
+      const res = await fetchAuth(`/api/invitations/${invitation.id}/qr-pdf`)
       if (res.ok) {
         const waUrl = `https://wa.me/${phoneForWhatsApp(guestPhone)}?text=${encodeURIComponent(getWhatsAppMessage(qrPdfUrl, true))}`
         window.open(waUrl, '_blank')
