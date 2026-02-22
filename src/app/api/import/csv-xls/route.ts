@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File
     const eventId = (formData.get('eventId') as string) || ''
     const append = formData.get('append') === 'true' || formData.get('append') === '1'
+    const confirmReplace = (formData.get('confirmReplace') as string) || ''
 
     if (!file) {
       return NextResponse.json({ error: 'Keine Datei hochgeladen' }, { status: 400 })
@@ -181,6 +182,19 @@ export async function POST(request: NextRequest) {
           })
         }
       }
+    }
+
+    // Beim Ersetzen: Nur mit expliziter Bestätigung (verhindert versehentliches Löschen von Einladungen/Zusagen/Absagen)
+    const REPLACE_CONFIRM_CODE = 'ALLE_EINLADUNGEN_UND_GAESTE_LOESCHEN'
+    if (!append && confirmReplace !== REPLACE_CONFIRM_CODE) {
+      return NextResponse.json(
+        {
+          error:
+            'Import im Modus "Ersetzen" erfordert eine Bestätigung. Bitte die Checkbox bestätigen und den Hinweis lesen.',
+          code: 'CONFIRM_REPLACE_REQUIRED',
+        },
+        { status: 400 }
+      )
     }
 
     // Beim Anhängen: Doppelte aktualisieren (fehlende Daten aus Import ergänzen); neue Einträge anlegen

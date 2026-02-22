@@ -224,6 +224,7 @@ export default function InvitationsPage() {
   const [savingMaxAccompanying, setSavingMaxAccompanying] = useState(false)
   const [syncFromRegistrations, setSyncFromRegistrations] = useState(false)
   const [formattingPhones, setFormattingPhones] = useState(false)
+  const [revertingResponses, setRevertingResponses] = useState(false)
   const [previewModal, setPreviewModal] = useState<{ guestName: string; subject: string; body: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [statsListFilter, setStatsListFilter] = useState<'sent' | 'sentRead' | 'sentNotRead' | 'openedAccepted' | 'openedDeclined' | 'total' | null>(null)
@@ -2252,6 +2253,34 @@ export default function InvitationsPage() {
                   title="Telefonnummern ins internationale Format (+49) formatieren"
                 >
                   {formattingPhones ? 'Korrektur läuft…' : '📞 Telefonnummern korrigieren'}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!eventId) return
+                    if (!confirm('Alle Zusagen und Absagen für dieses Event auf „Ausstehend“ zurücksetzen?\n\nDie Spalte Zusage/Absage wird für alle Einträge zurückgesetzt. QR-Codes (Check-in) werden ungültig. Diese Aktion kann danach nicht automatisch rückgängig gemacht werden.')) return
+                    setRevertingResponses(true)
+                    try {
+                      const res = await fetchAuth('/api/invitations/revert-responses', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ eventId }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data.error || 'Zurücksetzen fehlgeschlagen')
+                      await loadInvitations(eventId)
+                      alert(data.message || `${data.reverted ?? 0} Einladung(en) zurückgesetzt.`)
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : 'Zurücksetzen fehlgeschlagen')
+                    } finally {
+                      setRevertingResponses(false)
+                    }
+                  }}
+                  disabled={!eventId || revertingResponses}
+                  className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  title="Alle Zusagen und Absagen in der Spalte auf Ausstehend (PENDING) zurücksetzen"
+                >
+                  {revertingResponses ? 'Wird zurückgesetzt…' : '↩ Zusagen/Absagen zurücksetzen'}
                 </button>
                 <button
                   onClick={() => eventId && loadInvitations(eventId)}

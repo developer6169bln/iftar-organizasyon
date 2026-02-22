@@ -205,9 +205,11 @@ export default function GuestsPage() {
   const [importing, setImporting] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace')
+  const [importReplaceConfirmed, setImportReplaceConfirmed] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
   const [duplicateGroups, setDuplicateGroups] = useState<Array<{ type: 'name'; value: string; guests: any[] }>>([])
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
+  const [revertingColumnChanges, setRevertingColumnChanges] = useState(false)
 
   // Vorname/Nachname aus additionalData oder aus guest.name splitten (nutzt _additionalParsed wenn vorhanden)
   const getVornameNachname = (guest: any): { vorname: string; nachname: string } => {
@@ -495,12 +497,16 @@ export default function GuestsPage() {
     }
 
     const isAppend = importMode === 'append'
+    if (!isAppend && !importReplaceConfirmed) {
+      alert('Bitte bestätigen Sie die Checkbox: "Ich verstehe, dass alle Gäste und Einladungen (Zusagen/Absagen) gelöscht werden."')
+      return
+    }
     const confirmMessage = isAppend
       ? 'Neue Einträge aus der Datei werden an die bestehende Gästeliste angehängt. Spalten werden wie beim Import zugeordnet.\n\nFortfahren?'
-      : '⚠️ WICHTIG: Dieser Import wird:\n\n' +
-        '• ALLE vorhandenen Einträge in der Einladungsliste löschen\n' +
-        '• Die neue Datei als Master-Liste importieren\n\n' +
-        'Diese Aktion kann nicht rückgängig gemacht werden!\n\nMöchten Sie fortfahren?'
+      : '⚠️ LETZTE FRAGE: Dieser Import löscht unwiderruflich:\n\n' +
+        '• alle Gäste und die komplette Einladungsliste\n' +
+        '• alle Zusagen und Absagen\n\n' +
+        'Ohne Datenbank-Backup gibt es kein Zurück.\n\nWirklich fortfahren?'
     if (!window.confirm(confirmMessage)) return
 
     try {
@@ -508,7 +514,11 @@ export default function GuestsPage() {
       const formData = new FormData()
       formData.append('file', importFile)
       formData.append('eventId', eventId)
-      if (isAppend) formData.append('append', 'true')
+      if (isAppend) {
+        formData.append('append', 'true')
+      } else {
+        formData.append('confirmReplace', 'ALLE_EINLADUNGEN_UND_GAESTE_LOESCHEN')
+      }
 
       const response = await fetch('/api/import/csv-xls', {
         method: 'POST',
@@ -529,8 +539,12 @@ export default function GuestsPage() {
           alert(`✅ Import erfolgreich!\n\n• ${result.imported} Einträge importiert\n• ${result.total} Zeilen verarbeitet`)
         }
       } else {
-        const error = await response.json()
-        alert(error.error || 'Import fehlgeschlagen')
+        const err = await response.json().catch(() => ({}))
+        if (err.code === 'CONFIRM_REPLACE_REQUIRED') {
+          alert('Bitte die Checkbox unter "Ersetzen" bestätigen: Sie müssen anerkennen, dass alle Einladungen und Zusagen/Absagen gelöscht werden.')
+        } else {
+          alert(err.error || 'Import fehlgeschlagen')
+        }
       }
     } catch (error) {
       console.error('Import-Fehler:', error)
@@ -1639,7 +1653,7 @@ export default function GuestsPage() {
                       type="radio"
                       name="importMode"
                       checked={importMode === 'replace'}
-                      onChange={() => setImportMode('replace')}
+                      onChange={() => { setImportMode('replace'); setImportReplaceConfirmed(false) }}
                       className="rounded border-gray-300 text-indigo-600"
                     />
                     Ersetzen
@@ -1649,19 +1663,33 @@ export default function GuestsPage() {
                       type="radio"
                       name="importMode"
                       checked={importMode === 'append'}
-                      onChange={() => setImportMode('append')}
+                      onChange={() => { setImportMode('append'); setImportReplaceConfirmed(false) }}
                       className="rounded border-gray-300 text-indigo-600"
                     />
                     Anhängen
                   </label>
                 </div>
+                {importMode === 'replace' && (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-red-200 bg-red-50/80 px-3 py-2 text-sm text-red-800">
+                    <input
+                      type="checkbox"
+                      checked={importReplaceConfirmed}
+                      onChange={(e) => setImportReplaceConfirmed(e.target.checked)}
+                      className="mt-0.5 rounded border-red-300 text-red-600"
+                    />
+                    <span>
+                      Ich verstehe, dass beim Import „Ersetzen“ <strong>alle Gäste und die komplette Einladungsliste</strong> (inkl. Zusagen und Absagen) <strong>unwiderruflich gelöscht</strong> werden. Ohne Datenbank-Backup gibt es keine Wiederherstellung.
+                    </span>
+                  </label>
+                )}
                 {importFile && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-600">{importFile.name}</span>
                     <button
                       onClick={handleFileImport}
-                      disabled={importing}
+                      disabled={importing || (importMode === 'replace' && !importReplaceConfirmed)}
                       className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      title={importMode === 'replace' && !importReplaceConfirmed ? 'Bitte zuerst die Bestätigung unter „Ersetzen“ ankreuzen' : undefined}
                     >
                       {importing ? '⏳ Importiere...' : importMode === 'append' ? '📥 Liste anhängen' : '📥 Importieren'}
                     </button>
@@ -1683,6 +1711,37 @@ export default function GuestsPage() {
                 title="Doppelte (Vorname+Nachname) automatisch löschen"
               >
                 {checkingDuplicates ? '⏳ Lösche…' : '🔍 Doppelte prüfen'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!eventId) {
+                    alert('Bitte zuerst ein Event auswählen (Projekt/Event laden).')
+                    return
+                  }
+                  if (!confirm('Änderungen in den Spalten „Zusage“, „Absage“, „Nimmt teil“, „Nimmt nicht teil“ und „Einladungsliste“ auf den vorherigen Stand zurücksetzen?\n\nEs werden die letzten Einträge aus dem Audit-Log verwendet (Änderungen der letzten 7 Tage).')) return
+                  setRevertingColumnChanges(true)
+                  try {
+                    const res = await fetch('/api/guests/revert-column-changes', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ eventId }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) throw new Error(data.error || 'Zurücksetzen fehlgeschlagen')
+                    await loadGuests()
+                    alert(data.message || `${data.reverted ?? 0} Gäste zurückgesetzt.`)
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Zurücksetzen fehlgeschlagen')
+                  } finally {
+                    setRevertingColumnChanges(false)
+                  }
+                }}
+                disabled={!eventId || revertingColumnChanges || guests.length === 0}
+                className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50"
+                title="Spalten Zusage, Absage, Nimmt teil, Nimmt nicht teil, Einladungsliste aus Audit-Log zurücksetzen"
+              >
+                {revertingColumnChanges ? '⏳ Setze zurück…' : '↩ Spaltenänderungen rückgängig'}
               </button>
               {/* Export Buttons */}
               <div className="flex items-center gap-2">
