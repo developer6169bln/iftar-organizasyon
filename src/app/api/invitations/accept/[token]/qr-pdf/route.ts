@@ -6,7 +6,9 @@ import { buildQrPdf } from '@/lib/qrPdf'
 export const runtime = 'nodejs'
 
 /**
- * GET – PDF mit Eventinformationen und QR-Codes für Check-in (nur bei bereits akzeptierter Einladung).
+ * GET – PDF mit Eventinformationen und QR-Codes für Check-in.
+ * Erlaubt für jede Einladung mit gültigem Token (z. B. Versand vom Dashboard per WhatsApp),
+ * nicht nur bei response=ACCEPTED.
  */
 export async function GET(
   request: NextRequest,
@@ -27,7 +29,7 @@ export async function GET(
       },
     })
 
-    if (!invitation || invitation.response !== 'ACCEPTED') {
+    if (!invitation) {
       return NextResponse.json(
         { error: 'Einladung nicht gefunden oder noch nicht zugesagt' },
         { status: 404 }
