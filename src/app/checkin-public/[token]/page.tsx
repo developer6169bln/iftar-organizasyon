@@ -212,8 +212,8 @@ export default function PublicCheckinPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-indigo-600 shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <h1 className="text-xl font-bold text-white sm:text-2xl">Eingangskontrolle</h1>
-          <p className="mt-1 text-sm text-indigo-100">Öffentlicher Zugang</p>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Gästeliste Check-in</h1>
+          <p className="mt-1 text-sm text-indigo-100">Externer Zugang – Suchfeld und Gast angekommen</p>
         </div>
       </header>
 
@@ -271,7 +271,7 @@ export default function PublicCheckinPage() {
                       VIP
                     </th>
                     <th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 sm:px-4">
-                      Anwesend
+                      Gast angekommen
                     </th>
                   </tr>
                 </thead>

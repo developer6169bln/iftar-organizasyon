@@ -66,7 +66,6 @@ export default function EingangskontrollePage() {
   const [editingNotes, setEditingNotes] = useState<string>('')
   const [togglingAnwesendId, setTogglingAnwesendId] = useState<string | null>(null)
   const [publicLink, setPublicLink] = useState<string>('')
-  const [showPublicLink, setShowPublicLink] = useState(false)
   const [exportPdfLoading, setExportPdfLoading] = useState(false)
 
   useEffect(() => {
@@ -437,49 +436,38 @@ export default function EingangskontrollePage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Öffentlicher Link Bereich */}
-        <div className="mb-6 rounded-xl bg-indigo-50 border border-indigo-200 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-indigo-900">Öffentlicher Zugang</h3>
-              <p className="mt-1 text-sm text-indigo-700">
-                Link für Mobilgeräte ohne Login
-              </p>
-            </div>
+        {/* Externer Link: Gästeliste beim Check-in */}
+        <div className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+          <h3 className="text-lg font-semibold text-indigo-900">Externer Link für die Gästeliste (Check-in)</h3>
+          <p className="mt-1 text-sm text-indigo-700">
+            Mit diesem Link können Sie am Eingang die Gästeliste prüfen – ohne Login. Enthält Suchfeld und Checkbox „Gast angekommen“.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={publicLink}
+              readOnly
+              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
             <button
-              onClick={() => setShowPublicLink(!showPublicLink)}
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(publicLink)
+                alert('Link kopiert!')
+              }}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
             >
-              {showPublicLink ? 'Verbergen' : 'Link anzeigen'}
+              Kopieren
             </button>
+            <a
+              href={publicLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600"
+            >
+              Link öffnen
+            </a>
           </div>
-          {showPublicLink && (
-            <div className="mt-4 rounded-lg bg-white p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Öffentlicher Link (kopieren und teilen):
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={publicLink}
-                  readOnly
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(publicLink)
-                    alert('Link kopiert!')
-                  }}
-                  className="rounded-lg bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
-                >
-                  Kopieren
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-gray-500">
-                Dieser Link kann ohne Login verwendet werden. Perfekt für Mobilgeräte.
-              </p>
-            </div>
-          )}
         </div>
 
         <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4">
