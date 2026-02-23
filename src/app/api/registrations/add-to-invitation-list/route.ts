@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const newCheckInToken = crypto.randomBytes(24).toString('hex')
     let guestId: string
     if (!guest) {
       const created = await prisma.guest.create({
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
           organization: registration.district || null,
           status: 'INVITED',
           additionalData: JSON.stringify(additionalData),
+          checkInToken: newCheckInToken,
         },
       })
       guestId = created.id
@@ -136,7 +138,10 @@ export async function POST(request: NextRequest) {
       const updatedAdd = { ...currentAdd, ...additionalData }
       await prisma.guest.update({
         where: { id: guest.id },
-        data: { additionalData: JSON.stringify(updatedAdd) },
+        data: {
+          additionalData: JSON.stringify(updatedAdd),
+          ...(guest.checkInToken ? {} : { checkInToken: newCheckInToken }),
+        },
       })
     }
 

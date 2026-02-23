@@ -39,20 +39,45 @@ export async function GET(
     }
 
     const fullName = [registration.firstName, registration.lastName].filter(Boolean).join(' ').trim()
+    const nameNormalized = fullName.replace(/\s+/g, ' ').trim().toLowerCase()
 
-    const guest = await prisma.guest.findFirst({
+    let guest = await prisma.guest.findFirst({
       where: {
         eventId,
         OR: [
-          { email: registration.email },
+          ...(registration.email ? [{ email: registration.email }] : []),
           { name: { equals: fullName, mode: 'insensitive' } },
         ],
       },
       include: { invitations: { where: { eventId }, take: 1 } },
     })
 
+    if (!guest && nameNormalized) {
+      const allGuests = await prisma.guest.findMany({
+        where: { eventId },
+        include: { invitations: { where: { eventId }, take: 1 } },
+      })
+      for (const g of allGuests) {
+        const gName = (g.name ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+        if (gName === nameNormalized) {
+          guest = g
+          break
+        }
+        const add = g.additionalData
+          ? (typeof g.additionalData === 'string' ? JSON.parse(g.additionalData) : g.additionalData) as Record<string, unknown>
+          : {}
+        const v = String(add['Vorname'] ?? add['vorname'] ?? '').trim()
+        const n = String(add['Nachname'] ?? add['nachname'] ?? '').trim()
+        const combined = [v, n].filter(Boolean).join(' ').toLowerCase()
+        if (combined === nameNormalized) {
+          guest = g
+          break
+        }
+      }
+    }
+
     const inv = guest?.invitations?.[0]
-    if (!guest?.checkInToken || !inv) {
+    if (!guest || !inv) {
       return NextResponse.json(
         { error: 'Einladung nicht gefunden.' },
         { status: 404 }
@@ -61,7 +86,7 @@ export async function GET(
 
     return NextResponse.json({
       acceptToken: inv.acceptToken,
-      checkInToken: guest.checkInToken,
+      checkInToken: guest.checkInToken ?? null,
       fullName: guest.name,
     })
   } catch (error) {
