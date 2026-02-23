@@ -294,6 +294,18 @@ export default function RegistrierungenPage() {
   const [loadingGuests, setLoadingGuests] = useState(false)
   const [guestsRefreshKey, setGuestsRefreshKey] = useState(0)
   const [qrModal, setQrModal] = useState<{ checkInToken: string; acceptToken?: string; fullName: string; eventTitle: string } | null>(null)
+  const [numTables, setNumTables] = useState(() => {
+    if (typeof window === 'undefined') return 10
+    const v = localStorage.getItem('registrierungen-numTables')
+    return v ? parseInt(v, 10) || 10 : 10
+  })
+  const [seatsPerTable, setSeatsPerTable] = useState(() => {
+    if (typeof window === 'undefined') return 8
+    const v = localStorage.getItem('registrierungen-seatsPerTable')
+    return v ? parseInt(v, 10) || 8 : 8
+  })
+  const [assigningTables, setAssigningTables] = useState(false)
+  const [resettingTables, setResettingTables] = useState(false)
 
   const loadRegistrations = async () => {
     try {
@@ -367,6 +379,68 @@ export default function RegistrierungenPage() {
       .finally(() => { if (!cancelled) setLoadingGuests(false) })
     return () => { cancelled = true }
   }, [activeTab, selectedEventId, guestsRefreshKey])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('registrierungen-numTables', String(numTables))
+      localStorage.setItem('registrierungen-seatsPerTable', String(seatsPerTable))
+    }
+  }, [numTables, seatsPerTable])
+
+  const handleAssignRandomTables = async () => {
+    if (!selectedEventId) {
+      alert('Bitte Event wählen.')
+      return
+    }
+    if (numTables < 1 || seatsPerTable < 1) {
+      alert('Anzahl Tische und Sitzplätze pro Tisch müssen mindestens 1 sein.')
+      return
+    }
+    setAssigningTables(true)
+    try {
+      const res = await fetch('/api/guests/assign-tables-random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: selectedEventId,
+          numTables: Number(numTables),
+          seatsPerTable: Number(seatsPerTable),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Zuweisung fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+      alert(`${data.assigned} Gäste wurden Tischen zugewiesen. ${data.skippedVip ? `${data.skippedVip} VIP(s) ausgelassen.` : ''}`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Tischzuweisung fehlgeschlagen')
+    } finally {
+      setAssigningTables(false)
+    }
+  }
+
+  const handleResetAllTables = async () => {
+    if (!selectedEventId) {
+      alert('Bitte Event wählen.')
+      return
+    }
+    if (!confirm('Alle Tischnummern für dieses Event zurücksetzen? VIP-Gäste behalten ihre Zuweisung nicht.')) return
+    setResettingTables(true)
+    try {
+      const res = await fetch('/api/guests/reset-tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: selectedEventId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Zurücksetzen fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+      alert(`${data.count} Gäste: Tische zurückgesetzt.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Zurücksetzen fehlgeschlagen')
+    } finally {
+      setResettingTables(false)
+    }
+  }
 
   useEffect(() => {
     const onProjectChange = () => {
@@ -647,6 +721,50 @@ export default function RegistrierungenPage() {
     const hasQrCount = rows.filter((g) => g.hasQr).length
     return (
       <div>
+        <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
+          <p className="mb-3 text-xs text-gray-600">
+            Anzahl Tische und Sitzplätze pro Tisch werden gespeichert. VIP-Gäste werden bei der Zuweisung ausgelassen.
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Anzahl Tische</span>
+              <input
+                type="number"
+                min={1}
+                value={numTables}
+                onChange={(e) => setNumTables(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">Sitzplätze pro Tisch</span>
+              <input
+                type="number"
+                min={1}
+                value={seatsPerTable}
+                onChange={(e) => setSeatsPerTable(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleAssignRandomTables}
+              disabled={!selectedEventId || assigningTables}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {assigningTables ? '… Zuweisung läuft' : 'Random Tischzuweisung'}
+            </button>
+            <button
+              type="button"
+              onClick={handleResetAllTables}
+              disabled={!selectedEventId || resettingTables}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {resettingTables ? '…' : 'Alle Tische zurücksetzen'}
+            </button>
+          </div>
+        </div>
         <p className="mb-3 text-sm text-gray-600">
           <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
           {' · '}
