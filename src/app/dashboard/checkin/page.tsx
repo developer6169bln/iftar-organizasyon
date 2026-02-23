@@ -109,14 +109,17 @@ export default function EingangskontrollePage() {
     if (eventId) {
       loadAcceptedGuests()
     }
-    // Lade öffentlichen Link von API
+    // Externer Link inkl. eventId, damit dieselbe Gästeliste wie im Dashboard geladen wird
     fetch('/api/checkin-public/link')
       .then((res) => res.json())
-      .then((data) => setPublicLink(data.link))
+      .then((data) => {
+        const base = data.link || (typeof window !== 'undefined' ? `${window.location.origin}/checkin-public/checkin2024` : '')
+        const withEvent = eventId ? `${base}?eventId=${encodeURIComponent(eventId)}` : base
+        setPublicLink(withEvent)
+      })
       .catch(() => {
-        // Fallback falls API nicht verfügbar
         const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-        setPublicLink(`${baseUrl}/checkin-public/checkin2024`)
+        setPublicLink(eventId ? `${baseUrl}/checkin-public/checkin2024?eventId=${encodeURIComponent(eventId)}` : `${baseUrl}/checkin-public/checkin2024`)
       })
   }, [eventId])
 

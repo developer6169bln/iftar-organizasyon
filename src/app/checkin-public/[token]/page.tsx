@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 
 interface EingangGuestRow {
   id: string
@@ -48,7 +48,9 @@ function isVipFromAdditional(add: Record<string, any>, guestIsVip: boolean): boo
 
 export default function PublicCheckinPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const token = params?.token as string
+  const eventId = searchParams?.get('eventId') || undefined
   const [rows, setRows] = useState<EingangGuestRow[]>([])
   const [filteredRows, setFilteredRows] = useState<EingangGuestRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,7 +62,7 @@ export default function PublicCheckinPage() {
     if (token) {
       loadAcceptedGuests()
     }
-  }, [token])
+  }, [token, eventId])
 
   const loadAcceptedGuests = async () => {
     if (!token) return
@@ -68,7 +70,10 @@ export default function PublicCheckinPage() {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(`/api/checkin-public/${token}/guests`)
+      const url = eventId
+        ? `/api/checkin-public/${token}/guests?eventId=${encodeURIComponent(eventId)}`
+        : `/api/checkin-public/${token}/guests`
+      const response = await fetch(url)
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           setError('Ungültiger Zugangscode')

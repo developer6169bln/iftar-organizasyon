@@ -17,9 +17,20 @@ export async function GET(
       return NextResponse.json({ error: 'Ungültiger Zugangscode' }, { status: 403 })
     }
 
-    const event = await prisma.event.findFirst({
-      orderBy: { createdAt: 'desc' },
-    })
+    const eventIdParam = request.nextUrl.searchParams.get('eventId')
+
+    let event: { id: string } | null
+    if (eventIdParam) {
+      event = await prisma.event.findUnique({
+        where: { id: eventIdParam },
+        select: { id: true },
+      })
+    } else {
+      event = await prisma.event.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      })
+    }
 
     if (!event) {
       return NextResponse.json({ error: 'Event nicht gefunden' }, { status: 404 })
