@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 
 type Registration = {
   id: string
@@ -43,6 +44,7 @@ type GuestEntry = {
   phone: string | null
   organization: string | null
   additionalData?: string | null
+  tableNumber?: number | null
 }
 
 function getGuestVornameNachname(guest: GuestEntry): { vorname: string; nachname: string } {
@@ -306,6 +308,7 @@ export default function RegistrierungenPage() {
   })
   const [assigningTables, setAssigningTables] = useState(false)
   const [resettingTables, setResettingTables] = useState(false)
+  const [tischlistenPdfLoading, setTischlistenPdfLoading] = useState(false)
 
   const loadRegistrations = async () => {
     try {
@@ -366,13 +369,14 @@ export default function RegistrierungenPage() {
       .then((data) => {
         if (cancelled) return
         const arr = Array.isArray(data) ? data : []
-        setGuests(arr.map((g: { id?: string; name?: string; email?: string | null; phone?: string | null; organization?: string | null; additionalData?: string | null }) => ({
+        setGuests(arr.map((g: { id?: string; name?: string; email?: string | null; phone?: string | null; organization?: string | null; additionalData?: string | null; tableNumber?: number | null }) => ({
           id: g.id ?? '',
           name: (g.name || '').trim(),
           email: g.email ?? null,
           phone: g.phone ?? null,
           organization: g.organization ?? null,
           additionalData: g.additionalData ?? null,
+          tableNumber: g.tableNumber ?? null,
         })))
       })
       .catch(() => { if (!cancelled) setGuests([]) })
@@ -439,6 +443,91 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'Zurücksetzen fehlgeschlagen')
     } finally {
       setResettingTables(false)
+    }
+  }
+
+  const handleExportTischlistenPdf = async () => {
+    if (!selectedEventId) {
+      alert('Bitte Event wählen.')
+      return
+    }
+    setTischlistenPdfLoading(true)
+    try {
+      const res = await fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}`)
+      if (!res.ok) throw new Error('Gäste konnten nicht geladen werden.')
+      const allGuests = await res.json()
+      const withTable = (allGuests as { id: string; name: string; tableNumber?: number | null }[]).filter(
+        (g) => g.tableNumber != null
+      )
+      const byTable = new Map<number, { name: string }[]>()
+      for (const g of withTable) {
+        const t = g.tableNumber!
+        if (!byTable.has(t)) byTable.set(t, [])
+        byTable.get(t)!.push({ name: (g.name || '').trim() || '–' })
+      }
+      const sortedTables = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
+
+      const doc = await PDFDocument.create()
+      const font = await doc.embedFont(StandardFonts.Helvetica)
+      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
+      doc.addPage([595, 842])
+      const pageHeight = 842
+      let y = pageHeight - 50
+
+      const getPage = () => doc.getPage(doc.getPageCount() - 1)
+      const ensureSpace = (need: number) => {
+        if (y < need) {
+          doc.addPage([595, 842])
+          y = pageHeight - 40
+        }
+      }
+
+      getPage().drawText('Tischlisten', {
+        x: 50,
+        y,
+        size: 18,
+        font: fontBold,
+        color: rgb(0.2, 0.2, 0.4),
+      })
+      y -= 28
+
+      for (const [tableNum, guests] of sortedTables) {
+        ensureSpace(120)
+        getPage().drawText(`Tisch ${tableNum}`, {
+          x: 50,
+          y,
+          size: 14,
+          font: fontBold,
+          color: rgb(0.2, 0.2, 0.4),
+        })
+        y -= 22
+        for (const g of guests) {
+          ensureSpace(60)
+          getPage().drawText('  • ' + g.name.slice(0, 80), {
+            x: 50,
+            y,
+            size: 11,
+            font,
+            color: rgb(0.1, 0.1, 0.1),
+          })
+          y -= 16
+        }
+        y -= 8
+      }
+
+      const pdfBytes = await doc.save()
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Tischlisten_${new Date().toISOString().split('T')[0]}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'PDF konnte nicht erstellt werden.')
+    } finally {
+      setTischlistenPdfLoading(false)
     }
   }
 
@@ -763,6 +852,14 @@ export default function RegistrierungenPage() {
             >
               {resettingTables ? '…' : 'Alle Tische zurücksetzen'}
             </button>
+            <button
+              type="button"
+              onClick={handleExportTischlistenPdf}
+              disabled={!selectedEventId || tischlistenPdfLoading}
+              className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {tischlistenPdfLoading ? '… PDF wird erstellt' : 'Tischlisten als PDF'}
+            </button>
           </div>
         </div>
         <p className="mb-3 text-sm text-gray-600">
@@ -788,6 +885,7 @@ export default function RegistrierungenPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">E-Mail</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Telefon</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">Bezirk</th>
+                <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Tisch</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500">QR</th>
                 <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500">Aktion</th>
               </tr>
@@ -795,7 +893,7 @@ export default function RegistrierungenPage() {
             <tbody className="divide-y divide-gray-200">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={11} className="px-4 py-8 text-center text-sm text-gray-500">
                     {searchQuery.trim()
                       ? 'Keine Einträge entsprechen der Suche.'
                       : filterNoQr
@@ -846,6 +944,9 @@ export default function RegistrierungenPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{g.email || '–'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{g.phone || '–'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{g.district || '–'}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-center text-sm font-medium text-gray-900">
+                      {g.guest?.tableNumber != null ? g.guest.tableNumber : '–'}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {g.hasQr ? (
                         <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Gesendet</span>
