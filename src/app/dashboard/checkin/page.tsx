@@ -138,12 +138,8 @@ export default function EingangskontrollePage() {
       }
 
       const guests = await guestsRes.json()
-      const guestsWithZusage = guests.filter((g: any) => {
-        const add = parseAdditionalData(g.additionalData)
-        return add['Zusage'] === true || add['Zusage'] === 'true'
-      })
 
-      const mapped: EingangGuestRow[] = guestsWithZusage.map((g: any) => {
+      const mapped: EingangGuestRow[] = guests.map((g: any) => {
         const add = parseAdditionalData(g.additionalData)
         const fullName: string = g.name || ''
         // Vorname/Nachname aus additionalData (z. B. Import/Sheets), sonst aus vollem Namen splitten
@@ -479,7 +475,7 @@ export default function EingangskontrollePage() {
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow-md">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold">Liste der Gäste mit Zusage</h2>
+            <h2 className="text-xl font-semibold">Gästeliste (Check-in)</h2>
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
                 <input
@@ -538,8 +534,8 @@ export default function EingangskontrollePage() {
             <div className="rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
               <p className="text-gray-500">
                 {searchQuery
-                  ? 'Keine Gäste mit Zusage gefunden'
-                  : 'Keine Gäste mit Zusage vorhanden'}
+                  ? 'Keine Gäste gefunden'
+                  : 'Keine Gäste vorhanden'}
               </p>
               <p className="mt-2 text-xs text-gray-400">
                 Gäste erscheinen hier, sobald sie per Einladungs-E-Mail zugesagt haben (ACCEPTED).

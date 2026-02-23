@@ -37,18 +37,7 @@ export async function GET(
       },
     })
 
-    // Filtere nach Gästen mit Zusage = true in additionalData
-    const guestsWithZusage = guests.filter((g) => {
-      if (!g.additionalData) return false
-      try {
-        const add = JSON.parse(g.additionalData)
-        return add['Zusage'] === true || add['Zusage'] === 'true'
-      } catch {
-        return false
-      }
-    })
-
-    return NextResponse.json(guestsWithZusage)
+    return NextResponse.json(guests)
   } catch (error) {
     console.error('Fehler beim Laden der öffentlichen Gäste:', error)
     return NextResponse.json(

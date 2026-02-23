@@ -220,7 +220,7 @@ export default function PublicCheckinPage() {
       <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
         <div className="mb-4 rounded-xl bg-white p-4 shadow-md sm:p-6">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold sm:text-xl">Gäste mit Zusage</h2>
+            <h2 className="text-lg font-semibold sm:text-xl">Gästeliste</h2>
             <div className="relative w-full sm:w-72">
               <input
                 type="text"
