@@ -140,6 +140,14 @@ const EVENT_SLUG_LABELS: Record<string, string> = {
   'kemalettingruppe': 'Kemalettingruppe',
 }
 
+/** 4 Tischfarben zur Kategorisierung – gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. */
+const TISCHFARBE_OPTIONS: { value: string; label: string; bg: string; ring: string }[] = [
+  { value: '1', label: 'Rot', bg: 'bg-red-400', ring: 'ring-red-600' },
+  { value: '2', label: 'Blau', bg: 'bg-blue-400', ring: 'ring-blue-600' },
+  { value: '3', label: 'Grün', bg: 'bg-green-400', ring: 'ring-green-600' },
+  { value: '4', label: 'Gelb', bg: 'bg-amber-400', ring: 'ring-amber-600' },
+]
+
 function mergeRegistrations(list: Registration[], guestNamesLower: Set<string>): MergedEntry[] {
   const key = (r: Registration) =>
     `${(r.firstName || '').trim().toLowerCase()}|${(r.lastName || '').trim().toLowerCase()}`
@@ -315,6 +323,7 @@ export default function RegistrierungenPage() {
   >(null)
   const [swapInProgress, setSwapInProgress] = useState(false)
   const [weiblichUpdatingId, setWeiblichUpdatingId] = useState<string | null>(null)
+  const [tischfarbeUpdatingId, setTischfarbeUpdatingId] = useState<string | null>(null)
 
   const loadRegistrations = async () => {
     try {
@@ -424,10 +433,7 @@ export default function RegistrierungenPage() {
       if (data.tablesAutoAdjusted && data.numTablesUsed != null) {
         setNumTables(data.numTablesUsed)
         if (typeof window !== 'undefined') localStorage.setItem('registrierungen-numTables', String(data.numTablesUsed))
-        parts.push(` Anzahl Tische wurde automatisch auf ${data.numTablesUsed} angepasst (keine gemischten Tische).`)
-      }
-      if (data.assignedWeiblich != null && data.assignedNichtWeiblich != null && (data.assignedWeiblich > 0 || data.assignedNichtWeiblich > 0)) {
-        parts.push(` Davon weiblich: ${data.assignedWeiblich} (${data.tablesWeiblich ?? 0} Tische), übrige: ${data.assignedNichtWeiblich} (${data.tablesNichtWeiblich ?? 0} Tische).`)
+        parts.push(` Anzahl Tische wurde automatisch auf ${data.numTablesUsed} angepasst (Gruppen: Geschlecht + Tischfarbe).`)
       }
       if (data.unassigned > 0) parts.push(`${data.unassigned} ohne Platz.`)
       if (data.skippedNoZusage > 0) parts.push(`${data.skippedNoZusage} ohne Zusage/Nimmt teil (kein Tisch).`)
@@ -558,6 +564,39 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'Änderung fehlgeschlagen')
     } finally {
       setWeiblichUpdatingId(null)
+    }
+  }
+
+  function getGuestTischfarbe(guest: GuestEntry | undefined): string {
+    if (!guest?.additionalData) return ''
+    try {
+      const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+      const v = add?.['Tischfarbe'] ?? add?.['tischfarbe']
+      const s = String(v ?? '').trim()
+      return s === '1' || s === '2' || s === '3' || s === '4' ? s : ''
+    } catch {
+      return ''
+    }
+  }
+
+  const handleSetTischfarbe = async (g: GesamtEntry, value: string) => {
+    if (!g.guest?.id) return
+    setTischfarbeUpdatingId(g.guest.id)
+    try {
+      const add = g.guest.additionalData ? JSON.parse(g.guest.additionalData) : {}
+      const updated = { ...add, Tischfarbe: value || undefined }
+      if (value === '') delete updated.Tischfarbe
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.guest.id, additionalData: JSON.stringify(updated) }),
+      })
+      if (!res.ok) throw new Error('Aktualisierung fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Änderung fehlgeschlagen')
+    } finally {
+      setTischfarbeUpdatingId(null)
     }
   }
 
@@ -859,8 +898,8 @@ export default function RegistrierungenPage() {
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
           <p className="mb-3 text-xs text-gray-600">
-            Keine gemischten Tische: Gäste mit <strong>Weiblich</strong> nur mit weiblichen an einem Tisch; die übrigen Tische für den Rest. Bei Bedarf wird die Anzahl Tische automatisch erhöht.
-            Nur Gäste mit Zusage/Nimmt teil erhalten einen Tisch; VIP-Gäste werden nicht geändert. Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
+            Keine gemischten Tische: Gruppierung nach <strong>Geschlecht</strong> (Weiblich) und <strong>Tischfarbe</strong> (4 Farben). Gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. Bei Bedarf wird die Anzahl Tische automatisch erhöht.
+            Nur Gäste mit Zusage/Nimmt teil erhalten einen Tisch; VIP-Gäste werden nicht geändert.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2">
@@ -912,43 +951,69 @@ export default function RegistrierungenPage() {
         {sortedTableNumbers.length > 0 && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">Checkbox „Weiblich“ per Klick ändern; „Verschieben“ für Tisch-Tausch.</p>
+            <p className="mb-3 text-xs text-gray-500">„W“ = Weiblich; 4 Farben = Tischfarbe (gleiche Farbe + Geschlecht = gleicher Tisch). „Verschieben“ für Tausch.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
                 return (
                   <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <div className="mb-2 font-semibold text-gray-800">Tisch {num}</div>
-                    <ul className="space-y-1 text-sm text-gray-700">
+                    <ul className="space-y-2 text-sm text-gray-700">
                       {guestsAtTable.map((g) => {
                         const weiblich = isGuestWeiblich(g.guest)
                         const updating = g.guest?.id === weiblichUpdatingId
+                        const farbeUpdating = g.guest?.id === tischfarbeUpdatingId
+                        const currentFarbe = getGuestTischfarbe(g.guest)
                         return (
-                          <li key={g.key} className="flex items-center gap-2">
-                            {g.guest?.id ? (
-                              <>
-                                <label className="flex shrink-0 items-center gap-1" title="Weiblich">
-                                  <input
-                                    type="checkbox"
-                                    checked={weiblich}
-                                    disabled={updating}
-                                    onChange={() => handleToggleWeiblich(g)}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  <span className="text-xs text-gray-500">W</span>
-                                </label>
+                          <li key={g.key} className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              {g.guest?.id ? (
+                                <>
+                                  <label className="flex shrink-0 items-center gap-1" title="Weiblich">
+                                    <input
+                                      type="checkbox"
+                                      checked={weiblich}
+                                      disabled={updating}
+                                      onChange={() => handleToggleWeiblich(g)}
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    <span className="text-xs text-gray-500">W</span>
+                                  </label>
+                                  <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTableSwapStart(g, num)}
+                                    className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
+                                    title="Gast an anderen Tisch tauschen"
+                                  >
+                                    Verschieben
+                                  </button>
+                                </>
+                              ) : (
                                 <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                              )}
+                            </div>
+                            {g.guest?.id && (
+                              <div className="flex items-center gap-1 pl-6">
+                                <span className="text-xs text-gray-400">Farbe:</span>
                                 <button
                                   type="button"
-                                  onClick={() => handleTableSwapStart(g, num)}
-                                  className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
-                                  title="Gast an anderen Tisch tauschen"
-                                >
-                                  Verschieben
-                                </button>
-                              </>
-                            ) : (
-                              <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                                  disabled={farbeUpdating}
+                                  onClick={() => handleSetTischfarbe(g, '')}
+                                  title="Keine Farbe"
+                                  className={`h-5 w-5 rounded-full border-2 ${currentFarbe === '' ? 'border-gray-700 bg-gray-300' : 'border-gray-300 bg-gray-100 hover:bg-gray-200'}`}
+                                />
+                                {TISCHFARBE_OPTIONS.map((opt) => (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    disabled={farbeUpdating}
+                                    onClick={() => handleSetTischfarbe(g, opt.value)}
+                                    title={opt.label}
+                                    className={`h-5 w-5 rounded-full border-2 ${opt.bg} ${currentFarbe === opt.value ? `ring-2 ${opt.ring}` : 'border-gray-300 hover:opacity-90'}`}
+                                  />
+                                ))}
+                              </div>
                             )}
                           </li>
                         )

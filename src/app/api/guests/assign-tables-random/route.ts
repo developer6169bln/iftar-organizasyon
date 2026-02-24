@@ -43,6 +43,20 @@ function isWeiblich(guest: { additionalData: string | null }): boolean {
   }
 }
 
+/** Tischfarbe aus additionalData („1“–„4“ oder leer). Gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. */
+function getTischfarbe(guest: { additionalData: string | null }): string {
+  if (!guest.additionalData) return ''
+  try {
+    const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+    if (!add || typeof add !== 'object') return ''
+    const v = add['Tischfarbe'] ?? add['tischfarbe']
+    const s = String(v ?? '').trim()
+    return s === '1' || s === '2' || s === '3' || s === '4' ? s : ''
+  } catch {
+    return ''
+  }
+}
+
 /** Fisher-Yates Shuffle */
 function shuffle<T>(arr: T[]): T[] {
   const out = [...arr]
@@ -89,53 +103,48 @@ export async function POST(request: NextRequest) {
 
     const nonVip = guests.filter((g) => !isVip(g))
     const withZusage = nonVip.filter(hasZusageOrTeilnahme)
-    const weiblich = withZusage.filter(isWeiblich)
-    const nichtWeiblich = withZusage.filter((g) => !isWeiblich(g))
 
-    const shuffledWeiblich = shuffle(weiblich)
-    const shuffledNichtWeiblich = shuffle(nichtWeiblich)
+    // Gruppierung: gleiches Geschlecht + gleiche Tischfarbe = gleicher Tischblock (keine gemischten Tische).
+    const FARBE_ORDER = ['', '1', '2', '3', '4'] as const
+    const groups = new Map<string, typeof withZusage>()
+    for (const g of withZusage) {
+      const w = isWeiblich(g)
+      const f = getTischfarbe(g)
+      const key = `${w ? 'w' : 'm'}-${f || '_'}`
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(g)
+    }
 
-    // Keine gemischten Tische: Weiblich nur mit Weiblich, Rest nur mit Rest. Anzahl Tische bei Bedarf automatisch erhöhen.
-    const requiredTablesWeiblich = Math.ceil(weiblich.length / Math.max(1, seatsPerTable))
-    const requiredTablesNichtWeiblich = Math.ceil(nichtWeiblich.length / Math.max(1, seatsPerTable))
-    const requiredTablesTotal = requiredTablesWeiblich + requiredTablesNichtWeiblich
-    const numTablesToUse = Math.max(numTables, requiredTablesTotal)
-
-    const numTablesWeiblich = requiredTablesWeiblich
-    const numTablesNichtWeiblich = numTablesToUse - numTablesWeiblich
-    const seatsWeiblich = numTablesWeiblich * seatsPerTable
-    const seatsNichtWeiblich = numTablesNichtWeiblich * seatsPerTable
-
-    const toAssignWeiblich = shuffledWeiblich.slice(0, seatsWeiblich)
-    const toAssignNichtWeiblich = shuffledNichtWeiblich.slice(0, seatsNichtWeiblich)
-
+    let tableOffset = 0
     const updates: ReturnType<typeof prisma.guest.update>[] = []
+    const assignedIds: string[] = []
 
-    for (let i = 0; i < toAssignWeiblich.length; i++) {
-      const tableNumber = Math.floor(i / seatsPerTable) + 1
-      updates.push(
-        prisma.guest.update({
-          where: { id: toAssignWeiblich[i].id },
-          data: { tableNumber },
-        })
-      )
-    }
-    const tableOffsetNichtWeiblich = numTablesWeiblich
-    for (let i = 0; i < toAssignNichtWeiblich.length; i++) {
-      const tableNumber = tableOffsetNichtWeiblich + Math.floor(i / seatsPerTable) + 1
-      updates.push(
-        prisma.guest.update({
-          where: { id: toAssignNichtWeiblich[i].id },
-          data: { tableNumber },
-        })
-      )
+    for (const weiblich of [true, false]) {
+      for (const farbe of FARBE_ORDER) {
+        const key = `${weiblich ? 'w' : 'm'}-${farbe || '_'}`
+        const group = groups.get(key) ?? []
+        if (group.length === 0) continue
+        const shuffled = shuffle(group)
+        const requiredTables = Math.ceil(group.length / Math.max(1, seatsPerTable))
+        const seats = requiredTables * seatsPerTable
+        const toAssign = shuffled.slice(0, seats)
+        for (let i = 0; i < toAssign.length; i++) {
+          const tableNumber = tableOffset + Math.floor(i / seatsPerTable) + 1
+          updates.push(
+            prisma.guest.update({
+              where: { id: toAssign[i].id },
+              data: { tableNumber },
+            })
+          )
+          assignedIds.push(toAssign[i].id)
+        }
+        tableOffset += requiredTables
+      }
     }
 
-    const assignedIds = new Set([
-      ...toAssignWeiblich.map((g) => g.id),
-      ...toAssignNichtWeiblich.map((g) => g.id),
-    ])
-    const toUnassign = nonVip.filter((g) => !assignedIds.has(g.id))
+    const numTablesToUse = Math.max(numTables, tableOffset)
+    const assignedSet = new Set(assignedIds)
+    const toUnassign = nonVip.filter((g) => !assignedSet.has(g.id))
     for (const guest of toUnassign) {
       updates.push(
         prisma.guest.update({
@@ -148,12 +157,8 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction(updates)
 
     return NextResponse.json({
-      message: 'Tischzuweisung durchgeführt',
-      assigned: toAssignWeiblich.length + toAssignNichtWeiblich.length,
-      assignedWeiblich: toAssignWeiblich.length,
-      assignedNichtWeiblich: toAssignNichtWeiblich.length,
-      tablesWeiblich: numTablesWeiblich,
-      tablesNichtWeiblich: numTablesNichtWeiblich,
+      message: 'Tischzuweisung durchgeführt (gruppiert nach Geschlecht + Tischfarbe)',
+      assigned: assignedIds.length,
       numTablesUsed: numTablesToUse,
       tablesAutoAdjusted: numTablesToUse > numTables,
       unassigned: toUnassign.length,
