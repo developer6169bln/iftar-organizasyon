@@ -140,6 +140,12 @@ const EVENT_SLUG_LABELS: Record<string, string> = {
   'kemalettingruppe': 'Kemalettingruppe',
 }
 
+/** VIP-Tische: je 10 Platzhalter (Tisch-Nummern 901–910 = VIP1, 911–920 = VIP2). */
+const VIP1_TABLE_START = 901
+const VIP2_TABLE_START = 911
+const VIP_SLOTS = 10
+const getVipTableLabel = (n: number) => (n >= 901 && n <= 910) ? 'VIP1' : (n >= 911 && n <= 920) ? 'VIP2' : null
+
 /** 4 Tischfarben zur Kategorisierung – gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. */
 const TISCHFARBE_OPTIONS: { value: string; label: string; bg: string; ring: string }[] = [
   { value: '1', label: 'Rot', bg: 'bg-red-400', ring: 'ring-red-600' },
@@ -325,6 +331,7 @@ export default function RegistrierungenPage() {
   const [weiblichUpdatingId, setWeiblichUpdatingId] = useState<string | null>(null)
   const [presseUpdatingId, setPresseUpdatingId] = useState<string | null>(null)
   const [tischfarbeUpdatingId, setTischfarbeUpdatingId] = useState<string | null>(null)
+  const [vipAssignSlot, setVipAssignSlot] = useState<number | null>(null)
 
   const loadRegistrations = async () => {
     try {
@@ -620,6 +627,35 @@ export default function RegistrierungenPage() {
       return s === '1' || s === '2' || s === '3' || s === '4' ? s : ''
     } catch {
       return ''
+    }
+  }
+
+  const handleAssignGuestToVipSlot = async (guestId: string, slotTableNum: number) => {
+    try {
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: guestId, tableNumber: slotTableNum }),
+      })
+      if (!res.ok) throw new Error('Zuweisung fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+      setVipAssignSlot(null)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Zuweisung fehlgeschlagen')
+    }
+  }
+
+  const handleClearVipSlot = async (guestId: string) => {
+    try {
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: guestId, tableNumber: null }),
+      })
+      if (!res.ok) throw new Error('Entfernen fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Entfernen fehlgeschlagen')
     }
   }
 
@@ -936,7 +972,10 @@ export default function RegistrierungenPage() {
         byTable.get(tn)!.push(g)
       }
     }
-    const sortedTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
+    for (let t = VIP1_TABLE_START; t < VIP1_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = VIP2_TABLE_START; t < VIP2_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    const allTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
+    const normalTableNumbers = allTableNumbers.filter((n) => n < VIP1_TABLE_START)
     return (
       <div>
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -992,12 +1031,12 @@ export default function RegistrierungenPage() {
             </button>
           </div>
         </div>
-        {sortedTableNumbers.length > 0 && (
+        {(normalTableNumbers.length > 0 || selectedEventId) && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„P“ = Presse (Tisch 1); „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch.</p>
+            <p className="mb-3 text-xs text-gray-500">„P“ = Presse (Tisch 1); „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch. VIP1/VIP2 = Platzhalter (901–920).</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {sortedTableNumbers.map((num) => {
+              {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
                 return (
                   <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -1082,6 +1121,51 @@ export default function RegistrierungenPage() {
                 )
               })}
             </div>
+            {/* VIP1 / VIP2: je 10 Platzhalter – Gast zuweisen oder entfernen */}
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {[
+                { label: 'VIP1', start: VIP1_TABLE_START },
+                { label: 'VIP2', start: VIP2_TABLE_START },
+              ].map(({ label, start }) => (
+                <div key={label} className="rounded-lg border-2 border-amber-200 bg-amber-50/80 p-3">
+                  <div className="mb-2 font-semibold text-amber-900">{label}</div>
+                  <ul className="space-y-1.5 text-sm text-gray-700">
+                    {Array.from({ length: VIP_SLOTS }, (_, i) => {
+                      const slotNum = start + i
+                      const guests = byTable.get(slotNum) ?? []
+                      const g = guests[0]
+                      const nameText = g ? (g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–') : '–'
+                      const anwesend = g && isGuestAnwesend(g.guest)
+                      return (
+                        <li key={slotNum} className="flex items-center justify-between gap-2 rounded bg-white/70 px-2 py-1">
+                          <span className="min-w-0 flex-1 truncate font-medium text-amber-900">Platz {i + 1}</span>
+                          <span className={`min-w-0 flex-1 truncate ${anwesend ? 'rounded bg-emerald-100 px-1 font-medium text-emerald-800' : 'text-gray-700'}`}>{nameText}</span>
+                          <div className="flex shrink-0 gap-1">
+                            {g?.guest?.id ? (
+                              <button
+                                type="button"
+                                onClick={() => handleClearVipSlot(g.guest!.id!)}
+                                className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 hover:bg-red-200"
+                              >
+                                Entfernen
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setVipAssignSlot(slotNum)}
+                                className="rounded bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-300"
+                              >
+                                Gast zuweisen
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {/* Modal: Tisch tauschen – Schritt 1 Zieltisch wählen, Schritt 2 Gast von Zieltisch wählen */}
@@ -1095,7 +1179,7 @@ export default function RegistrierungenPage() {
                     {swapModal.guest.fullName || [swapModal.guest.firstName, swapModal.guest.lastName].filter(Boolean).join(' ') || '–'} sitzt aktuell an Tisch {swapModal.fromTable}. Zu welchem Tisch soll gewechselt werden?
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {sortedTableNumbers.filter((n) => n !== swapModal.fromTable).map((n) => (
+                    {normalTableNumbers.filter((n) => n !== swapModal.fromTable).map((n) => (
                       <button
                         key={n}
                         type="button"
@@ -1135,6 +1219,35 @@ export default function RegistrierungenPage() {
                   onClick={() => !swapInProgress && setSwapModal(null)}
                   className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300 disabled:opacity-50"
                 >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Modal: Gast für VIP-Platz auswählen */}
+        {vipAssignSlot != null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setVipAssignSlot(null)}>
+            <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="mb-2 text-sm font-semibold text-gray-800">
+                Gast für {getVipTableLabel(vipAssignSlot)} Platz {vipAssignSlot - (vipAssignSlot >= VIP2_TABLE_START ? VIP2_TABLE_START : VIP1_TABLE_START) + 1} zuweisen
+              </h3>
+              <p className="mb-3 text-xs text-gray-600">Gast aus der Liste wählen (wird diesem VIP-Platz zugewiesen).</p>
+              <ul className="max-h-80 space-y-1 overflow-y-auto">
+                {rows.filter((g) => g.guest?.id).map((g) => (
+                  <li key={g.guest!.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignGuestToVipSlot(g.guest!.id!, vipAssignSlot)}
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm text-gray-800 hover:bg-amber-100 hover:border-amber-300"
+                    >
+                      {g.fullName || [g.firstName, g.lastName].filter(Boolean).join(' ') || '–'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex justify-end">
+                <button type="button" onClick={() => setVipAssignSlot(null)} className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300">
                   Abbrechen
                 </button>
               </div>

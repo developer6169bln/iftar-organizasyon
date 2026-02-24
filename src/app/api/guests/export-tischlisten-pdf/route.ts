@@ -27,13 +27,20 @@ export async function GET(request: NextRequest) {
       orderBy: [{ tableNumber: 'asc' }, { name: 'asc' }],
     })
 
+    const VIP1_START = 901
+    const VIP2_START = 911
+    const VIP_SLOTS = 10
+
     const byTable = new Map<number, string[]>()
     for (const g of guests) {
       const t = g.tableNumber!
       if (!byTable.has(t)) byTable.set(t, [])
       byTable.get(t)!.push((g.name || '').trim() || '–')
     }
-    const sortedTables = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
+    const allEntries = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
+    const normalTables = allEntries.filter(([n]) => n < VIP1_START)
+    const vip1Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP1_START + i) ?? [])[0] ?? '–')
+    const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '–')
 
     const doc = await PDFDocument.create()
     const unicodeFont = await loadUnicodeFontForPdf(doc)
@@ -62,7 +69,7 @@ export async function GET(request: NextRequest) {
     })
     y -= 28
 
-    for (const [tableNum, names] of sortedTables) {
+    for (const [tableNum, names] of normalTables) {
       ensureSpace(120)
       getPage().drawText(safeText(`Tisch ${tableNum}`), {
         x: 50,
@@ -85,6 +92,50 @@ export async function GET(request: NextRequest) {
       }
       y -= 8
     }
+
+    ensureSpace(120)
+    getPage().drawText(safeText('VIP1'), {
+      x: 50,
+      y,
+      size: 14,
+      font: fontBold,
+      color: rgb(0.2, 0.2, 0.4),
+    })
+    y -= 22
+    for (let i = 0; i < VIP_SLOTS; i++) {
+      ensureSpace(60)
+      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(vip1Names[i]), {
+        x: 50,
+        y,
+        size: 11,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      })
+      y -= 16
+    }
+    y -= 8
+
+    ensureSpace(120)
+    getPage().drawText(safeText('VIP2'), {
+      x: 50,
+      y,
+      size: 14,
+      font: fontBold,
+      color: rgb(0.2, 0.2, 0.4),
+    })
+    y -= 22
+    for (let i = 0; i < VIP_SLOTS; i++) {
+      ensureSpace(60)
+      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(vip2Names[i]), {
+        x: 50,
+        y,
+        size: 11,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      })
+      y -= 16
+    }
+    y -= 8
 
     const pdfBytes = await doc.save()
     const filename = `Tischlisten_${new Date().toISOString().split('T')[0]}.pdf`
