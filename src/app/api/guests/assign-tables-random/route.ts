@@ -57,6 +57,19 @@ function getTischfarbe(guest: { additionalData: string | null }): string {
   }
 }
 
+/** Presse-Gäste kommen immer an Tisch 1 (eigener Presse-Tisch). */
+function isPresse(guest: { additionalData: string | null }): boolean {
+  if (!guest.additionalData) return false
+  try {
+    const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+    if (!add || typeof add !== 'object') return false
+    const v = add['Presse'] ?? add['presse']
+    return v === true || v === 1 || (typeof v === 'string' && ['true', 'ja', 'yes', '1'].includes(String(v).trim().toLowerCase()))
+  } catch {
+    return false
+  }
+}
+
 /** Fisher-Yates Shuffle */
 function shuffle<T>(arr: T[]): T[] {
   const out = [...arr]
@@ -103,21 +116,42 @@ export async function POST(request: NextRequest) {
 
     const nonVip = guests.filter((g) => !isVip(g))
     const withZusage = nonVip.filter(hasZusageOrTeilnahme)
+    const presse = withZusage.filter(isPresse)
+    const nonPresse = withZusage.filter((g) => !isPresse(g))
 
-    // Gruppierung: gleiches Geschlecht + gleiche Tischfarbe = gleicher Tischblock (keine gemischten Tische).
+    const updates: ReturnType<typeof prisma.guest.update>[] = []
+    const assignedIds: string[] = []
+    let tableOffset = 0
+
+    // Immer mindestens ein Tisch für Presse (Tisch 1, ggf. mehrere wenn viele Presse-Gäste).
+    if (presse.length > 0) {
+      const presseShuffled = shuffle(presse)
+      const presseTables = Math.ceil(presse.length / Math.max(1, seatsPerTable))
+      const presseSeats = presseTables * seatsPerTable
+      const toAssignPresse = presseShuffled.slice(0, presseSeats)
+      for (let i = 0; i < toAssignPresse.length; i++) {
+        const tableNumber = Math.floor(i / seatsPerTable) + 1
+        updates.push(
+          prisma.guest.update({
+            where: { id: toAssignPresse[i].id },
+            data: { tableNumber },
+          })
+        )
+        assignedIds.push(toAssignPresse[i].id)
+      }
+      tableOffset = presseTables
+    }
+
+    // Übrige Gäste: Gruppierung nach Geschlecht + Tischfarbe (Tische ab 2).
     const FARBE_ORDER = ['', '1', '2', '3', '4'] as const
-    const groups = new Map<string, typeof withZusage>()
-    for (const g of withZusage) {
+    const groups = new Map<string, typeof nonPresse>()
+    for (const g of nonPresse) {
       const w = isWeiblich(g)
       const f = getTischfarbe(g)
       const key = `${w ? 'w' : 'm'}-${f || '_'}`
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(g)
     }
-
-    let tableOffset = 0
-    const updates: ReturnType<typeof prisma.guest.update>[] = []
-    const assignedIds: string[] = []
 
     for (const weiblich of [true, false]) {
       for (const farbe of FARBE_ORDER) {

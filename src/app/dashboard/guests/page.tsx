@@ -52,6 +52,7 @@ export default function GuestsPage() {
     'Status',
     'Tischnummer',
     'Weiblich',
+    'Presse',
     'VIP Begleitung benötigt?',
     'VIP Begleiter (Name)',
     'VIP Anreise (Uhrzeit)',
@@ -67,6 +68,7 @@ export default function GuestsPage() {
     'Kategorie',
     'Partei / Organisation / Unternehmen',
     'Weiblich',
+    'Presse',
     'Funktion',
     'Ebende',
     'E-Mail',
@@ -648,7 +650,7 @@ export default function GuestsPage() {
   }, [guestsWithParsed, allColumns])
 
   // Boolean-Spalten pro Spalte (einmal berechnet, nicht pro Zelle) – großer Performance-Gewinn
-  const alwaysCheckboxColumns = new Set<string>(['Weiblich'])
+  const alwaysCheckboxColumns = new Set<string>(['Weiblich', 'Presse'])
   const isBooleanColumnMap = useMemo(() => {
     const map = new Map<string, boolean>()
     for (const column of allColumns) {

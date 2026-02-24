@@ -323,6 +323,7 @@ export default function RegistrierungenPage() {
   >(null)
   const [swapInProgress, setSwapInProgress] = useState(false)
   const [weiblichUpdatingId, setWeiblichUpdatingId] = useState<string | null>(null)
+  const [presseUpdatingId, setPresseUpdatingId] = useState<string | null>(null)
   const [tischfarbeUpdatingId, setTischfarbeUpdatingId] = useState<string | null>(null)
 
   const loadRegistrations = async () => {
@@ -564,6 +565,38 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'Änderung fehlgeschlagen')
     } finally {
       setWeiblichUpdatingId(null)
+    }
+  }
+
+  function isGuestPresse(guest: GuestEntry | undefined): boolean {
+    if (!guest?.additionalData) return false
+    try {
+      const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+      const v = add?.['Presse'] ?? add?.['presse']
+      return v === true || v === 1 || (typeof v === 'string' && ['true', 'ja', 'yes', '1'].includes(String(v).trim().toLowerCase()))
+    } catch {
+      return false
+    }
+  }
+
+  const handleTogglePresse = async (g: GesamtEntry) => {
+    if (!g.guest?.id) return
+    setPresseUpdatingId(g.guest.id)
+    try {
+      const add = g.guest.additionalData ? JSON.parse(g.guest.additionalData) : {}
+      const next = !isGuestPresse(g.guest)
+      const updated = { ...add, Presse: next }
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.guest.id, additionalData: JSON.stringify(updated) }),
+      })
+      if (!res.ok) throw new Error('Aktualisierung fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Änderung fehlgeschlagen')
+    } finally {
+      setPresseUpdatingId(null)
     }
   }
 
@@ -909,7 +942,7 @@ export default function RegistrierungenPage() {
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
           <p className="mb-3 text-xs text-gray-600">
-            Keine gemischten Tische: Gruppierung nach <strong>Geschlecht</strong> (Weiblich) und <strong>Tischfarbe</strong> (4 Farben). Gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. Bei Bedarf wird die Anzahl Tische automatisch erhöht.
+            <strong>Presse</strong> (Checkbox „P“) sitzt immer an Tisch 1 (eigener Presse-Tisch). Keine gemischten Tische: Gruppierung nach Geschlecht (Weiblich) und Tischfarbe. Bei Bedarf wird die Anzahl Tische automatisch erhöht.
             Nur Gäste mit Zusage/Nimmt teil erhalten einen Tisch; VIP-Gäste werden nicht geändert.
           </p>
           <div className="flex flex-wrap items-center gap-4">
@@ -962,7 +995,7 @@ export default function RegistrierungenPage() {
         {sortedTableNumbers.length > 0 && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün markiert. „Verschieben“ für Tausch.</p>
+            <p className="mb-3 text-xs text-gray-500">„P“ = Presse (Tisch 1); „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -972,8 +1005,10 @@ export default function RegistrierungenPage() {
                     <ul className="space-y-2 text-sm text-gray-700">
                       {guestsAtTable.map((g) => {
                         const weiblich = isGuestWeiblich(g.guest)
+                        const presse = isGuestPresse(g.guest)
                         const anwesend = isGuestAnwesend(g.guest)
                         const updating = g.guest?.id === weiblichUpdatingId
+                        const presseUpd = g.guest?.id === presseUpdatingId
                         const farbeUpdating = g.guest?.id === tischfarbeUpdatingId
                         const currentFarbe = getGuestTischfarbe(g.guest)
                         const nameText = g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'
@@ -983,7 +1018,17 @@ export default function RegistrierungenPage() {
                             <div className="flex items-center gap-2">
                               {g.guest?.id ? (
                                 <>
-                                  <label className="flex shrink-0 items-center gap-1" title="Weiblich">
+                                  <label className="flex shrink-0 items-center gap-0.5" title="Presse (Tisch 1)">
+                                    <input
+                                      type="checkbox"
+                                      checked={presse}
+                                      disabled={presseUpd}
+                                      onChange={() => handleTogglePresse(g)}
+                                      className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    <span className="text-xs text-gray-500">P</span>
+                                  </label>
+                                  <label className="flex shrink-0 items-center gap-0.5" title="Weiblich">
                                     <input
                                       type="checkbox"
                                       checked={weiblich}
