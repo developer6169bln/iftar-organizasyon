@@ -14,6 +14,22 @@ function isVip(guest: { isVip: boolean | null; additionalData: string | null }):
   }
 }
 
+/** Prüft, ob der Gast Zusage oder „Nimmt teil“ hat (nur diese bekommen einen Tisch). */
+function hasZusageOrTeilnahme(guest: { additionalData: string | null }): boolean {
+  if (!guest.additionalData) return false
+  try {
+    const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+    if (!add || typeof add !== 'object') return false
+    const zusage = add['Zusage'] ?? add['zusage']
+    const nimmtTeil = add['Nimmt teil'] ?? add['nimmt teil']
+    const truthy = (v: unknown) =>
+      v === true || v === 1 || (typeof v === 'string' && ['true', 'ja', 'yes', '1'].includes(v.trim().toLowerCase()))
+    return truthy(zusage) || truthy(nimmtTeil)
+  } catch {
+    return false
+  }
+}
+
 /** Fisher-Yates Shuffle */
 function shuffle<T>(arr: T[]): T[] {
   const out = [...arr]
@@ -27,7 +43,7 @@ function shuffle<T>(arr: T[]): T[] {
 /**
  * POST – Zuweisung von Gästen an Tische per Zufall.
  * Body: { eventId: string, numTables: number, seatsPerTable: number }
- * VIP-Gäste werden nicht zugewiesen (tableNumber bleibt unverändert).
+ * Nur Gäste mit Zusage oder „Nimmt teil“ bekommen einen Tisch. VIP-Gäste werden nicht geändert.
  */
 export async function POST(request: NextRequest) {
   const access = await requirePageAccess(request, 'guests')
@@ -58,11 +74,13 @@ export async function POST(request: NextRequest) {
     })
 
     const nonVip = guests.filter((g) => !isVip(g))
-    const shuffled = shuffle(nonVip)
+    const withZusage = nonVip.filter(hasZusageOrTeilnahme)
+    const shuffled = shuffle(withZusage)
 
     const totalSeats = numTables * seatsPerTable
     const toAssign = shuffled.slice(0, totalSeats)
-    const toUnassign = shuffled.slice(totalSeats)
+    const assignedIds = new Set(toAssign.map((g) => g.id))
+    const toUnassign = nonVip.filter((g) => !assignedIds.has(g.id))
 
     const updates = [
       ...toAssign.map((guest, index) => {
@@ -88,6 +106,7 @@ export async function POST(request: NextRequest) {
       assigned: toAssign.length,
       unassigned: toUnassign.length,
       skippedVip: guests.length - nonVip.length,
+      skippedNoZusage: nonVip.length - withZusage.length,
       numTables,
       seatsPerTable,
     })

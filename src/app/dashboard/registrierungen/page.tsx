@@ -415,9 +415,10 @@ export default function RegistrierungenPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Zuweisung fehlgeschlagen')
       setGuestsRefreshKey((k) => k + 1)
-      const parts = [`${data.assigned} Gäste wurden Tischen zugewiesen.`]
-      if (data.unassigned > 0) parts.push(`${data.unassigned} Gäste haben keinen Platz (mehr Gäste als Sitzplätze).`)
-      if (data.skippedVip) parts.push(`${data.skippedVip} VIP(s) ausgelassen.`)
+      const parts = [`${data.assigned} Gäste mit Zusage wurden Tischen zugewiesen.`]
+      if (data.unassigned > 0) parts.push(`${data.unassigned} ohne Platz (mehr Zusagen als Sitzplätze).`)
+      if (data.skippedNoZusage > 0) parts.push(`${data.skippedNoZusage} ohne Zusage/Nimmt teil (kein Tisch).`)
+      if (data.skippedVip) parts.push(`${data.skippedVip} VIP(s) unverändert.`)
       alert(parts.join(' '))
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Tischzuweisung fehlgeschlagen')
@@ -825,8 +826,8 @@ export default function RegistrierungenPage() {
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
           <p className="mb-3 text-xs text-gray-600">
-            Anzahl Tische und Sitzplätze pro Tisch werden gespeichert. VIP-Gäste werden bei der Zuweisung ausgelassen.
-            Nur Gäste, die bereits in der Gästeliste dieses Events sind, erhalten eine Tischnummer. Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
+            Nur Gäste mit <strong>Zusage</strong> oder <strong>Nimmt teil</strong> erhalten eine Tischnummer. VIP-Gäste werden nicht geändert.
+            Anzahl Tische und Sitzplätze pro Tisch werden gespeichert. Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2">
