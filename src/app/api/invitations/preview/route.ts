@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
             email: true,
             organization: true,
             additionalData: true,
+            checkInToken: true,
           },
         },
         event: { select: { id: true, title: true, date: true, location: true } },
@@ -159,6 +160,14 @@ export async function GET(request: NextRequest) {
       .replace(/{{STAAT_INSTITUTION}}/g, staatInstitution)
       .replace(/{{ACCEPT_LINK}}/g, acceptLink)
       .replace(/{{DECLINE_LINK}}/g, declineLink)
+
+    // QR-Code-URL: echte URL wenn checkInToken vorhanden, sonst Platzhalter für Vorschau
+    if (body.includes('{{QR_CODE_URL}}')) {
+      const qrUrl = guest.checkInToken
+        ? `${baseUrl}/api/checkin/qr?t=${encodeURIComponent(guest.checkInToken)}`
+        : 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#f0f0f0" width="200" height="200"/><text x="100" y="100" text-anchor="middle" fill="#999" font-size="14">QR-Code (beim Versand)</text></svg>')
+      body = body.replace(/\{\{QR_CODE_URL\}\}/g, qrUrl)
+    }
 
     return NextResponse.json({ subject, body, guestName: guest.name })
   } catch (error) {

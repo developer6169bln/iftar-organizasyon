@@ -777,6 +777,40 @@ export default function InvitationsPage() {
     }
   }
 
+  const handleCreateElcilikTemplate = async () => {
+    try {
+      const existing = templates.find((t) => t.name === 'Elçilik')
+      if (existing) {
+        alert('Template „Elçilik“ existiert bereits.')
+        return
+      }
+      const res = await fetch('/api/email-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Elçilik',
+          language: 'de',
+          category: '',
+          subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
+          body: `<p>Liebe/r {{GUEST_NAME}},</p>
+<p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
+<p>Wir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.</p>
+<p>Zur Einlasskontrolle am Veranstaltungstag zeigen Sie bitte folgenden QR-Code:</p>
+<p><img src="{{QR_CODE_URL}}" alt="Check-in QR-Code" width="200" height="200" style="display:block; margin:1em 0;" /></p>
+<p>Mit freundlichen Grüßen<br>Ihr Organisationsteam</p>`,
+          plainText: `Liebe/r {{GUEST_NAME}},\n\nwir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.\n\nWir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.\n\nZur Einlasskontrolle erhalten Sie einen QR-Code in dieser E-Mail.\n\nMit freundlichen Grüßen\nIhr Organisationsteam`,
+          isDefault: false,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      await loadTemplates()
+      alert('Template „Elçilik“ erstellt. Enthält keinen Zusage-/Absage-Link, dafür einen Check-in-QR-Code.')
+    } catch (error) {
+      console.error('Fehler beim Erstellen des Elçilik-Templates:', error)
+      alert('Fehler beim Erstellen des Templates.')
+    }
+  }
+
   const handleCreate3Templates = async () => {
     if (!confirm('Möchten Sie 3 fertige Templates in 3 Sprachen (Deutsch, Türkisch, Englisch) erstellen?')) {
       return
@@ -3297,6 +3331,13 @@ export default function InvitationsPage() {
                   className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
                 >
                   📂 Pro Kategorie DE/TR/EN
+                </button>
+                <button
+                  onClick={handleCreateElcilikTemplate}
+                  className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                  title="Wie UID Iftar, aber ohne Zusage/Absage-Links, mit Check-in-QR in der E-Mail"
+                >
+                  🏛 Elçilik (ohne Zusage/Absage, mit QR)
                 </button>
               </div>
             </div>

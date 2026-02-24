@@ -192,11 +192,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hole Gäste
+    // Hole Gäste (inkl. checkInToken für QR-Code in E-Mail)
     const guests = await prisma.guest.findMany({
       where: {
         id: { in: guestIds },
         eventId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        organization: true,
+        additionalData: true,
+        checkInToken: true,
       },
     })
 
@@ -243,6 +251,16 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        // Bei Template mit QR-Code: Check-in-Token für Gast sicherstellen (wird in E-Mail eingebettet)
+        let checkInToken = guest.checkInToken
+        if (template.body.includes('{{QR_CODE_URL}}') && !checkInToken) {
+          checkInToken = crypto.randomBytes(24).toString('hex')
+          await prisma.guest.update({
+            where: { id: guest.id },
+            data: { checkInToken },
+          })
+        }
+
         // Generiere Tokens
         const acceptToken = crypto.randomBytes(32).toString('hex')
         const declineToken = crypto.randomBytes(32).toString('hex')
@@ -298,6 +316,14 @@ export async function POST(request: NextRequest) {
           personalizedBody = personalizedBody
             .replace(/{{ACCEPT_LINK}}/g, '')
             .replace(/{{DECLINE_LINK}}/g, '')
+        }
+
+        // QR-Code-URL für Check-in (Template-Platzhalter {{QR_CODE_URL}})
+        if (template.body.includes('{{QR_CODE_URL}}') && checkInToken) {
+          personalizedBody = personalizedBody.replace(
+            /\{\{QR_CODE_URL\}\}/g,
+            `${baseUrl}/api/checkin/qr?t=${encodeURIComponent(checkInToken)}`
+          )
         }
 
         let personalizedSubject = template.subject

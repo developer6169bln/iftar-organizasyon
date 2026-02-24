@@ -138,6 +138,12 @@ export async function POST(request: NextRequest) {
         .replace(/{{DECLINE_LINK}}/g, '')
     }
 
+    // QR-Code-URL: bei Test-Mail Platzhalter (kein echter Gast)
+    if (personalizedBody.includes('{{QR_CODE_URL}}')) {
+      const qrPlaceholder = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#f0f0f0" width="200" height="200"/><text x="100" y="100" text-anchor="middle" fill="#999" font-size="14">QR-Code (Test)</text></svg>')
+      personalizedBody = personalizedBody.replace(/\{\{QR_CODE_URL\}\}/g, qrPlaceholder)
+    }
+
     let personalizedSubject = template.subject
       .replace(/{{GUEST_NAME}}/g, 'Test-Gast')
       .replace(/{{VORNAME}}/g, 'Test')
