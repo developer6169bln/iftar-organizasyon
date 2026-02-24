@@ -49,3 +49,18 @@ export function pdfSafeTextForUnicode(text: string): string {
     .trim()
     .slice(0, 300)
 }
+
+/** Für Helvetica/WinAnsi: Türkische Zeichen durch ASCII ersetzen, damit drawText nicht wirft. Nur verwenden, wenn kein Unicode-Font geladen wurde. */
+export function pdfSafeTextForWinAnsi(text: string): string {
+  const m: Record<string, string> = {
+    İ: 'I', ı: 'i', Ş: 'S', ş: 's', Ğ: 'G', ğ: 'g', Ü: 'U', ü: 'u', Ö: 'O', ö: 'o', Ç: 'C', ç: 'c',
+  }
+  let out = (text || '')
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+    .replace(/📅|🕰|📍/g, '')
+    .replace(/\r?\n/g, ' ')
+    .trim()
+    .slice(0, 300)
+  for (const [k, v] of Object.entries(m)) out = out.replace(new RegExp(k, 'g'), v)
+  return out
+}
