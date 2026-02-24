@@ -345,6 +345,7 @@ export default function RegistrierungenPage() {
   const [presseUpdatingId, setPresseUpdatingId] = useState<string | null>(null)
   const [tischfarbeUpdatingId, setTischfarbeUpdatingId] = useState<string | null>(null)
   const [vipAssignSlot, setVipAssignSlot] = useState<number | null>(null)
+  const [vipAssignSearch, setVipAssignSearch] = useState('')
 
   const loadRegistrations = async () => {
     try {
@@ -653,6 +654,7 @@ export default function RegistrierungenPage() {
       if (!res.ok) throw new Error('Zuweisung fehlgeschlagen')
       setGuestsRefreshKey((k) => k + 1)
       setVipAssignSlot(null)
+      setVipAssignSearch('')
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Zuweisung fehlgeschlagen')
     }
@@ -1242,14 +1244,29 @@ export default function RegistrierungenPage() {
         )}
         {/* Modal: Gast für Presse-/VIP-Platz auswählen */}
         {vipAssignSlot != null && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setVipAssignSlot(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => { setVipAssignSlot(null); setVipAssignSearch('') }}>
             <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="mb-2 text-sm font-semibold text-gray-800">
                 Gast für {getSpecialTableLabel(vipAssignSlot)} Platz {getSpecialTablePlatz(vipAssignSlot)} zuweisen
               </h3>
-              <p className="mb-3 text-xs text-gray-600">Gast aus der Liste wählen (wird diesem Platz zugewiesen).</p>
+              <p className="mb-2 text-xs text-gray-600">Gast aus der Liste wählen (wird diesem Platz zugewiesen).</p>
+              <input
+                type="search"
+                placeholder="Gast suchen…"
+                value={vipAssignSearch}
+                onChange={(e) => setVipAssignSearch(e.target.value)}
+                className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm placeholder:text-gray-400 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
               <ul className="max-h-80 space-y-1 overflow-y-auto">
-                {rows.filter((g) => g.guest?.id).map((g) => (
+                {rows
+                  .filter((g) => g.guest?.id)
+                  .filter((g) => {
+                    const q = vipAssignSearch.trim().toLowerCase()
+                    if (!q) return true
+                    const name = (g.fullName || [g.firstName, g.lastName].filter(Boolean).join(' ') || '').toLowerCase()
+                    return name.includes(q)
+                  })
+                  .map((g) => (
                   <li key={g.guest!.id}>
                     <button
                       type="button"
@@ -1262,7 +1279,7 @@ export default function RegistrierungenPage() {
                 ))}
               </ul>
               <div className="mt-4 flex justify-end">
-                <button type="button" onClick={() => setVipAssignSlot(null)} className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300">
+                <button type="button" onClick={() => { setVipAssignSlot(null); setVipAssignSearch('') }} className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300">
                   Abbrechen
                 </button>
               </div>

@@ -57,6 +57,17 @@ function getTischfarbe(guest: { additionalData: string | null }): string {
   }
 }
 
+/** Presse/VIP-Platzhalter-Tische: 801–812 Presse, 901–920 VIP. Diese Zuweisungen bei erneutem Random nicht ändern. */
+const PRESSE_TABLE_START = 801
+const PRESSE_TABLE_END = 813
+const VIP_TABLE_START = 901
+const VIP_TABLE_END = 921
+function isPresseOrVipTable(tableNumber: number | null): boolean {
+  if (tableNumber == null) return false
+  return (tableNumber >= PRESSE_TABLE_START && tableNumber < PRESSE_TABLE_END) ||
+    (tableNumber >= VIP_TABLE_START && tableNumber < VIP_TABLE_END)
+}
+
 /** Presse-Gäste kommen immer an Tisch 1 (eigener Presse-Tisch). */
 function isPresse(guest: { additionalData: string | null }): boolean {
   if (!guest.additionalData) return false
@@ -111,23 +122,25 @@ export async function POST(request: NextRequest) {
 
     const guests = await prisma.guest.findMany({
       where: { eventId },
-      select: { id: true, isVip: true, additionalData: true },
+      select: { id: true, isVip: true, additionalData: true, tableNumber: true },
     })
 
     const nonVip = guests.filter((g) => !isVip(g))
     const withZusage = nonVip.filter(hasZusageOrTeilnahme)
     const presse = withZusage.filter(isPresse)
     const nonPresse = withZusage.filter((g) => !isPresse(g))
+    // Bereits Presse/VIP zugewiesene Gäste (801–812, 901–920) bei erneutem Random unverändert lassen.
+    const nonPresseEligible = nonPresse.filter((g) => !isPresseOrVipTable(g.tableNumber))
     // Presse wird nicht automatisch zugewiesen; Platzhalter 801–812 werden manuell befüllt.
 
     const updates: ReturnType<typeof prisma.guest.update>[] = []
     const assignedIds: string[] = []
     let tableOffset = 0
 
-    // Übrige Gäste (ohne Presse): Gruppierung nach Geschlecht + Tischfarbe (Tische 1, 2, …).
+    // Übrige Gäste (ohne Presse, ohne bereits Presse/VIP-Platz): Gruppierung nach Geschlecht + Tischfarbe (Tische 1, 2, …).
     const FARBE_ORDER = ['', '1', '2', '3', '4'] as const
-    const groups = new Map<string, typeof nonPresse>()
-    for (const g of nonPresse) {
+    const groups = new Map<string, typeof nonPresseEligible>()
+    for (const g of nonPresseEligible) {
       const w = isWeiblich(g)
       const f = getTischfarbe(g)
       const key = `${w ? 'w' : 'm'}-${f || '_'}`
@@ -160,7 +173,9 @@ export async function POST(request: NextRequest) {
 
     const numTablesToUse = Math.max(numTables, tableOffset)
     const assignedSet = new Set(assignedIds)
-    const toUnassign = nonVip.filter((g) => !assignedSet.has(g.id) && !isPresse(g))
+    const toUnassign = nonVip.filter(
+      (g) => !assignedSet.has(g.id) && !isPresse(g) && !isPresseOrVipTable(g.tableNumber)
+    )
     for (const guest of toUnassign) {
       updates.push(
         prisma.guest.update({
