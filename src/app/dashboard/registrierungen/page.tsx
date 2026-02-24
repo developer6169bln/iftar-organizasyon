@@ -567,6 +567,17 @@ export default function RegistrierungenPage() {
     }
   }
 
+  function isGuestAnwesend(guest: GuestEntry | undefined): boolean {
+    if (!guest?.additionalData) return false
+    try {
+      const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+      const v = add?.['Anwesend'] ?? add?.['anwesend']
+      return v === true || v === 1 || (typeof v === 'string' && ['true', 'ja', 'yes', '1'].includes(String(v).trim().toLowerCase()))
+    } catch {
+      return false
+    }
+  }
+
   function getGuestTischfarbe(guest: GuestEntry | undefined): string {
     if (!guest?.additionalData) return ''
     try {
@@ -951,7 +962,7 @@ export default function RegistrierungenPage() {
         {sortedTableNumbers.length > 0 && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„W“ = Weiblich; 4 Farben = Tischfarbe (gleiche Farbe + Geschlecht = gleicher Tisch). „Verschieben“ für Tausch.</p>
+            <p className="mb-3 text-xs text-gray-500">„W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün markiert. „Verschieben“ für Tausch.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -961,9 +972,12 @@ export default function RegistrierungenPage() {
                     <ul className="space-y-2 text-sm text-gray-700">
                       {guestsAtTable.map((g) => {
                         const weiblich = isGuestWeiblich(g.guest)
+                        const anwesend = isGuestAnwesend(g.guest)
                         const updating = g.guest?.id === weiblichUpdatingId
                         const farbeUpdating = g.guest?.id === tischfarbeUpdatingId
                         const currentFarbe = getGuestTischfarbe(g.guest)
+                        const nameText = g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'
+                        const nameClass = `min-w-0 flex-1 truncate ${anwesend ? 'rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-800' : ''}`
                         return (
                           <li key={g.key} className="flex flex-col gap-1">
                             <div className="flex items-center gap-2">
@@ -979,7 +993,7 @@ export default function RegistrierungenPage() {
                                     />
                                     <span className="text-xs text-gray-500">W</span>
                                   </label>
-                                  <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                                  <span className={nameClass} title={anwesend ? 'Anwesend' : undefined}>{nameText}</span>
                                   <button
                                     type="button"
                                     onClick={() => handleTableSwapStart(g, num)}
@@ -990,7 +1004,7 @@ export default function RegistrierungenPage() {
                                   </button>
                                 </>
                               ) : (
-                                <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                                <span className={nameClass} title={anwesend ? 'Anwesend' : undefined}>{nameText}</span>
                               )}
                             </div>
                             {g.guest?.id && (
