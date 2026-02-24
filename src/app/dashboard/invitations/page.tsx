@@ -789,16 +789,16 @@ export default function InvitationsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'Elçilik',
-          language: 'de',
+          language: 'tr',
           category: '',
-          subject: 'Einladung zum Iftar-Essen - {{EVENT_TITLE}}',
-          body: `<p>Liebe/r {{GUEST_NAME}},</p>
-<p>wir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.</p>
-<p>Wir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.</p>
-<p>Zur Einlasskontrolle am Veranstaltungstag zeigen Sie bitte folgenden QR-Code:</p>
-<p><img src="{{QR_CODE_URL}}" alt="Check-in QR-Code" width="200" height="200" style="display:block; margin:1em 0;" /></p>
-<p>Mit freundlichen Grüßen<br>Ihr Organisationsteam</p>`,
-          plainText: `Liebe/r {{GUEST_NAME}},\n\nwir laden Sie herzlich ein zum Iftar-Essen am {{EVENT_DATE}} um {{EVENT_LOCATION}}.\n\nWir würden uns sehr freuen, Sie bei dieser besonderen Veranstaltung begrüßen zu dürfen.\n\nZur Einlasskontrolle erhalten Sie einen QR-Code in dieser E-Mail.\n\nMit freundlichen Grüßen\nIhr Organisationsteam`,
+          subject: 'İftar Yemeği Daveti - {{EVENT_TITLE}}',
+          body: `<p>Sayın {{GUEST_NAME}},</p>
+<p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
+<p>Bu özel etkinlikte sizleri ağırlamaktan memnuniyet duyacağız.</p>
+<p>Giriş kontrolü için lütfen aşağıdaki QR kodu göstermenizi rica ederiz:</p>
+<p><img src="{{QR_CODE_URL}}" alt="Giriş QR Kodu" width="200" height="200" style="display:block; margin:1em 0;" /></p>
+<p>Saygılarımızla,<br>Organizasyon Ekibi</p>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\n{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.\n\nBu özel etkinlikte sizleri ağırlamaktan memnuniyet duyacağız.\n\nGiriş kontrolü için bu e-postadaki QR kodu kullanınız.\n\nSaygılarımızla,\nOrganizasyon Ekibi`,
           isDefault: false,
         }),
       })
