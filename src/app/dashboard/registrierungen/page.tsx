@@ -140,11 +140,24 @@ const EVENT_SLUG_LABELS: Record<string, string> = {
   'kemalettingruppe': 'Kemalettingruppe',
 }
 
-/** VIP-Tische: je 10 Platzhalter (Tisch-Nummern 901–910 = VIP1, 911–920 = VIP2). */
+/** Presse-Tisch: 12 Platzhalter (801–812). VIP: je 10 (901–910 = VIP1, 911–920 = VIP2). */
+const PRESSE_TABLE_START = 801
+const PRESSE_SLOTS = 12
 const VIP1_TABLE_START = 901
 const VIP2_TABLE_START = 911
 const VIP_SLOTS = 10
-const getVipTableLabel = (n: number) => (n >= 901 && n <= 910) ? 'VIP1' : (n >= 911 && n <= 920) ? 'VIP2' : null
+function getSpecialTableLabel(n: number): string {
+  if (n >= PRESSE_TABLE_START && n < PRESSE_TABLE_START + PRESSE_SLOTS) return 'Presse'
+  if (n >= VIP1_TABLE_START && n <= 910) return 'VIP1'
+  if (n >= VIP2_TABLE_START && n <= 920) return 'VIP2'
+  return ''
+}
+function getSpecialTablePlatz(n: number): number {
+  if (n >= PRESSE_TABLE_START && n < PRESSE_TABLE_START + PRESSE_SLOTS) return n - PRESSE_TABLE_START + 1
+  if (n >= VIP1_TABLE_START && n <= 910) return n - VIP1_TABLE_START + 1
+  if (n >= VIP2_TABLE_START && n <= 920) return n - VIP2_TABLE_START + 1
+  return 0
+}
 
 /** 4 Tischfarben zur Kategorisierung – gleiche Farbe + gleiches Geschlecht = gleicher Tischblock. */
 const TISCHFARBE_OPTIONS: { value: string; label: string; bg: string; ring: string }[] = [
@@ -972,10 +985,11 @@ export default function RegistrierungenPage() {
         byTable.get(tn)!.push(g)
       }
     }
+    for (let t = PRESSE_TABLE_START; t < PRESSE_TABLE_START + PRESSE_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     for (let t = VIP1_TABLE_START; t < VIP1_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     for (let t = VIP2_TABLE_START; t < VIP2_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     const allTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
-    const normalTableNumbers = allTableNumbers.filter((n) => n < VIP1_TABLE_START)
+    const normalTableNumbers = allTableNumbers.filter((n) => n < PRESSE_TABLE_START)
     return (
       <div>
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -1034,7 +1048,7 @@ export default function RegistrierungenPage() {
         {(normalTableNumbers.length > 0 || selectedEventId) && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„P“ = Presse (Tisch 1); „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch. VIP1/VIP2 = Platzhalter (901–920).</p>
+            <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch. Presse (801–812), VIP1/VIP2 (901–920) = Platzhalter.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -1121,16 +1135,17 @@ export default function RegistrierungenPage() {
                 )
               })}
             </div>
-            {/* VIP1 / VIP2: je 10 Platzhalter – Gast zuweisen oder entfernen */}
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Presse (12) / VIP1 / VIP2 (je 10): Platzhalter – Gast zuweisen oder entfernen */}
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
-                { label: 'VIP1', start: VIP1_TABLE_START },
-                { label: 'VIP2', start: VIP2_TABLE_START },
-              ].map(({ label, start }) => (
-                <div key={label} className="rounded-lg border-2 border-amber-200 bg-amber-50/80 p-3">
-                  <div className="mb-2 font-semibold text-amber-900">{label}</div>
+                { label: 'Presse', start: PRESSE_TABLE_START, slots: PRESSE_SLOTS, border: 'border-slate-300', bg: 'bg-slate-50/80', title: 'text-slate-800', btn: 'bg-slate-200 text-slate-800 hover:bg-slate-300' },
+                { label: 'VIP1', start: VIP1_TABLE_START, slots: VIP_SLOTS, border: 'border-amber-200', bg: 'bg-amber-50/80', title: 'text-amber-900', btn: 'bg-amber-200 text-amber-900 hover:bg-amber-300' },
+                { label: 'VIP2', start: VIP2_TABLE_START, slots: VIP_SLOTS, border: 'border-amber-200', bg: 'bg-amber-50/80', title: 'text-amber-900', btn: 'bg-amber-200 text-amber-900 hover:bg-amber-300' },
+              ].map(({ label, start, slots, border, bg, title, btn }) => (
+                <div key={label} className={`rounded-lg border-2 ${border} ${bg} p-3`}>
+                  <div className={`mb-2 font-semibold ${title}`}>{label}</div>
                   <ul className="space-y-1.5 text-sm text-gray-700">
-                    {Array.from({ length: VIP_SLOTS }, (_, i) => {
+                    {Array.from({ length: slots }, (_, i) => {
                       const slotNum = start + i
                       const guests = byTable.get(slotNum) ?? []
                       const g = guests[0]
@@ -1138,7 +1153,7 @@ export default function RegistrierungenPage() {
                       const anwesend = g && isGuestAnwesend(g.guest)
                       return (
                         <li key={slotNum} className="flex items-center justify-between gap-2 rounded bg-white/70 px-2 py-1">
-                          <span className="min-w-0 flex-1 truncate font-medium text-amber-900">Platz {i + 1}</span>
+                          <span className={`min-w-0 flex-1 truncate font-medium ${title}`}>Platz {i + 1}</span>
                           <span className={`min-w-0 flex-1 truncate ${anwesend ? 'rounded bg-emerald-100 px-1 font-medium text-emerald-800' : 'text-gray-700'}`}>{nameText}</span>
                           <div className="flex shrink-0 gap-1">
                             {g?.guest?.id ? (
@@ -1153,7 +1168,7 @@ export default function RegistrierungenPage() {
                               <button
                                 type="button"
                                 onClick={() => setVipAssignSlot(slotNum)}
-                                className="rounded bg-amber-200 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-300"
+                                className={`rounded px-2 py-0.5 text-xs font-medium ${btn}`}
                               >
                                 Gast zuweisen
                               </button>
@@ -1225,14 +1240,14 @@ export default function RegistrierungenPage() {
             </div>
           </div>
         )}
-        {/* Modal: Gast für VIP-Platz auswählen */}
+        {/* Modal: Gast für Presse-/VIP-Platz auswählen */}
         {vipAssignSlot != null && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setVipAssignSlot(null)}>
             <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="mb-2 text-sm font-semibold text-gray-800">
-                Gast für {getVipTableLabel(vipAssignSlot)} Platz {vipAssignSlot - (vipAssignSlot >= VIP2_TABLE_START ? VIP2_TABLE_START : VIP1_TABLE_START) + 1} zuweisen
+                Gast für {getSpecialTableLabel(vipAssignSlot)} Platz {getSpecialTablePlatz(vipAssignSlot)} zuweisen
               </h3>
-              <p className="mb-3 text-xs text-gray-600">Gast aus der Liste wählen (wird diesem VIP-Platz zugewiesen).</p>
+              <p className="mb-3 text-xs text-gray-600">Gast aus der Liste wählen (wird diesem Platz zugewiesen).</p>
               <ul className="max-h-80 space-y-1 overflow-y-auto">
                 {rows.filter((g) => g.guest?.id).map((g) => (
                   <li key={g.guest!.id}>

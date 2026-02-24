@@ -118,31 +118,13 @@ export async function POST(request: NextRequest) {
     const withZusage = nonVip.filter(hasZusageOrTeilnahme)
     const presse = withZusage.filter(isPresse)
     const nonPresse = withZusage.filter((g) => !isPresse(g))
+    // Presse wird nicht automatisch zugewiesen; Platzhalter 801–812 werden manuell befüllt.
 
     const updates: ReturnType<typeof prisma.guest.update>[] = []
     const assignedIds: string[] = []
     let tableOffset = 0
 
-    // Immer mindestens ein Tisch für Presse (Tisch 1, ggf. mehrere wenn viele Presse-Gäste).
-    if (presse.length > 0) {
-      const presseShuffled = shuffle(presse)
-      const presseTables = Math.ceil(presse.length / Math.max(1, seatsPerTable))
-      const presseSeats = presseTables * seatsPerTable
-      const toAssignPresse = presseShuffled.slice(0, presseSeats)
-      for (let i = 0; i < toAssignPresse.length; i++) {
-        const tableNumber = Math.floor(i / seatsPerTable) + 1
-        updates.push(
-          prisma.guest.update({
-            where: { id: toAssignPresse[i].id },
-            data: { tableNumber },
-          })
-        )
-        assignedIds.push(toAssignPresse[i].id)
-      }
-      tableOffset = presseTables
-    }
-
-    // Übrige Gäste: Gruppierung nach Geschlecht + Tischfarbe (Tische ab 2).
+    // Übrige Gäste (ohne Presse): Gruppierung nach Geschlecht + Tischfarbe (Tische 1, 2, …).
     const FARBE_ORDER = ['', '1', '2', '3', '4'] as const
     const groups = new Map<string, typeof nonPresse>()
     for (const g of nonPresse) {
@@ -178,7 +160,7 @@ export async function POST(request: NextRequest) {
 
     const numTablesToUse = Math.max(numTables, tableOffset)
     const assignedSet = new Set(assignedIds)
-    const toUnassign = nonVip.filter((g) => !assignedSet.has(g.id))
+    const toUnassign = nonVip.filter((g) => !assignedSet.has(g.id) && !isPresse(g))
     for (const guest of toUnassign) {
       updates.push(
         prisma.guest.update({
