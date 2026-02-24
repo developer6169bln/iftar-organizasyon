@@ -811,6 +811,40 @@ export default function InvitationsPage() {
     }
   }
 
+  /** Kopie von „UID Berlin Gästeliste“ (TR): gleicher Text, ohne Zusage/Absage, mit Check-in-QR. Kategorie gasteliste. */
+  const handleCreateElcoTemplate = async () => {
+    try {
+      const existing = templates.find((t) => t.name === 'Elco')
+      if (existing) {
+        alert('Template „Elco“ existiert bereits.')
+        return
+      }
+      const res = await fetch('/api/email-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Elco',
+          language: 'tr',
+          category: 'gasteliste',
+          subject: 'Davet - Davet Listesi - {{EVENT_TITLE}}',
+          body: `<p>Sayın {{GUEST_NAME}},</p>
+<p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
+<p>Giriş kontrolü için lütfen aşağıdaki QR kodu göstermenizi rica ederiz:</p>
+<p><img src="{{QR_CODE_URL}}" alt="Giriş QR Kodu" width="200" height="200" style="display:block; margin:1em 0;" /></p>
+<p>Saygılarımızla<br>Organizasyon Ekibi</p>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\n{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.\n\nGiriş kontrolü için bu e-postadaki QR kodu kullanınız.\n\nSaygılarımızla\nOrganizasyon Ekibi`,
+          isDefault: false,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      await loadTemplates()
+      alert('Template „Elco“ erstellt (Kopie Gästeliste TR ohne Zusage/Absage, mit Check-in-QR).')
+    } catch (error) {
+      console.error('Fehler beim Erstellen des Elco-Templates:', error)
+      alert('Fehler beim Erstellen des Templates.')
+    }
+  }
+
   const handleCreate3Templates = async () => {
     if (!confirm('Möchten Sie 3 fertige Templates in 3 Sprachen (Deutsch, Türkisch, Englisch) erstellen?')) {
       return
@@ -3338,6 +3372,13 @@ export default function InvitationsPage() {
                   title="Wie UID Iftar, aber ohne Zusage/Absage-Links, mit Check-in-QR in der E-Mail"
                 >
                   🏛 Elçilik (ohne Zusage/Absage, mit QR)
+                </button>
+                <button
+                  onClick={handleCreateElcoTemplate}
+                  className="rounded-lg bg-slate-500 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                  title="Kopie von UID Berlin Gästeliste (TR): gleicher Text, ohne Zusage/Absage, mit Check-in-QR"
+                >
+                  📋 Elco (Gästeliste TR, ohne Zusage/Absage, mit QR)
                 </button>
               </div>
             </div>
