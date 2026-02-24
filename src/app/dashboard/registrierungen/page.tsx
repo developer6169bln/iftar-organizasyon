@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
-import { loadUnicodeFontForPdf, pdfSafeTextForUnicode } from '@/lib/pdfUnicodeFont'
 
 type Registration = {
   id: string
@@ -316,6 +314,7 @@ export default function RegistrierungenPage() {
     | null
   >(null)
   const [swapInProgress, setSwapInProgress] = useState(false)
+  const [weiblichUpdatingId, setWeiblichUpdatingId] = useState<string | null>(null)
 
   const loadRegistrations = async () => {
     try {
@@ -472,75 +471,16 @@ export default function RegistrierungenPage() {
     }
     setTischlistenPdfLoading(true)
     try {
-      const res = await fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}`)
-      if (!res.ok) throw new Error('Gäste konnten nicht geladen werden.')
-      const allGuests = await res.json()
-      const withTable = (allGuests as { id: string; name: string; tableNumber?: number | null }[]).filter(
-        (g) => g.tableNumber != null
-      )
-      const byTable = new Map<number, { name: string }[]>()
-      for (const g of withTable) {
-        const t = g.tableNumber!
-        if (!byTable.has(t)) byTable.set(t, [])
-        byTable.get(t)!.push({ name: (g.name || '').trim() || '–' })
+      const res = await fetch(`/api/guests/export-tischlisten-pdf?eventId=${encodeURIComponent(selectedEventId)}`, { credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'PDF konnte nicht erstellt werden.')
       }
-      const sortedTables = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
-
-      const doc = await PDFDocument.create()
-      const unicodeFont = await loadUnicodeFontForPdf(doc)
-      const font = unicodeFont ?? (await doc.embedFont(StandardFonts.Helvetica))
-      const fontBold = unicodeFont ?? (await doc.embedFont(StandardFonts.HelveticaBold))
-      doc.addPage([595, 842])
-      const pageHeight = 842
-      let y = pageHeight - 50
-
-      const getPage = () => doc.getPage(doc.getPageCount() - 1)
-      const ensureSpace = (need: number) => {
-        if (y < need) {
-          doc.addPage([595, 842])
-          y = pageHeight - 40
-        }
-      }
-
-      getPage().drawText(pdfSafeTextForUnicode('Tischlisten'), {
-        x: 50,
-        y,
-        size: 18,
-        font: fontBold,
-        color: rgb(0.2, 0.2, 0.4),
-      })
-      y -= 28
-
-      for (const [tableNum, guests] of sortedTables) {
-        ensureSpace(120)
-        getPage().drawText(pdfSafeTextForUnicode(`Tisch ${tableNum}`), {
-          x: 50,
-          y,
-          size: 14,
-          font: fontBold,
-          color: rgb(0.2, 0.2, 0.4),
-        })
-        y -= 22
-        for (const g of guests) {
-          ensureSpace(60)
-          getPage().drawText('  • ' + pdfSafeTextForUnicode(g.name), {
-            x: 50,
-            y,
-            size: 11,
-            font,
-            color: rgb(0.1, 0.1, 0.1),
-          })
-          y -= 16
-        }
-        y -= 8
-      }
-
-      const pdfBytes = await doc.save()
-      const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' })
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `Tischlisten_${new Date().toISOString().split('T')[0]}.pdf`
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || `Tischlisten_${new Date().toISOString().split('T')[0]}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
@@ -586,6 +526,38 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'Tausch fehlgeschlagen')
     } finally {
       setSwapInProgress(false)
+    }
+  }
+
+  function isGuestWeiblich(guest: GuestEntry | undefined): boolean {
+    if (!guest?.additionalData) return false
+    try {
+      const add = typeof guest.additionalData === 'string' ? JSON.parse(guest.additionalData) : guest.additionalData
+      const v = add?.['Weiblich'] ?? add?.['weiblich']
+      return v === true || v === 1 || (typeof v === 'string' && ['true', 'ja', 'yes', '1'].includes(String(v).trim().toLowerCase()))
+    } catch {
+      return false
+    }
+  }
+
+  const handleToggleWeiblich = async (g: GesamtEntry) => {
+    if (!g.guest?.id) return
+    setWeiblichUpdatingId(g.guest.id)
+    try {
+      const add = g.guest.additionalData ? JSON.parse(g.guest.additionalData) : {}
+      const next = !isGuestWeiblich(g.guest)
+      const updated = { ...add, Weiblich: next }
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.guest.id, additionalData: JSON.stringify(updated) }),
+      })
+      if (!res.ok) throw new Error('Aktualisierung fehlgeschlagen')
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Änderung fehlgeschlagen')
+    } finally {
+      setWeiblichUpdatingId(null)
     }
   }
 
@@ -940,7 +912,7 @@ export default function RegistrierungenPage() {
         {sortedTableNumbers.length > 0 && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">Klicken Sie bei einem Gast auf „Verschieben“, wählen Sie den Zieltisch und dann den Tauschpartner.</p>
+            <p className="mb-3 text-xs text-gray-500">Checkbox „Weiblich“ per Klick ändern; „Verschieben“ für Tisch-Tausch.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -948,21 +920,39 @@ export default function RegistrierungenPage() {
                   <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <div className="mb-2 font-semibold text-gray-800">Tisch {num}</div>
                     <ul className="space-y-1 text-sm text-gray-700">
-                      {guestsAtTable.map((g) => (
-                        <li key={g.key} className="flex items-center justify-between gap-2">
-                          <span>{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
-                          {g.guest?.id && (
-                            <button
-                              type="button"
-                              onClick={() => handleTableSwapStart(g, num)}
-                              className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
-                              title="Gast an anderen Tisch tauschen"
-                            >
-                              Verschieben
-                            </button>
-                          )}
-                        </li>
-                      ))}
+                      {guestsAtTable.map((g) => {
+                        const weiblich = isGuestWeiblich(g.guest)
+                        const updating = g.guest?.id === weiblichUpdatingId
+                        return (
+                          <li key={g.key} className="flex items-center gap-2">
+                            {g.guest?.id ? (
+                              <>
+                                <label className="flex shrink-0 items-center gap-1" title="Weiblich">
+                                  <input
+                                    type="checkbox"
+                                    checked={weiblich}
+                                    disabled={updating}
+                                    onChange={() => handleToggleWeiblich(g)}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  <span className="text-xs text-gray-500">W</span>
+                                </label>
+                                <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTableSwapStart(g, num)}
+                                  className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
+                                  title="Gast an anderen Tisch tauschen"
+                                >
+                                  Verschieben
+                                </button>
+                              </>
+                            ) : (
+                              <span className="min-w-0 flex-1 truncate">{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                            )}
+                          </li>
+                        )
+                      })}
                     </ul>
                   </div>
                 )

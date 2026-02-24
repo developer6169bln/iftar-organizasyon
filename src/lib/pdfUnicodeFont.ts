@@ -1,17 +1,22 @@
 import type { PDFDocument, PDFFont } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 
-/** NotoSans unterstützt Türkisch (ğ, ş, ı, ü, ö, ç, İ, …) und weitere Unicode-Zeichen. */
+/** Gleiche Reihenfolge wie bei VIP-Namensschildern: Arimo (Arial-ähnlich), dann Noto Sans – volle Unicode/Türkisch-Unterstützung. */
 const UNICODE_FONT_URLS = [
+  'https://github.com/google/fonts/raw/main/ofl/arimo/Arimo-Regular.ttf',
+  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/arimo/Arimo-Regular.ttf',
   'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
   'https://github.com/google/fonts/raw/main/ofl/notosans/NotoSans-Regular.ttf',
-  'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/arimo/Arimo-Regular.ttf',
 ]
 
+const FONT_FETCH_HEADERS = {
+  Accept: 'application/octet-stream, application/font-ttf, font/ttf, font/otf, */*',
+  'User-Agent': 'Mozilla/5.0 (compatible; pdf-lib-font-loader)',
+}
+
 /**
- * Registriert Fontkit und lädt eine Unicode-Schrift (z. B. NotoSans) für PDFs.
- * Damit können türkische Zeichen (ğ, ş, ı, ü, ö, ç, İ, …) und andere Unicode-Zeichen ausgegeben werden.
- * Kein WinAnsi/Helvetica, das nur Latin-1 unterstützt.
+ * Registriert Fontkit und lädt eine Unicode-Schrift (Arimo/NotoSans) für PDFs.
+ * Damit können türkische Zeichen (ğ, ş, ı, ü, ö, ç, İ, …) ausgegeben werden – kein WinAnsi/Helvetica.
  */
 export async function loadUnicodeFontForPdf(pdfDoc: PDFDocument): Promise<PDFFont | null> {
   try {
@@ -21,13 +26,11 @@ export async function loadUnicodeFontForPdf(pdfDoc: PDFDocument): Promise<PDFFon
   }
   for (const url of UNICODE_FONT_URLS) {
     try {
-      const res = await fetch(url, {
-        headers: { Accept: 'font/ttf, application/octet-stream, */*' },
-      })
+      const res = await fetch(url, { headers: FONT_FETCH_HEADERS })
       if (res.ok) {
         const bytes = await res.arrayBuffer()
         if (bytes.byteLength > 1000) {
-          return await pdfDoc.embedFont(bytes) as PDFFont
+          return (await pdfDoc.embedFont(bytes)) as PDFFont
         }
       }
     } catch {
