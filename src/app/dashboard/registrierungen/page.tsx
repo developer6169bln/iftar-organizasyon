@@ -564,10 +564,15 @@ export default function RegistrierungenPage() {
   const omerliste = list.filter((r) => r.eventSlug === 'omerliste')
   const kemalettingruppe = list.filter((r) => r.eventSlug === 'kemalettingruppe')
 
-  const guestsWithEinladungsliste = guests.filter(hasEinladungsliste)
-  const guestNamesLowerEinladungsliste = new Set(guestsWithEinladungsliste.map((g) => g.name.toLowerCase()).filter(Boolean))
-  const mergedListForGesamt = mergeRegistrations(list, guestNamesLowerEinladungsliste)
-  const gesamtList = mergeGesamtList(mergedListForGesamt, guestsWithEinladungsliste)
+  const guestNamesLower = new Set(
+    guests.map((g) => {
+      const { vorname, nachname } = getGuestVornameNachname(g)
+      const full = [vorname, nachname].filter(Boolean).join(' ').trim() || g.name || ''
+      return full.toLowerCase()
+    }).filter(Boolean)
+  )
+  const mergedListForGesamt = mergeRegistrations(list, guestNamesLower)
+  const gesamtList = mergeGesamtList(mergedListForGesamt, guests)
   const gesamtFiltered = filterGesamtByNoQr(filterGesamtBySearch(gesamtList, searchQuery), filterNoQr)
 
   const formatDate = (s: string) => {
