@@ -51,6 +51,7 @@ export default function GuestsPage() {
     'E-Mail',
     'Status',
     'Tischnummer',
+    'Weiblich',
     'VIP Begleitung benötigt?',
     'VIP Begleiter (Name)',
     'VIP Anreise (Uhrzeit)',
@@ -65,6 +66,7 @@ export default function GuestsPage() {
   const columnsWithoutFilter = [
     'Kategorie',
     'Partei / Organisation / Unternehmen',
+    'Weiblich',
     'Funktion',
     'Ebende',
     'E-Mail',
@@ -646,10 +648,15 @@ export default function GuestsPage() {
   }, [guestsWithParsed, allColumns])
 
   // Boolean-Spalten pro Spalte (einmal berechnet, nicht pro Zelle) – großer Performance-Gewinn
+  const alwaysCheckboxColumns = new Set<string>(['Weiblich'])
   const isBooleanColumnMap = useMemo(() => {
     const map = new Map<string, boolean>()
     for (const column of allColumns) {
       if (['Nummer', 'İşlemler', 'ID'].includes(column)) continue
+      if (alwaysCheckboxColumns.has(column)) {
+        map.set(column, true)
+        continue
+      }
       const allValues = guestsWithParsed
         .map((g) => getColumnValue(g, column))
         .filter((v) => v !== null && v !== undefined && v !== '')
@@ -673,8 +680,8 @@ export default function GuestsPage() {
       return
     }
     
-    // Sammle Spalten: Nummer, Hinzugefügt am (DB-Feld) + alle aus additionalData
-    const columnsSet = new Set<string>(['Nummer', 'Hinzugefügt am'])
+    // Sammle Spalten: Nummer, Hinzugefügt am (DB-Feld), alle Standard-Spalten + alle aus additionalData
+    const columnsSet = new Set<string>(['Nummer', 'Hinzugefügt am', ...standardColumns.filter(c => c !== 'Nummer' && c !== 'İşlemler')])
     
     // Sammle Spalten aus additionalData (nutze guestsWithParsed, kein doppeltes Parsen)
     guestsWithParsed.forEach((guest) => {
