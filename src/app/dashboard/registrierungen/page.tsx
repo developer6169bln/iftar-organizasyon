@@ -422,10 +422,15 @@ export default function RegistrierungenPage() {
       if (!res.ok) throw new Error(data.error || 'Zuweisung fehlgeschlagen')
       setGuestsRefreshKey((k) => k + 1)
       const parts = [`${data.assigned} Gäste mit Zusage wurden Tischen zugewiesen.`]
+      if (data.tablesAutoAdjusted && data.numTablesUsed != null) {
+        setNumTables(data.numTablesUsed)
+        if (typeof window !== 'undefined') localStorage.setItem('registrierungen-numTables', String(data.numTablesUsed))
+        parts.push(` Anzahl Tische wurde automatisch auf ${data.numTablesUsed} angepasst (keine gemischten Tische).`)
+      }
       if (data.assignedWeiblich != null && data.assignedNichtWeiblich != null && (data.assignedWeiblich > 0 || data.assignedNichtWeiblich > 0)) {
         parts.push(` Davon weiblich: ${data.assignedWeiblich} (${data.tablesWeiblich ?? 0} Tische), übrige: ${data.assignedNichtWeiblich} (${data.tablesNichtWeiblich ?? 0} Tische).`)
       }
-      if (data.unassigned > 0) parts.push(`${data.unassigned} ohne Platz (mehr Zusagen als Sitzplätze).`)
+      if (data.unassigned > 0) parts.push(`${data.unassigned} ohne Platz.`)
       if (data.skippedNoZusage > 0) parts.push(`${data.skippedNoZusage} ohne Zusage/Nimmt teil (kein Tisch).`)
       if (data.skippedVip) parts.push(`${data.skippedVip} VIP(s) unverändert.`)
       alert(parts.join(' '))
@@ -882,9 +887,8 @@ export default function RegistrierungenPage() {
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
           <p className="mb-3 text-xs text-gray-600">
-            Nur Gäste mit <strong>Zusage</strong> oder <strong>Nimmt teil</strong> erhalten eine Tischnummer. VIP-Gäste werden nicht geändert.
-            Gäste mit <strong>Weiblich</strong> (in der Gästeliste) sitzen nur mit anderen weiblichen Gästen an einem Tisch; die übrigen Tische sind für die restlichen Gäste.
-            Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
+            Keine gemischten Tische: Gäste mit <strong>Weiblich</strong> nur mit weiblichen an einem Tisch; die übrigen Tische für den Rest. Bei Bedarf wird die Anzahl Tische automatisch erhöht.
+            Nur Gäste mit Zusage/Nimmt teil erhalten einen Tisch; VIP-Gäste werden nicht geändert. Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2">

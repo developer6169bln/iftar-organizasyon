@@ -95,9 +95,14 @@ export async function POST(request: NextRequest) {
     const shuffledWeiblich = shuffle(weiblich)
     const shuffledNichtWeiblich = shuffle(nichtWeiblich)
 
-    // Tischaufteilung: Weiblich nur mit Weiblich, Rest nur mit Rest (getrennte Tischblöcke)
-    const numTablesWeiblich = Math.min(numTables, Math.ceil(weiblich.length / Math.max(1, seatsPerTable)))
-    const numTablesNichtWeiblich = numTables - numTablesWeiblich
+    // Keine gemischten Tische: Weiblich nur mit Weiblich, Rest nur mit Rest. Anzahl Tische bei Bedarf automatisch erhöhen.
+    const requiredTablesWeiblich = Math.ceil(weiblich.length / Math.max(1, seatsPerTable))
+    const requiredTablesNichtWeiblich = Math.ceil(nichtWeiblich.length / Math.max(1, seatsPerTable))
+    const requiredTablesTotal = requiredTablesWeiblich + requiredTablesNichtWeiblich
+    const numTablesToUse = Math.max(numTables, requiredTablesTotal)
+
+    const numTablesWeiblich = requiredTablesWeiblich
+    const numTablesNichtWeiblich = numTablesToUse - numTablesWeiblich
     const seatsWeiblich = numTablesWeiblich * seatsPerTable
     const seatsNichtWeiblich = numTablesNichtWeiblich * seatsPerTable
 
@@ -149,6 +154,8 @@ export async function POST(request: NextRequest) {
       assignedNichtWeiblich: toAssignNichtWeiblich.length,
       tablesWeiblich: numTablesWeiblich,
       tablesNichtWeiblich: numTablesNichtWeiblich,
+      numTablesUsed: numTablesToUse,
+      tablesAutoAdjusted: numTablesToUse > numTables,
       unassigned: toUnassign.length,
       skippedVip: guests.length - nonVip.length,
       skippedNoZusage: nonVip.length - withZusage.length,
