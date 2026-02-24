@@ -821,6 +821,15 @@ export default function RegistrierungenPage() {
     const hasQrCount = rows.filter((g) => g.hasQr).length
     const withTable = rows.filter((g) => g.guest?.tableNumber != null).length
     const withoutTable = rows.length - withTable
+    const byTable = new Map<number, GesamtEntry[]>()
+    for (const g of rows) {
+      const tn = g.guest?.tableNumber
+      if (tn != null) {
+        if (!byTable.has(tn)) byTable.set(tn, [])
+        byTable.get(tn)!.push(g)
+      }
+    }
+    const sortedTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
     return (
       <div>
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -876,6 +885,26 @@ export default function RegistrierungenPage() {
             </button>
           </div>
         </div>
+        {sortedTableNumbers.length > 0 && (
+          <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+            <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {sortedTableNumbers.map((num) => {
+                const guestsAtTable = byTable.get(num)!
+                return (
+                  <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="mb-2 font-semibold text-gray-800">Tisch {num}</div>
+                    <ul className="list-inside list-disc space-y-0.5 text-sm text-gray-700">
+                      {guestsAtTable.map((g) => (
+                        <li key={g.key}>{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
         <p className="mb-3 text-sm text-gray-600">
           <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
           {' · '}
