@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { loadUnicodeFontForPdf, pdfSafeTextForUnicode } from '@/lib/pdfUnicodeFont'
 
 export const runtime = 'nodejs'
 
@@ -17,22 +18,6 @@ type ZusageRow = {
   anrede3: string
   notizen: string
   anwesend: boolean
-}
-
-function sanitizePdfText(input: string): string {
-  return (input || '')
-    .replace(/İ/g, 'I')
-    .replace(/ı/g, 'i')
-    .replace(/Ş/g, 'S')
-    .replace(/ş/g, 's')
-    .replace(/Ğ/g, 'G')
-    .replace(/ğ/g, 'g')
-    .replace(/Ü/g, 'U')
-    .replace(/ü/g, 'u')
-    .replace(/Ö/g, 'O')
-    .replace(/ö/g, 'o')
-    .replace(/Ç/g, 'C')
-    .replace(/ç/g, 'c')
 }
 
 export async function POST(request: NextRequest) {
@@ -69,8 +54,9 @@ export async function POST(request: NextRequest) {
     ])
 
     const pdfDoc = await PDFDocument.create()
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+    const unicodeFont = await loadUnicodeFontForPdf(pdfDoc)
+    const font = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.Helvetica))
+    const fontBold = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.HelveticaBold))
     const pageSize: [number, number] = [595.28, 841.89]
     const marginX = 30
     const totalWidth = pageSize[0] - marginX * 2
@@ -83,7 +69,7 @@ export async function POST(request: NextRequest) {
     let page = pdfDoc.addPage(pageSize)
     let y = pageSize[1] - 40
 
-    page.drawText(sanitizePdfText('Liste der Gaste mit Zusage'), {
+    page.drawText(pdfSafeTextForUnicode('Liste der Gäste mit Zusage'), {
       x: marginX,
       y,
       size: 14,
@@ -91,7 +77,7 @@ export async function POST(request: NextRequest) {
       color: rgb(0, 0, 0),
     })
     y -= 18
-    page.drawText(sanitizePdfText(`Stand: ${new Date().toLocaleDateString('de-DE')} ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} | ${rows.length} Eintrage`), {
+    page.drawText(pdfSafeTextForUnicode(`Stand: ${new Date().toLocaleDateString('de-DE')} ${new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} | ${rows.length} Einträge`), {
       x: marginX,
       y,
       size: 9,
@@ -112,7 +98,7 @@ export async function POST(request: NextRequest) {
       })
       let x = marginX + 4
       for (let i = 0; i < headers.length; i++) {
-        const h = sanitizePdfText(headers[i]).slice(0, 14)
+        const h = pdfSafeTextForUnicode(headers[i]).slice(0, 14)
         page.drawText(h, { x, y: y - 11, size: 6, font: fontBold, color: rgb(0, 0, 0), maxWidth: colWidth - 6 })
         x += colWidth
       }
@@ -145,7 +131,7 @@ export async function POST(request: NextRequest) {
       })
       let x = marginX + 4
       for (let i = 0; i < r.length; i++) {
-        const text = sanitizePdfText(String(r[i] ?? '')).slice(0, 18)
+        const text = pdfSafeTextForUnicode(String(r[i] ?? '')).slice(0, 18)
         page.drawText(text, { x, y: y - 9, size: fontSize, font, color: rgb(0, 0, 0), maxWidth: colWidth - 6 })
         x += colWidth
       }

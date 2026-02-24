@@ -62,21 +62,31 @@ export async function POST(request: NextRequest) {
 
     const totalSeats = numTables * seatsPerTable
     const toAssign = shuffled.slice(0, totalSeats)
+    const toUnassign = shuffled.slice(totalSeats)
 
-    await prisma.$transaction(
-      toAssign.map((guest, index) => {
+    const updates = [
+      ...toAssign.map((guest, index) => {
         const tableIndex = Math.floor(index / seatsPerTable)
         const tableNumber = tableIndex + 1
         return prisma.guest.update({
           where: { id: guest.id },
           data: { tableNumber },
         })
-      })
-    )
+      }),
+      ...toUnassign.map((guest) =>
+        prisma.guest.update({
+          where: { id: guest.id },
+          data: { tableNumber: null },
+        })
+      ),
+    ]
+
+    await prisma.$transaction(updates)
 
     return NextResponse.json({
       message: 'Tischzuweisung durchgeführt',
       assigned: toAssign.length,
+      unassigned: toUnassign.length,
       skippedVip: guests.length - nonVip.length,
       numTables,
       seatsPerTable,

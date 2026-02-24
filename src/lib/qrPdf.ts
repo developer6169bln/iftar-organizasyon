@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import QRCode from 'qrcode'
+import { pdfSafeTextForUnicode } from '@/lib/pdfUnicodeFont'
 
 const UNICODE_FONT_URLS = [
   'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Regular.ttf',
@@ -27,19 +28,9 @@ async function loadUnicodeFont(pdfDoc: PDFDocument): Promise<PDFFont | null> {
   return null
 }
 
-function sanitizePdfText(s: string): string {
-  return (s || '')
-    .replace(/[^\x00-\xFF]/g, '?')
-    .replace(/\r?\n/g, ' ')
-    .slice(0, 200)
-}
-
-/** PDF-sichere Version (Emojis entfernt). */
-function pdfSafeDetailsText(text: string): string {
-  return (text || '')
-    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
-    .replace(/📅|🕰|📍/g, '')
-    .trim()
+/** PDF-Text mit Unicode (Türkisch etc.); Emojis/Zeilenumbrüche bereinigt. */
+function safePdfText(s: string): string {
+  return pdfSafeTextForUnicode(s).slice(0, 200)
 }
 
 export type QrPdfInvitation = {
@@ -69,15 +60,15 @@ export async function buildQrPdf(
 
   const pdfDoc = await PDFDocument.create()
   pdfDoc.registerFontkit(fontkit)
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
   const unicodeFont = await loadUnicodeFont(pdfDoc)
+  const font = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const fontBold = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.HelveticaBold))
   pdfDoc.addPage([595, 842])
   const page = pdfDoc.getPage(0)
   const { width, height } = page.getSize()
   let y = height - 60
 
-  page.drawText('Check-in & Eventinformationen', {
+  page.drawText(safePdfText('Check-in & Eventinformationen'), {
     x: 50,
     y,
     size: 18,
@@ -86,7 +77,7 @@ export async function buildQrPdf(
   })
   y -= 28
 
-  page.drawText(sanitizePdfText(eventTitle), {
+  page.drawText(safePdfText(eventTitle), {
     x: 50,
     y,
     size: 14,
@@ -96,29 +87,24 @@ export async function buildQrPdf(
   y -= 20
 
   if (eventDate) {
-    page.drawText('Datum: ' + sanitizePdfText(eventDate), { x: 50, y, size: 11, font, color: rgb(0.3, 0.3, 0.3) })
+    page.drawText('Datum: ' + safePdfText(eventDate), { x: 50, y, size: 11, font, color: rgb(0.3, 0.3, 0.3) })
     y -= 18
   }
   if (eventLocation) {
-    page.drawText('Ort: ' + sanitizePdfText(eventLocation), { x: 50, y, size: 11, font, color: rgb(0.3, 0.3, 0.3) })
+    page.drawText('Ort: ' + safePdfText(eventLocation), { x: 50, y, size: 11, font, color: rgb(0.3, 0.3, 0.3) })
     y -= 24
   }
 
   // Projektbeschreibung (falls vorhanden)
   const projectDescription = invitation.event?.project?.description?.trim()
   if (projectDescription) {
-    const detailsLines = pdfSafeDetailsText(projectDescription)
+    const detailsLines = pdfSafeTextForUnicode(projectDescription)
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean)
-    const textFont = unicodeFont ?? font
     for (const line of detailsLines) {
       if (y < 100) break
-      try {
-        page.drawText(line || ' ', { x: 50, y, size: 10, font: textFont, color: rgb(0.2, 0.2, 0.3) })
-      } catch {
-        page.drawText(sanitizePdfText(line) || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
-      }
+      page.drawText(safePdfText(line) || ' ', { x: 50, y, size: 10, font, color: rgb(0.2, 0.2, 0.3) })
       y -= 14
     }
     y -= 16
@@ -127,13 +113,13 @@ export async function buildQrPdf(
   const entries: { label: string; token: string }[] = []
   if (invitation.guest?.checkInToken) {
     entries.push({
-      label: invitation.guest.name ? sanitizePdfText(invitation.guest.name) : 'Hauptgast',
+      label: invitation.guest.name ? safePdfText(invitation.guest.name) : 'Hauptgast',
       token: invitation.guest.checkInToken,
     })
   }
   for (const ag of invitation.accompanyingGuests ?? []) {
     const label = [ag.firstName, ag.lastName].filter(Boolean).join(' ') || 'Begleitperson'
-    entries.push({ label: sanitizePdfText(label), token: ag.checkInToken })
+    entries.push({ label: safePdfText(label), token: ag.checkInToken })
   }
 
   const qrSize = 120
@@ -189,6 +175,6 @@ export async function buildQrPdf(
 
   const pdfBytes = await pdfDoc.save()
   const buffer = Buffer.from(pdfBytes)
-  const filename = `Check-in-${sanitizePdfText(eventTitle).replace(/\s+/g, '-')}.pdf`
+  const filename = `Check-in-${safePdfText(eventTitle).replace(/\s+/g, '-')}.pdf`
   return { buffer, filename }
 }

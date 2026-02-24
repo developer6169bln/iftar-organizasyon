@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { loadUnicodeFontForPdf, pdfSafeTextForUnicode } from '@/lib/pdfUnicodeFont'
 
 type Registration = {
   id: string
@@ -364,7 +365,7 @@ export default function RegistrierungenPage() {
     }
     let cancelled = false
     setLoadingGuests(true)
-    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}&einladungslisteOnly=true`)
+    fetch(`/api/guests?eventId=${encodeURIComponent(selectedEventId)}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (cancelled) return
@@ -414,7 +415,10 @@ export default function RegistrierungenPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Zuweisung fehlgeschlagen')
       setGuestsRefreshKey((k) => k + 1)
-      alert(`${data.assigned} Gäste wurden Tischen zugewiesen. ${data.skippedVip ? `${data.skippedVip} VIP(s) ausgelassen.` : ''}`)
+      const parts = [`${data.assigned} Gäste wurden Tischen zugewiesen.`]
+      if (data.unassigned > 0) parts.push(`${data.unassigned} Gäste haben keinen Platz (mehr Gäste als Sitzplätze).`)
+      if (data.skippedVip) parts.push(`${data.skippedVip} VIP(s) ausgelassen.`)
+      alert(parts.join(' '))
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Tischzuweisung fehlgeschlagen')
     } finally {
@@ -468,8 +472,9 @@ export default function RegistrierungenPage() {
       const sortedTables = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
 
       const doc = await PDFDocument.create()
-      const font = await doc.embedFont(StandardFonts.Helvetica)
-      const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
+      const unicodeFont = await loadUnicodeFontForPdf(doc)
+      const font = unicodeFont ?? (await doc.embedFont(StandardFonts.Helvetica))
+      const fontBold = unicodeFont ?? (await doc.embedFont(StandardFonts.HelveticaBold))
       doc.addPage([595, 842])
       const pageHeight = 842
       let y = pageHeight - 50
@@ -482,7 +487,7 @@ export default function RegistrierungenPage() {
         }
       }
 
-      getPage().drawText('Tischlisten', {
+      getPage().drawText(pdfSafeTextForUnicode('Tischlisten'), {
         x: 50,
         y,
         size: 18,
@@ -493,7 +498,7 @@ export default function RegistrierungenPage() {
 
       for (const [tableNum, guests] of sortedTables) {
         ensureSpace(120)
-        getPage().drawText(`Tisch ${tableNum}`, {
+        getPage().drawText(pdfSafeTextForUnicode(`Tisch ${tableNum}`), {
           x: 50,
           y,
           size: 14,
@@ -503,7 +508,7 @@ export default function RegistrierungenPage() {
         y -= 22
         for (const g of guests) {
           ensureSpace(60)
-          getPage().drawText('  • ' + g.name.slice(0, 80), {
+          getPage().drawText('  • ' + pdfSafeTextForUnicode(g.name), {
             x: 50,
             y,
             size: 11,
@@ -808,12 +813,15 @@ export default function RegistrierungenPage() {
     const onlyReg = rows.filter((g) => g.fromRegistration && !g.fromGuestList).length
     const onlyGuest = rows.filter((g) => !g.fromRegistration && g.fromGuestList).length
     const hasQrCount = rows.filter((g) => g.hasQr).length
+    const withTable = rows.filter((g) => g.guest?.tableNumber != null).length
+    const withoutTable = rows.length - withTable
     return (
       <div>
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-gray-800">Tischzuweisung (Random)</h3>
           <p className="mb-3 text-xs text-gray-600">
             Anzahl Tische und Sitzplätze pro Tisch werden gespeichert. VIP-Gäste werden bei der Zuweisung ausgelassen.
+            Nur Gäste, die bereits in der Gästeliste dieses Events sind, erhalten eine Tischnummer. Einträge nur aus Anmeldungen zuerst per „Import in Gästeliste“ hinzufügen.
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center gap-2">
@@ -864,6 +872,14 @@ export default function RegistrierungenPage() {
         </div>
         <p className="mb-3 text-sm text-gray-600">
           <span className="font-medium">Gesamtanzahl: {rows.length} Einträge</span>
+          {' · '}
+          <span className="font-medium text-green-700">Mit Tisch: {withTable}</span>
+          {withoutTable > 0 && (
+            <>
+              {' · '}
+              <span className="font-medium text-red-700">Ohne Tisch: {withoutTable}</span>
+            </>
+          )}
           {' · '}
           <span className="font-medium text-green-700">In beiden: {fromBoth}</span>
           {' · '}

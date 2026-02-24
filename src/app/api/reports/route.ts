@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
+import { loadUnicodeFontForPdf, pdfSafeTextForUnicode } from '@/lib/pdfUnicodeFont'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
 
 // Prisma + PDF generation require Node.js runtime (not Edge).
@@ -94,23 +95,6 @@ function formatDate(d: Date | null | undefined): string {
   }
 }
 
-function sanitizePdfText(input: string): string {
-  // pdf-lib standard fonts use WinAnsi; replace common Turkish chars to avoid encoding crashes.
-  return (input || '')
-    .replace(/İ/g, 'I')
-    .replace(/ı/g, 'i')
-    .replace(/Ş/g, 'S')
-    .replace(/ş/g, 's')
-    .replace(/Ğ/g, 'G')
-    .replace(/ğ/g, 'g')
-    .replace(/Ü/g, 'U')
-    .replace(/ü/g, 'u')
-    .replace(/Ö/g, 'O')
-    .replace(/ö/g, 'o')
-    .replace(/Ç/g, 'C')
-    .replace(/ç/g, 'c')
-}
-
 function groupBy<T>(rows: T[], keyFn: (r: T) => string): Record<string, T[]> {
   const out: Record<string, T[]> = {}
   for (const r of rows) {
@@ -122,7 +106,7 @@ function groupBy<T>(rows: T[], keyFn: (r: T) => string): Record<string, T[]> {
 }
 
 function wrapText(text: string, maxChars: number): string[] {
-  const t = sanitizePdfText(text || '').replace(/\s+/g, ' ').trim()
+  const t = pdfSafeTextForUnicode(text || '').replace(/\s+/g, ' ').trim()
   if (!t) return ['']
   const words = t.split(' ')
   const lines: string[] = []
@@ -150,8 +134,9 @@ async function buildPdf(args: {
   }>
 }): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create()
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+  const unicodeFont = await loadUnicodeFontForPdf(pdfDoc)
+  const font = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.Helvetica))
+  const fontBold = unicodeFont ?? (await pdfDoc.embedFont(StandardFonts.HelveticaBold))
 
   const pageSize: [number, number] = [595.28, 841.89] // A4
   let page = pdfDoc.addPage(pageSize)
@@ -159,7 +144,7 @@ async function buildPdf(args: {
   const marginX = 40
 
   const drawText = (txt: string, size: number, bold = false) => {
-    page.drawText(sanitizePdfText(txt), {
+    page.drawText(pdfSafeTextForUnicode(txt), {
       x: marginX,
       y,
       size,
@@ -222,7 +207,7 @@ async function buildPdf(args: {
       })
       let x = marginX + 6
       for (let i = 0; i < headers.length; i++) {
-        const h = sanitizePdfText(headers[i])
+        const h = pdfSafeTextForUnicode(headers[i])
         page.drawText(h, { x, y: y - 13, size: 9, font: fontBold, color: rgb(0, 0, 0) })
         x += colWidths[i]
       }
@@ -267,7 +252,7 @@ async function buildPdf(args: {
 
         for (let li = 0; li < lines.length; li++) {
           const line = lines[li]
-          page.drawText(sanitizePdfText(line), {
+          page.drawText(pdfSafeTextForUnicode(line), {
             x,
             y: y - 12 - li * 11,
             size: 9,
@@ -290,7 +275,7 @@ async function buildPdf(args: {
         ensureSpace(18)
         const lines = wrapText(p, 110)
         for (const l of lines) {
-          page.drawText(sanitizePdfText(l), { x: marginX, y, size: 10, font, color: rgb(0, 0, 0) })
+          page.drawText(pdfSafeTextForUnicode(l), { x: marginX, y, size: 10, font, color: rgb(0, 0, 0) })
           y -= 14
         }
       }
