@@ -310,6 +310,12 @@ export default function RegistrierungenPage() {
   const [assigningTables, setAssigningTables] = useState(false)
   const [resettingTables, setResettingTables] = useState(false)
   const [tischlistenPdfLoading, setTischlistenPdfLoading] = useState(false)
+  const [swapModal, setSwapModal] = useState<
+    | { step: 1; guest: GesamtEntry; fromTable: number }
+    | { step: 2; guest: GesamtEntry; fromTable: number; targetTable: number }
+    | null
+  >(null)
+  const [swapInProgress, setSwapInProgress] = useState(false)
 
   const loadRegistrations = async () => {
     try {
@@ -537,6 +543,44 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'PDF konnte nicht erstellt werden.')
     } finally {
       setTischlistenPdfLoading(false)
+    }
+  }
+
+  const handleTableSwapStart = (guest: GesamtEntry, fromTable: number) => {
+    if (!guest.guest?.id) return
+    setSwapModal({ step: 1, guest, fromTable })
+  }
+
+  const handleTableSwapSelectTarget = (targetTable: number) => {
+    if (!swapModal || swapModal.step !== 1) return
+    setSwapModal({ step: 2, guest: swapModal.guest, fromTable: swapModal.fromTable, targetTable })
+  }
+
+  const handleTableSwapConfirm = async (otherGuest: GesamtEntry) => {
+    if (!swapModal || swapModal.step !== 2 || !otherGuest.guest?.id || !swapModal.guest.guest?.id || !selectedEventId) return
+    setSwapInProgress(true)
+    try {
+      const resA = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: swapModal.guest.guest.id, tableNumber: swapModal.targetTable }),
+      })
+      const resB = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: otherGuest.guest.id, tableNumber: swapModal.fromTable }),
+      })
+      if (!resA.ok || !resB.ok) {
+        const errA = resA.ok ? null : await resA.json().catch(() => ({}))
+        const errB = resB.ok ? null : await resB.json().catch(() => ({}))
+        throw new Error((errA?.error || errB?.error) || 'Tausch fehlgeschlagen')
+      }
+      setSwapModal(null)
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Tausch fehlgeschlagen')
+    } finally {
+      setSwapInProgress(false)
     }
   }
 
@@ -892,20 +936,90 @@ export default function RegistrierungenPage() {
         {sortedTableNumbers.length > 0 && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
+            <p className="mb-3 text-xs text-gray-500">Klicken Sie bei einem Gast auf „Verschieben“, wählen Sie den Zieltisch und dann den Tauschpartner.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {sortedTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
                 return (
                   <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <div className="mb-2 font-semibold text-gray-800">Tisch {num}</div>
-                    <ul className="list-inside list-disc space-y-0.5 text-sm text-gray-700">
+                    <ul className="space-y-1 text-sm text-gray-700">
                       {guestsAtTable.map((g) => (
-                        <li key={g.key}>{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</li>
+                        <li key={g.key} className="flex items-center justify-between gap-2">
+                          <span>{g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'}</span>
+                          {g.guest?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleTableSwapStart(g, num)}
+                              className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
+                              title="Gast an anderen Tisch tauschen"
+                            >
+                              Verschieben
+                            </button>
+                          )}
+                        </li>
                       ))}
                     </ul>
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+        {/* Modal: Tisch tauschen – Schritt 1 Zieltisch wählen, Schritt 2 Gast von Zieltisch wählen */}
+        {swapModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !swapInProgress && setSwapModal(null)}>
+            <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              {swapModal.step === 1 ? (
+                <>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-800">Gast an anderen Tisch verschieben</h3>
+                  <p className="mb-3 text-xs text-gray-600">
+                    {swapModal.guest.fullName || [swapModal.guest.firstName, swapModal.guest.lastName].filter(Boolean).join(' ') || '–'} sitzt aktuell an Tisch {swapModal.fromTable}. Zu welchem Tisch soll gewechselt werden?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {sortedTableNumbers.filter((n) => n !== swapModal.fromTable).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => handleTableSwapSelectTarget(n)}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                      >
+                        Tisch {n}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-800">Tauschpartner wählen</h3>
+                  <p className="mb-3 text-xs text-gray-600">
+                    Wer soll von Tisch {swapModal.targetTable} zu Tisch {swapModal.fromTable} wechseln? (Klick auf einen Gast führt den Tausch aus.)
+                  </p>
+                  <ul className="space-y-2">
+                    {(byTable.get(swapModal.targetTable) ?? []).map((g) => (
+                      <li key={g.key}>
+                        <button
+                          type="button"
+                          disabled={swapInProgress}
+                          onClick={() => handleTableSwapConfirm(g)}
+                          className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left text-sm text-gray-800 hover:bg-indigo-50 hover:border-indigo-200 disabled:opacity-50"
+                        >
+                          {g.fullName || [g.firstName, g.lastName].filter(Boolean).join(' ') || '–'}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => !swapInProgress && setSwapModal(null)}
+                  className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Abbrechen
+                </button>
+              </div>
             </div>
           </div>
         )}
