@@ -794,11 +794,11 @@ export default function InvitationsPage() {
           subject: 'İftar Yemeği Daveti - {{EVENT_TITLE}}',
           body: `<p>Sayın {{GUEST_NAME}},</p>
 <p>{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.</p>
-<p>Bu özel etkinlikte sizleri ağırlamaktan memnuniyet duyacağız.</p>
+<p>Bu özel etkinlikte sizleri ağırlamaktan memnuniyet duyarız.</p>
 <p>Giriş kontrolü için lütfen aşağıdaki QR kodu göstermenizi rica ederiz:</p>
 <p><img src="{{QR_CODE_URL}}" alt="Giriş QR Kodu" width="200" height="200" style="display:block; margin:1em 0;" /></p>
-<p>Saygılarımızla,<br>Organizasyon Ekibi</p>`,
-          plainText: `Sayın {{GUEST_NAME}},\n\n{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.\n\nBu özel etkinlikte sizleri ağırlamaktan memnuniyet duyacağız.\n\nGiriş kontrolü için bu e-postadaki QR kodu kullanınız.\n\nSaygılarımızla,\nOrganizasyon Ekibi`,
+<p>Saygılarımızla<br>Organizasyon Ekibi</p>`,
+          plainText: `Sayın {{GUEST_NAME}},\n\n{{EVENT_DATE}} tarihinde {{EVENT_LOCATION}} adresinde düzenlenecek İftar Yemeği'ne sizleri davet etmekten mutluluk duyarız.\n\nBu özel etkinlikte sizleri ağırlamaktan memnuniyet duyarız.\n\nGiriş kontrolü için bu e-postadaki QR kodu kullanınız.\n\nSaygılarımızla\nOrganizasyon Ekibi`,
           isDefault: false,
         }),
       })
