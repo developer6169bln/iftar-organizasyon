@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
     for (const g of guests) {
       const t = g.tableNumber!
       if (!byTable.has(t)) byTable.set(t, [])
-      byTable.get(t)!.push((g.name || '').trim() || '–')
+      const name = g.name != null ? String(g.name).trim() : ''
+      byTable.get(t)!.push(name || '–')
     }
     const allEntries = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
     const normalTables = allEntries.filter(([n]) => n < PRESSE_START)
@@ -46,10 +47,15 @@ export async function GET(request: NextRequest) {
     const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '–')
 
     const doc = await PDFDocument.create()
-    const unicodeFont = await loadUnicodeFontForPdf(doc)
+    let unicodeFont: Awaited<ReturnType<typeof loadUnicodeFontForPdf>> = null
+    try {
+      unicodeFont = await loadUnicodeFontForPdf(doc)
+    } catch {
+      unicodeFont = null
+    }
     const font = unicodeFont ?? (await doc.embedFont(StandardFonts.Helvetica))
     const fontBold = unicodeFont ?? (await doc.embedFont(StandardFonts.HelveticaBold))
-    const safeText = unicodeFont ? pdfSafeTextForUnicode : pdfSafeTextForWinAnsi
+    const safeText = (text: string) => (unicodeFont ? pdfSafeTextForUnicode(text) : pdfSafeTextForWinAnsi(text))
 
     doc.addPage([595, 842])
     const pageHeight = 842

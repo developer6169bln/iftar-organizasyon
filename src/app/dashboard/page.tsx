@@ -6,11 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import PushNotificationSetup from '@/components/PushNotificationSetup'
 
-// Prüfe ob Logo existiert (per HEAD – kein Bild-Load, vermeidet 404 in Konsole)
-const checkImageExists = (url: string): Promise<boolean> => {
-  return fetch(url, { method: 'HEAD' }).then((r) => r.ok).catch(() => false)
-}
-
+// Logo: Nur verwenden wenn Datei in public/ existiert (uid-berlin-logo.png). Sonst header-bg.jpg.
+// Kein automatischer HEAD-Check, um 404 in der Konsole zu vermeiden. Logo aktivieren: Datei nach public/ legen und Seite neu laden.
 export default function DashboardPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -36,7 +33,7 @@ export default function DashboardPage() {
     description: '',
     responsibleUserId: '',
   })
-  const [logoExists, setLogoExists] = useState<boolean | null>(null)
+  const [logoExists] = useState<boolean>(false)
   const [allowedPageIds, setAllowedPageIds] = useState<string[]>([])
   const [allowedCategoryIds, setAllowedCategoryIds] = useState<string[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
@@ -101,7 +98,6 @@ export default function DashboardPage() {
     checkAuth()
     loadCategories()
     loadUsers()
-    checkImageExists('/uid-berlin-logo.png').then(setLogoExists)
   }, [router])
 
   // Bei gewähltem Projekt Berechtigungen für dieses Projekt laden (Hauptnutzer sehen dann Bereiche/Seiten/Mitarbeiter)
@@ -482,7 +478,7 @@ export default function DashboardPage() {
       <header 
         className="relative bg-cover bg-center bg-no-repeat shadow-sm"
         style={{
-          backgroundImage: logoExists === true ? 'url(/uid-berlin-logo.png)' : 'url(/header-bg.jpg)',
+          backgroundImage: logoExists ? 'url(/uid-berlin-logo.png)' : 'url(/header-bg.jpg)',
           backgroundSize: logoExists === true ? 'contain' : 'cover',
           backgroundPosition: 'center',
           backgroundColor: '#215F7D',
