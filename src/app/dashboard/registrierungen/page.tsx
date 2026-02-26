@@ -1541,7 +1541,7 @@ export default function RegistrierungenPage() {
             <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <h3 className="mb-3 text-sm font-semibold text-gray-800">Schnellanmeldung</h3>
               <p className="mb-3 text-xs text-gray-600">
-                Gast nur mit Vorname, Nachname und optional Staat/Institution erfassen. Wird sofort als <strong>Zusage / Nimmt teil</strong> markiert und in die <strong>Einladungsliste</strong> aufgenommen (kann danach Tisch zugewiesen werden).
+                Gast nur mit Vorname, Nachname und optional Staat/Institution erfassen. Wird sofort als <strong>Zusage / Nimmt teil</strong> markiert, in die <strong>Einladungsliste</strong> aufgenommen und auf die <strong>Spool-Warteliste</strong> gesetzt. Von dort kann der Gast an einen Tisch verschoben werden.
               </p>
               <div className="space-y-3">
                 <div>
