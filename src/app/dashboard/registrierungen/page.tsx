@@ -346,6 +346,9 @@ export default function RegistrierungenPage() {
   const [tischfarbeUpdatingId, setTischfarbeUpdatingId] = useState<string | null>(null)
   const [vipAssignSlot, setVipAssignSlot] = useState<number | null>(null)
   const [vipAssignSearch, setVipAssignSearch] = useState('')
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddForm, setQuickAddForm] = useState({ firstName: '', lastName: '', staatInstitution: '' })
+  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false)
 
   const loadRegistrations = async () => {
     try {
@@ -952,6 +955,43 @@ export default function RegistrierungenPage() {
     }
   }
 
+  const handleQuickAddSubmit = async () => {
+    if (!selectedEventId) return
+    const firstName = quickAddForm.firstName.trim()
+    const lastName = quickAddForm.lastName.trim()
+    if (!firstName && !lastName) {
+      alert('Bitte Vorname oder Nachname eingeben.')
+      return
+    }
+    setQuickAddSubmitting(true)
+    try {
+      const res = await fetch('/api/guests/quick-add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: selectedEventId,
+          firstName,
+          lastName,
+          staatInstitution: quickAddForm.staatInstitution.trim() || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || data.details || 'Schnellerfassung fehlgeschlagen.')
+        return
+      }
+      setQuickAddOpen(false)
+      setQuickAddForm({ firstName: '', lastName: '', staatInstitution: '' })
+      setGuestsRefreshKey((k) => k + 1)
+      alert(data.message || 'Gast erfasst.')
+    } catch (e) {
+      console.error(e)
+      alert('Schnellerfassung fehlgeschlagen.')
+    } finally {
+      setQuickAddSubmitting(false)
+    }
+  }
+
   const handleWhatsAppShare = async (r: Registration) => {
     if (!selectedEventId) return
     const info = await fetchQrInfo(r.id)
@@ -1281,6 +1321,66 @@ export default function RegistrierungenPage() {
               <div className="mt-4 flex justify-end">
                 <button type="button" onClick={() => { setVipAssignSlot(null); setVipAssignSearch('') }} className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300">
                   Abbrechen
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Modal: Schnellanmeldung – Vorname, Nachname, Staat/Institution */}
+        {quickAddOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !quickAddSubmitting && setQuickAddOpen(false)}>
+            <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="mb-3 text-sm font-semibold text-gray-800">Schnellanmeldung</h3>
+              <p className="mb-3 text-xs text-gray-600">
+                Gast nur mit Vorname, Nachname und optional Staat/Institution erfassen. Wird sofort als <strong>Zusage / Nimmt teil</strong> markiert und in die <strong>Einladungsliste</strong> aufgenommen (kann danach Tisch zugewiesen werden).
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Vorname</label>
+                  <input
+                    type="text"
+                    value={quickAddForm.firstName}
+                    onChange={(e) => setQuickAddForm((f) => ({ ...f, firstName: e.target.value }))}
+                    placeholder="Vorname"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Nachname</label>
+                  <input
+                    type="text"
+                    value={quickAddForm.lastName}
+                    onChange={(e) => setQuickAddForm((f) => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Nachname"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-700">Staat/Institution (optional)</label>
+                  <input
+                    type="text"
+                    value={quickAddForm.staatInstitution}
+                    onChange={(e) => setQuickAddForm((f) => ({ ...f, staatInstitution: e.target.value }))}
+                    placeholder="z. B. Botschaft, Verein"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => !quickAddSubmitting && setQuickAddOpen(false)}
+                  className="rounded bg-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={handleQuickAddSubmit}
+                  disabled={quickAddSubmitting || (!quickAddForm.firstName.trim() && !quickAddForm.lastName.trim())}
+                  className="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {quickAddSubmitting ? '… Erfassen' : 'Erfassen'}
                 </button>
               </div>
             </div>
@@ -1781,6 +1881,16 @@ export default function RegistrierungenPage() {
                   ))}
                 </select>
               </div>
+              {activeTab === 'gesamtliste' && selectedEventId && (
+                <button
+                  type="button"
+                  onClick={() => setQuickAddOpen(true)}
+                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  title="Gast nur mit Vorname, Nachname, Staat/Institution erfassen – sofort Zusage/Nimmt teil und Einladungsliste"
+                >
+                  ＋ Schnellanmeldung
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleImportToGuests(activeTab === 'gesamtliste' ? 'all' : activeTab)}
