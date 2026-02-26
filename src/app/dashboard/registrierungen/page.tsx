@@ -1250,7 +1250,7 @@ export default function RegistrierungenPage() {
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
             <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Auf Spool“ = Warteliste; „Verschieben“ = Tausch/Ziel. Spool (700), Presse (801–812), VIP1/VIP2 (901–920) = Platzhalter.</p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4">
               {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
                 return (
