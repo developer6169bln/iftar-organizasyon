@@ -349,6 +349,8 @@ export default function RegistrierungenPage() {
   const [quickAddOpen, setQuickAddOpen] = useState(false)
   const [quickAddForm, setQuickAddForm] = useState({ firstName: '', lastName: '', staatInstitution: '' })
   const [quickAddSubmitting, setQuickAddSubmitting] = useState(false)
+  const [isAppOwner, setIsAppOwner] = useState(false)
+  const [adminAnmeldungenOpen, setAdminAnmeldungenOpen] = useState(false)
 
   const loadRegistrations = async () => {
     try {
@@ -430,6 +432,22 @@ export default function RegistrierungenPage() {
       localStorage.setItem('registrierungen-seatsPerTable', String(seatsPerTable))
     }
   }, [numTables, seatsPerTable])
+
+  useEffect(() => {
+    const loadMe = async () => {
+      try {
+        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
+        const url = projectId ? `/api/me?projectId=${encodeURIComponent(projectId)}` : '/api/me'
+        const res = await fetch(url, { credentials: 'include' })
+        if (!res.ok) return
+        const data = await res.json()
+        setIsAppOwner(!!data.isAdmin || !!data.isProjectOwner)
+      } catch {
+        setIsAppOwner(false)
+      }
+    }
+    loadMe()
+  }, [])
 
   const handleAssignRandomTables = async () => {
     if (!selectedEventId) {
@@ -1891,129 +1909,92 @@ export default function RegistrierungenPage() {
                   ＋ Schnellanmeldung
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => handleImportToGuests(activeTab === 'gesamtliste' ? 'all' : activeTab)}
-                disabled={!selectedEventId || importing !== null}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {importing === (activeTab === 'gesamtliste' ? 'all' : activeTab)
-                  ? 'Import läuft …'
-                  : activeTab === 'gesamtliste'
-                    ? 'Alle in Gästeliste übernehmen'
-                    : 'In Gästeliste übernehmen'}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFixImportedGuests(activeTab === 'gesamtliste' ? 'all' : activeTab)}
-                disabled={!selectedEventId || fixing !== null}
-                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Vorname und Nachname in die richtigen Spalten übertragen (für bereits importierte Gäste)"
-              >
-                {fixing === (activeTab === 'gesamtliste' ? 'all' : activeTab) ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
-              </button>
-              <button
-                type="button"
-                onClick={handleRemoveDuplicates}
-                disabled={removingDuplicates}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Doppelteinträge über alle Gruppen prüfen, entfernen und E-Mail senden"
-              >
-                {removingDuplicates ? 'Duplikate werden entfernt …' : 'Duplikate entfernen'}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!selectedEventId) {
-                    alert('Bitte wählen Sie ein Ziel-Event aus.')
-                    return
-                  }
-                  if (!confirm('Abgleich durchführen? Gäste mit bestätigter Teilnahme in den Formular-Ergebnissen werden in der Einladungsliste als Zusage markiert.')) return
-                  setSyncingToInvitations(true)
-                  try {
-                    const res = await fetch('/api/invitations/sync-from-registrations', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ eventId: selectedEventId }),
-                    })
-                    const data = await res.json()
-                    if (!res.ok) throw new Error(data.error || 'Abgleich fehlgeschlagen')
-                    alert(`${data.updated} Einladung(en) als Zusage markiert.`)
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : 'Abgleich fehlgeschlagen')
-                  } finally {
-                    setSyncingToInvitations(false)
-                  }
-                }}
-                disabled={!selectedEventId || syncingToInvitations}
-                className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Teilnahme bestätigt in Formular-Ergebnissen → Einladungsliste als Zusage markieren"
-              >
-                {syncingToInvitations ? 'Abgleich läuft…' : '↔ Mit Einladungsliste abgleichen'}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!selectedEventId) {
-                    alert('Bitte wählen Sie ein Ziel-Event aus.')
-                    return
-                  }
-                  if (!confirm('Zusagen und Absagen aus der Einladungsliste in die Ergebnisse der Anmeldung übernehmen?\n\nAnmeldungen werden per Name zugeordnet; Teilnahme (Ja/Nein) wird aus der Einladungsliste gesetzt.')) return
-                  setSyncingFromInvitations(true)
-                  try {
-                    const res = await fetch('/api/registrations/sync-from-invitations', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ eventId: selectedEventId }),
-                    })
-                    const data = await res.json()
-                    if (!res.ok) throw new Error(data.error || 'Übernahme fehlgeschlagen')
-                    loadRegistrations()
-                    alert(data.message || `${data.updated ?? 0} Anmeldung(en) aktualisiert.`)
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : 'Übernahme fehlgeschlagen')
-                  } finally {
-                    setSyncingFromInvitations(false)
-                  }
-                }}
-                disabled={!selectedEventId || syncingFromInvitations}
-                className="rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Zusagen/Absagen aus Einladungsliste in die Spalte Teilnahme (Ergebnisse der Anmeldung) zurückspielen"
-              >
-                {syncingFromInvitations ? 'Übernahme läuft…' : '↩ Zusagen/Absagen aus Einladungsliste wiederherstellen'}
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!selectedEventId) {
-                    alert('Bitte wählen Sie ein Ziel-Event aus.')
-                    return
-                  }
-                  if (!confirm('Alle Personen aus den Ergebnissen der Anmeldung in der Gästeliste als „Zusage“, „Nimmt teil“ und „Einladungsliste“ markieren?\n\nGäste werden per Name zugeordnet; fehlende Einladungen werden angelegt.')) return
-                  setMarkingAllAsZusage(true)
-                  try {
-                    const res = await fetch('/api/registrations/mark-all-as-zusage-in-guests', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ eventId: selectedEventId }),
-                    })
-                    const data = await res.json()
-                    if (!res.ok) throw new Error(data.error || 'Markierung fehlgeschlagen')
-                    loadRegistrations()
-                    setGuestsRefreshKey((k) => k + 1)
-                    alert(data.message || `${data.guestsUpdated ?? 0} Gäste markiert.`)
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : 'Markierung fehlgeschlagen')
-                  } finally {
-                    setMarkingAllAsZusage(false)
-                  }
-                }}
-                disabled={!selectedEventId || markingAllAsZusage}
-                className="rounded-lg bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Alle Anmeldungen in der Gästeliste als Zusage, Nimmt teil und Einladungsliste markieren"
-              >
-                {markingAllAsZusage ? 'Markierung läuft…' : '✓ Alle in Gästeliste + Einladungsliste als Zusage/Nimmt teil'}
-              </button>
+              {isAppOwner && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAdminAnmeldungenOpen((o) => !o)}
+                    className="rounded-lg border border-gray-400 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200"
+                    title="Nur für App-Inhaber: Admin-Aktionen zu Anmeldungen"
+                  >
+                    Admin Anmeldungen ▾
+                  </button>
+                  {adminAnmeldungenOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" aria-hidden onClick={() => setAdminAnmeldungenOpen(false)} />
+                      <div className="absolute left-0 top-full z-20 mt-1 min-w-[280px] rounded-lg border border-gray-200 bg-white py-2 shadow-lg">
+                        <div className="border-b border-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">Admin Anmeldungen</div>
+                        <button
+                          type="button"
+                          onClick={() => { handleImportToGuests(activeTab === 'gesamtliste' ? 'all' : activeTab); setAdminAnmeldungenOpen(false) }}
+                          disabled={!selectedEventId || importing !== null}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-indigo-50 disabled:opacity-50"
+                        >
+                          {importing === (activeTab === 'gesamtliste' ? 'all' : activeTab) ? 'Import läuft …' : activeTab === 'gesamtliste' ? 'Alle in Gästeliste übernehmen' : 'In Gästeliste übernehmen'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { handleFixImportedGuests(activeTab === 'gesamtliste' ? 'all' : activeTab); setAdminAnmeldungenOpen(false) }}
+                          disabled={!selectedEventId || fixing !== null}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-amber-50 disabled:opacity-50"
+                        >
+                          {fixing === (activeTab === 'gesamtliste' ? 'all' : activeTab) ? 'Korrektur läuft …' : 'Bereits importierte korrigieren'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { handleRemoveDuplicates(); setAdminAnmeldungenOpen(false) }}
+                          disabled={removingDuplicates}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {removingDuplicates ? 'Duplikate werden entfernt …' : 'Duplikate entfernen'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!selectedEventId) { alert('Bitte wählen Sie ein Ziel-Event aus.'); return }
+                            if (!confirm('Abgleich durchführen? Gäste mit bestätigter Teilnahme in den Formular-Ergebnissen werden in der Einladungsliste als Zusage markiert.')) return
+                            setAdminAnmeldungenOpen(false)
+                            setSyncingToInvitations(true)
+                            try {
+                              const res = await fetch('/api/invitations/sync-from-registrations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: selectedEventId }) })
+                              const data = await res.json()
+                              if (!res.ok) throw new Error(data.error || 'Abgleich fehlgeschlagen')
+                              alert(`${data.updated} Einladung(en) als Zusage markiert.`)
+                            } catch (e) { alert(e instanceof Error ? e.message : 'Abgleich fehlgeschlagen') }
+                            finally { setSyncingToInvitations(false) }
+                          }}
+                          disabled={!selectedEventId || syncingToInvitations}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          {syncingToInvitations ? 'Abgleich läuft…' : 'Mit Einladungsliste abgleichen'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!selectedEventId) { alert('Bitte wählen Sie ein Ziel-Event aus.'); return }
+                            if (!confirm('Alle Personen aus den Ergebnissen der Anmeldung in der Gästeliste als „Zusage“, „Nimmt teil“ und „Einladungsliste“ markieren?\n\nGäste werden per Name zugeordnet; fehlende Einladungen werden angelegt.')) return
+                            setAdminAnmeldungenOpen(false)
+                            setMarkingAllAsZusage(true)
+                            try {
+                              const res = await fetch('/api/registrations/mark-all-as-zusage-in-guests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: selectedEventId }) })
+                              const data = await res.json()
+                              if (!res.ok) throw new Error(data.error || 'Markierung fehlgeschlagen')
+                              loadRegistrations()
+                              setGuestsRefreshKey((k) => k + 1)
+                              alert(data.message || `${data.guestsUpdated ?? 0} Gäste markiert.`)
+                            } catch (e) { alert(e instanceof Error ? e.message : 'Markierung fehlgeschlagen') }
+                            finally { setMarkingAllAsZusage(false) }
+                          }}
+                          disabled={!selectedEventId || markingAllAsZusage}
+                          className="block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          {markingAllAsZusage ? 'Markierung läuft…' : 'Alle in Gästeliste + Einladungsliste als Zusage/Nimmt teil'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <span className="text-sm text-gray-500">
                 Doppelte Namen werden übersprungen.
               </span>
