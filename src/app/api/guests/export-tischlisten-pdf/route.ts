@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import { prisma } from '@/lib/prisma'
 import { requirePageAccess, requireEventAccess } from '@/lib/permissions'
-import { loadUnicodeFontForPdf, pdfSafeTextForUnicode, pdfSafeTextForWinAnsi } from '@/lib/pdfUnicodeFont'
+import { pdfSafeTextForWinAnsi } from '@/lib/pdfUnicodeFont'
 
 export const runtime = 'nodejs'
 
 /**
- * GET ?eventId=... – Tischlisten-PDF serverseitig erzeugen (Unicode-Font wenn möglich, sonst Helvetica mit ASCII-Text).
+ * GET ?eventId=... – Tischlisten-PDF serverseitig erzeugen.
+ * Verwendet nur Helvetica (kein externer Font-Download), damit der Export auf Railway/Server zuverlässig funktioniert.
+ * Türkische Zeichen werden durch ASCII-Äquivalente ersetzt (ğ→g, ü→u, …).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -38,24 +40,18 @@ export async function GET(request: NextRequest) {
       const t = g.tableNumber!
       if (!byTable.has(t)) byTable.set(t, [])
       const name = g.name != null ? String(g.name).trim() : ''
-      byTable.get(t)!.push(name || '–')
+      byTable.get(t)!.push(name || '-')
     }
     const allEntries = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
     const normalTables = allEntries.filter(([n]) => n < PRESSE_START)
-    const presseNames = Array.from({ length: PRESSE_SLOTS }, (_, i) => (byTable.get(PRESSE_START + i) ?? [])[0] ?? '–')
-    const vip1Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP1_START + i) ?? [])[0] ?? '–')
-    const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '–')
+    const presseNames = Array.from({ length: PRESSE_SLOTS }, (_, i) => (byTable.get(PRESSE_START + i) ?? [])[0] ?? '-')
+    const vip1Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP1_START + i) ?? [])[0] ?? '-')
+    const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '-')
 
     const doc = await PDFDocument.create()
-    let unicodeFont: Awaited<ReturnType<typeof loadUnicodeFontForPdf>> = null
-    try {
-      unicodeFont = await loadUnicodeFontForPdf(doc)
-    } catch {
-      unicodeFont = null
-    }
-    const font = unicodeFont ?? (await doc.embedFont(StandardFonts.Helvetica))
-    const fontBold = unicodeFont ?? (await doc.embedFont(StandardFonts.HelveticaBold))
-    const safeText = (text: string) => (unicodeFont ? pdfSafeTextForUnicode(text) : pdfSafeTextForWinAnsi(text))
+    const font = await doc.embedFont(StandardFonts.Helvetica)
+    const fontBold = await doc.embedFont(StandardFonts.HelveticaBold)
+    const safeText = (text: string) => pdfSafeTextForWinAnsi(String(text ?? ''))
 
     doc.addPage([595, 842])
     const pageHeight = 842

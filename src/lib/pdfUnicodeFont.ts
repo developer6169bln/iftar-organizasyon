@@ -62,5 +62,7 @@ export function pdfSafeTextForWinAnsi(text: string): string {
     .trim()
     .slice(0, 300)
   for (const [k, v] of Object.entries(m)) out = out.replace(new RegExp(k, 'g'), v)
+  // Alle Zeichen außerhalb WinAnsi (0x20–0xFF) durch ? ersetzen, damit pdf-lib drawText nicht wirft
+  out = out.replace(/[^\x20-\xFF]/g, '?')
   return out
 }
