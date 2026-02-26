@@ -356,16 +356,22 @@ export default function RegistrierungenPage() {
   const [duplicateActionLoading, setDuplicateActionLoading] = useState<string | null>(null)
 
   const duplicateGroups = useMemo(() => {
-    const byName = new Map<string, GuestEntry[]>()
+    const byKey = new Map<string, GuestEntry[]>()
     for (const g of guests) {
-      const key = (g.name || '').trim().toLowerCase()
-      if (!key) continue
-      if (!byName.has(key)) byName.set(key, [])
-      byName.get(key)!.push(g)
+      const { vorname, nachname } = getGuestVornameNachname(g)
+      const key = `${vorname.trim().toLowerCase()}|${nachname.trim().toLowerCase()}`
+      if (!key || key === '|') continue
+      if (!byKey.has(key)) byKey.set(key, [])
+      byKey.get(key)!.push(g)
     }
-    return Array.from(byName.entries())
+    return Array.from(byKey.entries())
       .filter(([, list]) => list.length > 1)
-      .map(([name, list]) => ({ name, guests: list }))
+      .map(([, list]) => {
+        const first = list[0]
+        const { vorname, nachname } = getGuestVornameNachname(first)
+        const name = [vorname, nachname].filter(Boolean).join(' ').trim() || first.name || '–'
+        return { name, guests: list }
+      })
   }, [guests])
 
   const loadRegistrations = async () => {
@@ -2288,10 +2294,10 @@ export default function RegistrierungenPage() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="mb-2 text-sm font-semibold text-gray-800">Doppelte Namen bei den Tischen</h3>
             <p className="mb-4 text-xs text-gray-600">
-              Gäste mit gleichem Namen. Sie können umbenennen, löschen oder alle Einträge einer Gruppe auf einen neuen leeren Tisch verschieben.
+              Gäste mit gleichem Vor- und Nachnamen. Sie können umbenennen, löschen oder alle Einträge einer Gruppe auf einen neuen leeren Tisch verschieben.
             </p>
             {duplicateGroups.length === 0 ? (
-              <p className="rounded-lg bg-gray-100 p-4 text-sm text-gray-600">Keine doppelten Namen gefunden.</p>
+              <p className="rounded-lg bg-gray-100 p-4 text-sm text-gray-600">Keine doppelten Vor- und Nachnamen gefunden.</p>
             ) : (
               <ul className="space-y-4">
                 {duplicateGroups.map(({ name, guests: groupGuests }) => (
