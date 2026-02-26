@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       orderBy: [{ tableNumber: 'asc' }, { name: 'asc' }],
     })
 
+    const SPOOL_TABLE = 700
     const PRESSE_START = 801
     const PRESSE_SLOTS = 12
     const VIP1_START = 901
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest) {
       byTable.get(t)!.push(name || '-')
     }
     const allEntries = Array.from(byTable.entries()).sort((a, b) => a[0] - b[0])
-    const normalTables = allEntries.filter(([n]) => n < PRESSE_START)
+    const normalTables = allEntries.filter(([n]) => n < PRESSE_START && n !== SPOOL_TABLE)
+    const spoolNames = byTable.get(SPOOL_TABLE) ?? []
     const presseNames = Array.from({ length: PRESSE_SLOTS }, (_, i) => (byTable.get(PRESSE_START + i) ?? [])[0] ?? '-')
     const vip1Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP1_START + i) ?? [])[0] ?? '-')
     const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '-')
@@ -85,6 +87,30 @@ export async function GET(request: NextRequest) {
       })
       y -= 22
       for (const name of names) {
+        ensureSpace(60)
+        getPage().drawText('  • ' + safeText(name), {
+          x: 50,
+          y,
+          size: 11,
+          font,
+          color: rgb(0.1, 0.1, 0.1),
+        })
+        y -= 16
+      }
+      y -= 8
+    }
+
+    if (spoolNames.length > 0) {
+      ensureSpace(120)
+      getPage().drawText(safeText('Spool (Warteliste)'), {
+        x: 50,
+        y,
+        size: 14,
+        font: fontBold,
+        color: rgb(0.2, 0.2, 0.4),
+      })
+      y -= 22
+      for (const name of spoolNames) {
         ensureSpace(60)
         getPage().drawText('  • ' + safeText(name), {
           x: 50,

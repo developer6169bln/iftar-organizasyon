@@ -140,7 +140,8 @@ const EVENT_SLUG_LABELS: Record<string, string> = {
   'kemalettingruppe': 'Kemalettingruppe',
 }
 
-/** Presse-Tisch: 12 Platzhalter (801–812). VIP: je 10 (901–910 = VIP1, 911–920 = VIP2). */
+/** Spool-Tisch: Wartende Gäste/Platzhalter (700). Presse: 801–812. VIP: 901–910 = VIP1, 911–920 = VIP2. */
+const SPOOL_TABLE = 700
 const PRESSE_TABLE_START = 801
 const PRESSE_SLOTS = 12
 const VIP1_TABLE_START = 901
@@ -567,8 +568,50 @@ export default function RegistrierungenPage() {
     setSwapModal({ step: 1, guest, fromTable })
   }
 
-  const handleTableSwapSelectTarget = (targetTable: number) => {
+  const handleMoveToSpool = async (g: GesamtEntry) => {
+    if (!g.guest?.id) return
+    setSwapInProgress(true)
+    try {
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.guest.id, tableNumber: SPOOL_TABLE }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Verschieben fehlgeschlagen')
+      }
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Auf Spool verschieben fehlgeschlagen.')
+    } finally {
+      setSwapInProgress(false)
+    }
+  }
+
+  const handleTableSwapSelectTarget = async (targetTable: number) => {
     if (!swapModal || swapModal.step !== 1) return
+    if (swapModal.fromTable === SPOOL_TABLE) {
+      setSwapInProgress(true)
+      try {
+        const res = await fetch('/api/guests', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: swapModal.guest.guest!.id, tableNumber: targetTable }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Verschieben fehlgeschlagen')
+        }
+        setSwapModal(null)
+        setGuestsRefreshKey((k) => k + 1)
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Verschieben fehlgeschlagen.')
+      } finally {
+        setSwapInProgress(false)
+      }
+      return
+    }
     setSwapModal({ step: 2, guest: swapModal.guest, fromTable: swapModal.fromTable, targetTable })
   }
 
@@ -1082,7 +1125,7 @@ export default function RegistrierungenPage() {
   const handleDuplicateMoveToNewTable = async (guestsInGroup: GuestEntry[]) => {
     const normalTableNumbers = guests
       .map((g) => g.tableNumber)
-      .filter((t): t is number => t != null && t < PRESSE_TABLE_START)
+      .filter((t): t is number => t != null && t < PRESSE_TABLE_START && t !== SPOOL_TABLE)
     const maxTable = normalTableNumbers.length > 0 ? Math.max(...normalTableNumbers) : 0
     const newTable = maxTable + 1
     setDuplicateActionLoading('move-group')
@@ -1142,11 +1185,12 @@ export default function RegistrierungenPage() {
         byTable.get(tn)!.push(g)
       }
     }
+    if (!byTable.has(SPOOL_TABLE)) byTable.set(SPOOL_TABLE, [])
     for (let t = PRESSE_TABLE_START; t < PRESSE_TABLE_START + PRESSE_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     for (let t = VIP1_TABLE_START; t < VIP1_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     for (let t = VIP2_TABLE_START; t < VIP2_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     const allTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
-    const normalTableNumbers = allTableNumbers.filter((n) => n < PRESSE_TABLE_START)
+    const normalTableNumbers = allTableNumbers.filter((n) => n < PRESSE_TABLE_START && n !== SPOOL_TABLE)
     return (
       <div>
         <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -1205,7 +1249,7 @@ export default function RegistrierungenPage() {
         {(normalTableNumbers.length > 0 || selectedEventId) && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Verschieben“ für Tausch. Presse (801–812), VIP1/VIP2 (901–920) = Platzhalter.</p>
+            <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Auf Spool“ = Warteliste; „Verschieben“ = Tausch/Ziel. Spool (700), Presse (801–812), VIP1/VIP2 (901–920) = Platzhalter.</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -1251,6 +1295,15 @@ export default function RegistrierungenPage() {
                                   <span className={nameClass} title={anwesend ? 'Anwesend' : undefined}>{nameText}</span>
                                   <button
                                     type="button"
+                                    disabled={swapInProgress}
+                                    onClick={() => handleMoveToSpool(g)}
+                                    className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                                    title="Gast auf Spool (Warteliste) verschieben"
+                                  >
+                                    Auf Spool
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleTableSwapStart(g, num)}
                                     className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
                                     title="Gast an anderen Tisch tauschen"
@@ -1291,6 +1344,36 @@ export default function RegistrierungenPage() {
                   </div>
                 )
               })}
+            </div>
+            {/* Spool: Wartende Gäste / Platzhalter – von hier auf andere Tische verschieben */}
+            <div className="mt-4 rounded-lg border-2 border-slate-300 bg-slate-50/80 p-3">
+              <div className="mb-2 font-semibold text-slate-800">Spool (Warteliste)</div>
+              <p className="mb-2 text-xs text-slate-600">Wartende Gäste und Platzhalter – mit „Verschieben“ auf einen Tisch setzen.</p>
+              <ul className="space-y-2 text-sm text-gray-700">
+                {(byTable.get(SPOOL_TABLE) ?? []).map((g) => {
+                  const nameText = g.fullName || `${g.firstName} ${g.lastName}`.trim() || '–'
+                  const anwesend = isGuestAnwesend(g.guest)
+                  return (
+                    <li key={g.key} className="flex items-center justify-between gap-2 rounded bg-white/70 px-2 py-1.5">
+                      <span className={`min-w-0 flex-1 truncate ${anwesend ? 'rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-800' : 'text-gray-800'}`}>{nameText}</span>
+                      {g.guest?.id && (
+                        <button
+                          type="button"
+                          disabled={swapInProgress}
+                          onClick={() => handleTableSwapStart(g, SPOOL_TABLE)}
+                          className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 hover:bg-indigo-200"
+                          title="Gast an Tisch verschieben"
+                        >
+                          Verschieben
+                        </button>
+                      )}
+                    </li>
+                  )
+                })}
+                {(byTable.get(SPOOL_TABLE) ?? []).length === 0 && (
+                  <li className="rounded bg-white/50 px-2 py-2 text-gray-500">Keine Gäste auf Spool.</li>
+                )}
+              </ul>
             </div>
             {/* Presse (12) / VIP1 / VIP2 (je 10): Platzhalter – Gast zuweisen oder entfernen */}
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1355,12 +1438,23 @@ export default function RegistrierungenPage() {
                       <button
                         key={n}
                         type="button"
+                        disabled={swapInProgress}
                         onClick={() => handleTableSwapSelectTarget(n)}
-                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                       >
                         Tisch {n}
                       </button>
                     ))}
+                    {swapModal.fromTable !== SPOOL_TABLE && (
+                      <button
+                        type="button"
+                        disabled={swapInProgress}
+                        onClick={() => handleTableSwapSelectTarget(SPOOL_TABLE)}
+                        className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                      >
+                        Spool
+                      </button>
+                    )}
                   </div>
                 </>
               ) : (

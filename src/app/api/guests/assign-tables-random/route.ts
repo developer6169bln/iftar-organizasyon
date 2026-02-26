@@ -57,7 +57,8 @@ function getTischfarbe(guest: { additionalData: string | null }): string {
   }
 }
 
-/** Presse/VIP-Platzhalter-Tische: 801–812 Presse, 901–920 VIP. Diese Zuweisungen bei erneutem Random nicht ändern. */
+/** Spool (700) = Warteliste. Presse/VIP: 801–812, 901–920. Diese Zuweisungen bei erneutem Random nicht ändern. */
+const SPOOL_TABLE = 700
 const PRESSE_TABLE_START = 801
 const PRESSE_TABLE_END = 813
 const VIP_TABLE_START = 901
@@ -66,6 +67,9 @@ function isPresseOrVipTable(tableNumber: number | null): boolean {
   if (tableNumber == null) return false
   return (tableNumber >= PRESSE_TABLE_START && tableNumber < PRESSE_TABLE_END) ||
     (tableNumber >= VIP_TABLE_START && tableNumber < VIP_TABLE_END)
+}
+function isSpoolTable(tableNumber: number | null): boolean {
+  return tableNumber === SPOOL_TABLE
 }
 
 /** Presse-Gäste kommen immer an Tisch 1 (eigener Presse-Tisch). */
@@ -129,8 +133,8 @@ export async function POST(request: NextRequest) {
     const withZusage = nonVip.filter(hasZusageOrTeilnahme)
     const presse = withZusage.filter(isPresse)
     const nonPresse = withZusage.filter((g) => !isPresse(g))
-    // Bereits Presse/VIP zugewiesene Gäste (801–812, 901–920) bei erneutem Random unverändert lassen.
-    const nonPresseEligible = nonPresse.filter((g) => !isPresseOrVipTable(g.tableNumber))
+    // Bereits Presse/VIP/Spool zugewiesene Gäste (700, 801–812, 901–920) bei erneutem Random unverändert lassen.
+    const nonPresseEligible = nonPresse.filter((g) => !isPresseOrVipTable(g.tableNumber) && !isSpoolTable(g.tableNumber))
     // Presse wird nicht automatisch zugewiesen; Platzhalter 801–812 werden manuell befüllt.
 
     const updates: ReturnType<typeof prisma.guest.update>[] = []
@@ -174,7 +178,7 @@ export async function POST(request: NextRequest) {
     const numTablesToUse = Math.max(numTables, tableOffset)
     const assignedSet = new Set(assignedIds)
     const toUnassign = nonVip.filter(
-      (g) => !assignedSet.has(g.id) && !isPresse(g) && !isPresseOrVipTable(g.tableNumber)
+      (g) => !assignedSet.has(g.id) && !isPresse(g) && !isPresseOrVipTable(g.tableNumber) && !isSpoolTable(g.tableNumber)
     )
     for (const guest of toUnassign) {
       updates.push(
