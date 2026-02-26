@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 
 type Registration = {
@@ -351,6 +351,22 @@ export default function RegistrierungenPage() {
   const [quickAddSubmitting, setQuickAddSubmitting] = useState(false)
   const [isAppOwner, setIsAppOwner] = useState(false)
   const [adminAnmeldungenOpen, setAdminAnmeldungenOpen] = useState(false)
+  const [duplicatesModalOpen, setDuplicatesModalOpen] = useState(false)
+  const [duplicateRenameDraft, setDuplicateRenameDraft] = useState<Record<string, string>>({})
+  const [duplicateActionLoading, setDuplicateActionLoading] = useState<string | null>(null)
+
+  const duplicateGroups = useMemo(() => {
+    const byName = new Map<string, GuestEntry[]>()
+    for (const g of guests) {
+      const key = (g.name || '').trim().toLowerCase()
+      if (!key) continue
+      if (!byName.has(key)) byName.set(key, [])
+      byName.get(key)!.push(g)
+    }
+    return Array.from(byName.entries())
+      .filter(([, list]) => list.length > 1)
+      .map(([name, list]) => ({ name, guests: list }))
+  }, [guests])
 
   const loadRegistrations = async () => {
     try {
@@ -1007,6 +1023,81 @@ export default function RegistrierungenPage() {
       alert('Schnellerfassung fehlgeschlagen.')
     } finally {
       setQuickAddSubmitting(false)
+    }
+  }
+
+  const handleDuplicateRename = async (guestId: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    setDuplicateActionLoading(guestId)
+    try {
+      const res = await fetch('/api/guests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: guestId, name: trimmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Aktualisierung fehlgeschlagen')
+      setDuplicateRenameDraft((prev) => {
+        const next = { ...prev }
+        delete next[guestId]
+        return next
+      })
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Umbenennen fehlgeschlagen.')
+    } finally {
+      setDuplicateActionLoading(null)
+    }
+  }
+
+  const handleDuplicateDeleteGroup = async (guestIds: string[]) => {
+    if (!confirm(`Wirklich ${guestIds.length} Einträge löschen?`)) return
+    setDuplicateActionLoading('delete-group')
+    try {
+      for (const id of guestIds) {
+        const res = await fetch(`/api/guests?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Löschen fehlgeschlagen')
+        }
+      }
+      setGuestsRefreshKey((k) => k + 1)
+      setDuplicatesModalOpen(false)
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.')
+    } finally {
+      setDuplicateActionLoading(null)
+    }
+  }
+
+  const handleDuplicateMoveToNewTable = async (guestsInGroup: GuestEntry[]) => {
+    const normalTableNumbers = guests
+      .map((g) => g.tableNumber)
+      .filter((t): t is number => t != null && t < PRESSE_TABLE_START)
+    const maxTable = normalTableNumbers.length > 0 ? Math.max(...normalTableNumbers) : 0
+    const newTable = maxTable + 1
+    setDuplicateActionLoading('move-group')
+    try {
+      for (const g of guestsInGroup) {
+        const res = await fetch('/api/guests', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: g.id, tableNumber: newTable }),
+        })
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Verschieben fehlgeschlagen')
+        }
+      }
+      setGuestsRefreshKey((k) => k + 1)
+    } catch (e) {
+      console.error(e)
+      alert(e instanceof Error ? e.message : 'Verschieben fehlgeschlagen.')
+    } finally {
+      setDuplicateActionLoading(null)
     }
   }
 
@@ -2004,6 +2095,22 @@ export default function RegistrierungenPage() {
                 <h2 className="mb-4 text-lg font-semibold text-gray-900">
                   Gesamtliste – alle Anmeldungen + Gästeliste (Einladungsliste) zusammengeführt
                 </h2>
+                {selectedEventId && !loadingGuests && (
+                  <div className="mb-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDuplicatesModalOpen(true)}
+                      className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700"
+                    >
+                      Doppelte Namen anzeigen
+                      {duplicateGroups.length > 0 && (
+                        <span className="ml-2 rounded-full bg-white/25 px-2 py-0.5 text-xs">
+                          {duplicateGroups.length}
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
                 {!selectedEventId ? (
                   <p className="text-amber-600">Bitte wählen Sie ein Ziel-Event für den Gästelisten-Vergleich.</p>
                 ) : loadingGuests ? (
@@ -2167,6 +2274,82 @@ export default function RegistrierungenPage() {
                 type="button"
                 onClick={() => setQrModal(null)}
                 className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Doppelte Namen – Anzeige und Aktionen */}
+      {duplicatesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDuplicatesModalOpen(false)}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-2 text-sm font-semibold text-gray-800">Doppelte Namen bei den Tischen</h3>
+            <p className="mb-4 text-xs text-gray-600">
+              Gäste mit gleichem Namen. Sie können umbenennen, löschen oder alle Einträge einer Gruppe auf einen neuen leeren Tisch verschieben.
+            </p>
+            {duplicateGroups.length === 0 ? (
+              <p className="rounded-lg bg-gray-100 p-4 text-sm text-gray-600">Keine doppelten Namen gefunden.</p>
+            ) : (
+              <ul className="space-y-4">
+                {duplicateGroups.map(({ name, guests: groupGuests }) => (
+                  <li key={name} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <div className="mb-2 font-medium text-gray-800">&quot;{name}&quot;</div>
+                    <ul className="mb-3 space-y-2">
+                      {groupGuests.map((g) => (
+                        <li key={g.id} className="flex flex-wrap items-center gap-2 text-sm">
+                          <span className="text-gray-600">
+                            {g.name} {g.tableNumber != null ? `(Tisch ${g.tableNumber})` : '(ohne Tisch)'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={duplicateRenameDraft[g.id] ?? g.name}
+                              onChange={(e) => setDuplicateRenameDraft((prev) => ({ ...prev, [g.id]: e.target.value }))}
+                              placeholder="Neuer Name"
+                              className="w-40 rounded border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <button
+                              type="button"
+                              disabled={duplicateActionLoading !== null}
+                              onClick={() => handleDuplicateRename(g.id, duplicateRenameDraft[g.id] ?? g.name)}
+                              className="rounded bg-slate-600 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700 disabled:opacity-50"
+                            >
+                              {duplicateActionLoading === g.id ? '…' : 'Umbenennen'}
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={duplicateActionLoading !== null}
+                        onClick={() => handleDuplicateMoveToNewTable(groupGuests)}
+                        className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {duplicateActionLoading === 'move-group' ? '…' : 'Alle auf neuen Tisch verschieben'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={duplicateActionLoading !== null}
+                        onClick={() => handleDuplicateDeleteGroup(groupGuests.map((g) => g.id))}
+                        className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {duplicateActionLoading === 'delete-group' ? '…' : 'Alle löschen'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDuplicatesModalOpen(false)}
+                className="rounded bg-gray-200 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-300"
               >
                 Schließen
               </button>
