@@ -110,6 +110,11 @@ export async function POST(request: NextRequest) {
     const eventId = body?.eventId as string
     const numTables = typeof body?.numTables === 'number' ? body.numTables : parseInt(body?.numTables, 10)
     const seatsPerTable = typeof body?.seatsPerTable === 'number' ? body.seatsPerTable : parseInt(body?.seatsPerTable, 10)
+    const blockedTablesRaw = Array.isArray(body?.blockedTables) ? body.blockedTables : []
+    const blockedTables = blockedTablesRaw
+      .map((n: unknown) => (typeof n === 'number' ? n : parseInt(String(n), 10)))
+      .filter((n: number) => Number.isFinite(n) && n > 0)
+    const blockedTableSet = new Set<number>(blockedTables)
 
     if (!eventId) {
       return NextResponse.json({ error: 'eventId ist erforderlich' }, { status: 400 })
@@ -134,12 +139,27 @@ export async function POST(request: NextRequest) {
     const presse = withZusage.filter(isPresse)
     const nonPresse = withZusage.filter((g) => !isPresse(g))
     // Bereits Presse/VIP/Spool zugewiesene Gäste (700, 801–812, 901–920) bei erneutem Random unverändert lassen.
-    const nonPresseEligible = nonPresse.filter((g) => !isPresseOrVipTable(g.tableNumber) && !isSpoolTable(g.tableNumber))
+    const nonPresseEligible = nonPresse.filter(
+      (g) => !isPresseOrVipTable(g.tableNumber) && !isSpoolTable(g.tableNumber) && !blockedTableSet.has(g.tableNumber ?? -1)
+    )
     // Presse wird nicht automatisch zugewiesen; Platzhalter 801–812 werden manuell befüllt.
 
     const updates: ReturnType<typeof prisma.guest.update>[] = []
     const assignedIds: string[] = []
     let tableOffset = 0
+    let maxTableNumberUsed = 0
+
+    const getAllowedTableNumber = (index: number): number => {
+      let n = 1
+      let count = 0
+      while (true) {
+        if (!blockedTableSet.has(n)) {
+          if (count === index) return n
+          count++
+        }
+        n++
+      }
+    }
 
     // Übrige Gäste (ohne Presse, ohne bereits Presse/VIP-Platz): Gruppierung nach Geschlecht + Tischfarbe (Tische 1, 2, …).
     const FARBE_ORDER = ['', '1', '2', '3', '4'] as const
@@ -162,7 +182,8 @@ export async function POST(request: NextRequest) {
         const seats = requiredTables * seatsPerTable
         const toAssign = shuffled.slice(0, seats)
         for (let i = 0; i < toAssign.length; i++) {
-          const tableNumber = tableOffset + Math.floor(i / seatsPerTable) + 1
+          const tableIndex = tableOffset + Math.floor(i / seatsPerTable)
+          const tableNumber = getAllowedTableNumber(tableIndex)
           updates.push(
             prisma.guest.update({
               where: { id: toAssign[i].id },
@@ -170,15 +191,21 @@ export async function POST(request: NextRequest) {
             })
           )
           assignedIds.push(toAssign[i].id)
+          if (tableNumber > maxTableNumberUsed) maxTableNumberUsed = tableNumber
         }
         tableOffset += requiredTables
       }
     }
 
-    const numTablesToUse = Math.max(numTables, tableOffset)
+    const numTablesToUse = maxTableNumberUsed > 0 ? Math.max(numTables, maxTableNumberUsed) : numTables
     const assignedSet = new Set(assignedIds)
     const toUnassign = nonVip.filter(
-      (g) => !assignedSet.has(g.id) && !isPresse(g) && !isPresseOrVipTable(g.tableNumber) && !isSpoolTable(g.tableNumber)
+      (g) =>
+        !assignedSet.has(g.id) &&
+        !isPresse(g) &&
+        !isPresseOrVipTable(g.tableNumber) &&
+        !isSpoolTable(g.tableNumber) &&
+        !blockedTableSet.has(g.tableNumber ?? -1)
     )
     for (const guest of toUnassign) {
       updates.push(

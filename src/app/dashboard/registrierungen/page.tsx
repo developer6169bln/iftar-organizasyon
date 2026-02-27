@@ -346,6 +346,10 @@ export default function RegistrierungenPage() {
     const v = localStorage.getItem('registrierungen-seatsPerTable')
     return v ? parseInt(v, 10) || 8 : 8
   })
+  const [blockedTablesInput, setBlockedTablesInput] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return localStorage.getItem('registrierungen-blockedTables') ?? ''
+  })
   const [assigningTables, setAssigningTables] = useState(false)
   const [resettingTables, setResettingTables] = useState(false)
   const [tischlistenPdfLoading, setTischlistenPdfLoading] = useState(false)
@@ -466,8 +470,9 @@ export default function RegistrierungenPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('registrierungen-numTables', String(numTables))
       localStorage.setItem('registrierungen-seatsPerTable', String(seatsPerTable))
+      localStorage.setItem('registrierungen-blockedTables', blockedTablesInput)
     }
-  }, [numTables, seatsPerTable])
+  }, [numTables, seatsPerTable, blockedTablesInput])
 
   useEffect(() => {
     const loadMe = async () => {
@@ -494,6 +499,11 @@ export default function RegistrierungenPage() {
       alert('Anzahl Tische und Sitzplätze pro Tisch müssen mindestens 1 sein.')
       return
     }
+    const blockedTables = blockedTablesInput
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    const uniqueBlocked = Array.from(new Set(blockedTables))
     setAssigningTables(true)
     try {
       const res = await fetch('/api/guests/assign-tables-random', {
@@ -503,6 +513,7 @@ export default function RegistrierungenPage() {
           eventId: selectedEventId,
           numTables: Number(numTables),
           seatsPerTable: Number(seatsPerTable),
+          blockedTables: uniqueBlocked,
         }),
       })
       const data = await res.json()
@@ -1237,6 +1248,16 @@ export default function RegistrierungenPage() {
                 className="w-20 rounded border border-gray-300 px-2 py-1 text-sm"
               />
             </label>
+            <div className="flex flex-col gap-1 text-xs text-gray-700">
+              <span>Blockierte Tische (von Random ausschließen)</span>
+              <input
+                type="text"
+                value={blockedTablesInput}
+                onChange={(e) => setBlockedTablesInput(e.target.value)}
+                placeholder="z. B. 3, 4, 5"
+                className="w-40 rounded border border-gray-300 px-2 py-1 text-xs"
+              />
+            </div>
             <button
               type="button"
               onClick={handleAssignRandomTables}
@@ -1270,8 +1291,21 @@ export default function RegistrierungenPage() {
             <div className="grid grid-cols-2 gap-4">
               {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
+                const farbenSet = new Set(
+                  guestsAtTable
+                    .map((g) => getGuestTischfarbe(g.guest))
+                    .filter((f) => f && f !== '')
+                )
+                let tableBg = 'bg-gray-50'
+                if (farbenSet.size === 1) {
+                  const f = Array.from(farbenSet)[0]
+                  if (f === '1') tableBg = 'bg-red-50'
+                  else if (f === '2') tableBg = 'bg-blue-50'
+                  else if (f === '3') tableBg = 'bg-green-50'
+                  else if (f === '4') tableBg = 'bg-amber-50'
+                }
                 return (
-                  <div key={num} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div key={num} className={`rounded-lg border border-gray-200 p-3 ${tableBg}`}>
                     <div className="mb-2 font-semibold text-gray-800">Tisch {num}</div>
                     <ul className="space-y-2 text-sm text-gray-700">
                       {guestsAtTable.map((g) => {
