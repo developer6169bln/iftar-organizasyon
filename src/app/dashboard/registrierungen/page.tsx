@@ -372,6 +372,10 @@ export default function RegistrierungenPage() {
   const [duplicatesModalOpen, setDuplicatesModalOpen] = useState(false)
   const [duplicateRenameDraft, setDuplicateRenameDraft] = useState<Record<string, string>>({})
   const [duplicateActionLoading, setDuplicateActionLoading] = useState<string | null>(null)
+  const [swapTableNumbersOpen, setSwapTableNumbersOpen] = useState(false)
+  const [swapTableA, setSwapTableA] = useState('')
+  const [swapTableB, setSwapTableB] = useState('')
+  const [swapTableNumbersLoading, setSwapTableNumbersLoading] = useState(false)
 
   const duplicateGroups = useMemo(() => {
     const byKey = new Map<string, GuestEntry[]>()
@@ -557,6 +561,39 @@ export default function RegistrierungenPage() {
       alert(e instanceof Error ? e.message : 'Zurücksetzen fehlgeschlagen')
     } finally {
       setResettingTables(false)
+    }
+  }
+
+  const handleSwapTableNumbers = async () => {
+    if (!selectedEventId) return
+    const a = parseInt(swapTableA.trim(), 10)
+    const b = parseInt(swapTableB.trim(), 10)
+    if (!Number.isInteger(a) || a < 1 || !Number.isInteger(b) || b < 1) {
+      alert('Bitte zwei gültige Tischnummern (≥ 1) eingeben.')
+      return
+    }
+    if (a === b) {
+      alert('Die beiden Tischnummern müssen unterschiedlich sein.')
+      return
+    }
+    setSwapTableNumbersLoading(true)
+    try {
+      const res = await fetch('/api/guests/swap-table-numbers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: selectedEventId, tableA: a, tableB: b }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Tausch fehlgeschlagen')
+      setSwapTableNumbersOpen(false)
+      setSwapTableA('')
+      setSwapTableB('')
+      setGuestsRefreshKey((k) => k + 1)
+      alert(data.message ?? `Tisch ${a} und Tisch ${b} getauscht.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Tausch fehlgeschlagen.')
+    } finally {
+      setSwapTableNumbersLoading(false)
     }
   }
 
@@ -1281,6 +1318,15 @@ export default function RegistrierungenPage() {
               className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
             >
               {tischlistenPdfLoading ? '… PDF wird erstellt' : 'Tischlisten als PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSwapTableNumbersOpen(true)}
+              disabled={!selectedEventId || swapTableNumbersLoading}
+              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              title="Nur Tischnummern tauschen (z. B. Tisch 24 ↔ Tisch 9)"
+            >
+              {swapTableNumbersLoading ? '…' : 'Tischnummern tauschen'}
             </button>
           </div>
         </div>
@@ -2507,6 +2553,56 @@ export default function RegistrierungenPage() {
                 className="rounded bg-gray-200 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-300"
               >
                 Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Tischnummern tauschen (z. B. Tisch 24 ↔ Tisch 9) */}
+      {swapTableNumbersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !swapTableNumbersLoading && setSwapTableNumbersOpen(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-2 text-sm font-semibold text-gray-800">Tischnummern tauschen</h3>
+            <p className="mb-4 text-xs text-gray-600">
+              Nur die Nummern werden getauscht: Alle Gäste an Tisch A sitzen danach an Tisch B und umgekehrt.
+            </p>
+            <div className="mb-4 flex items-center gap-2">
+              <label className="text-sm text-gray-700">Tisch</label>
+              <input
+                type="number"
+                min={1}
+                value={swapTableA}
+                onChange={(e) => setSwapTableA(e.target.value)}
+                placeholder="z. B. 24"
+                className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+              <span className="text-gray-500">↔</span>
+              <label className="text-sm text-gray-700">Tisch</label>
+              <input
+                type="number"
+                min={1}
+                value={swapTableB}
+                onChange={(e) => setSwapTableB(e.target.value)}
+                placeholder="z. B. 9"
+                className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => !swapTableNumbersLoading && setSwapTableNumbersOpen(false)}
+                className="rounded bg-gray-200 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleSwapTableNumbers}
+                disabled={swapTableNumbersLoading || !swapTableA.trim() || !swapTableB.trim()}
+                className="rounded bg-violet-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+              >
+                {swapTableNumbersLoading ? '… Tauschen' : 'Tauschen'}
               </button>
             </div>
           </div>

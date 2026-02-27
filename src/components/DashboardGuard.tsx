@@ -10,6 +10,7 @@ const PATH_TO_PAGE: Record<string, string> = {
   '/dashboard/guests': 'guests',
   '/dashboard/invitations': 'invitations',
   '/dashboard/checkin': 'checkin',
+  '/dashboard/checkin-vip': 'checkin',
   '/dashboard/reports': 'reports',
   '/dashboard/audit-logs': 'audit-logs',
   '/dashboard/push-notifications': 'push-notifications',
