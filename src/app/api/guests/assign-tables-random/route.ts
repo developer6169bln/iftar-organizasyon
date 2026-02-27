@@ -57,10 +57,10 @@ function getTischfarbe(guest: { additionalData: string | null }): string {
   }
 }
 
-/** Spool (700) = Warteliste. Presse/VIP: 801–812, 901–918 (ein VIP-Tisch mit 18 Plätzen). Diese Zuweisungen bei erneutem Random nicht ändern. */
+/** Spool (700) = Warteliste. Sondertische (Presse/VIP/STB/SPONSOR): 801–918. Diese Zuweisungen bei erneutem Random nicht ändern. */
 const SPOOL_TABLE = 700
 const PRESSE_TABLE_START = 801
-const PRESSE_TABLE_END = 813
+const PRESSE_TABLE_END = 919
 const VIP_TABLE_START = 901
 const VIP_TABLE_END = 919
 function isPresseOrVipTable(tableNumber: number | null): boolean {

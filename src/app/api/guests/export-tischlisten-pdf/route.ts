@@ -34,6 +34,12 @@ export async function GET(request: NextRequest) {
     const PRESSE_SLOTS = 12
     const VIP_START = 901
     const VIP_SLOTS = 18
+    const STB_BASKAN_START = 813
+    const SPONSOR_STK1_START = 825
+    const SPONSOR_STK2_START = 837
+    const SPONSOR_STK3_START = 849
+    const SPONSOR_STK4_START = 861
+    const SPONSOR_STK_SLOTS = 12
 
     const byTable = new Map<number, string[]>()
     for (const g of guests) {
@@ -47,6 +53,11 @@ export async function GET(request: NextRequest) {
     const spoolNames = byTable.get(SPOOL_TABLE) ?? []
     const presseNames = Array.from({ length: PRESSE_SLOTS }, (_, i) => (byTable.get(PRESSE_START + i) ?? [])[0] ?? '-')
     const vipNames = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP_START + i) ?? [])[0] ?? '-')
+    const stbBaskanNames = Array.from({ length: SPONSOR_STK_SLOTS }, (_, i) => (byTable.get(STB_BASKAN_START + i) ?? [])[0] ?? '-')
+    const sponsorStk1Names = Array.from({ length: SPONSOR_STK_SLOTS }, (_, i) => (byTable.get(SPONSOR_STK1_START + i) ?? [])[0] ?? '-')
+    const sponsorStk2Names = Array.from({ length: SPONSOR_STK_SLOTS }, (_, i) => (byTable.get(SPONSOR_STK2_START + i) ?? [])[0] ?? '-')
+    const sponsorStk3Names = Array.from({ length: SPONSOR_STK_SLOTS }, (_, i) => (byTable.get(SPONSOR_STK3_START + i) ?? [])[0] ?? '-')
+    const sponsorStk4Names = Array.from({ length: SPONSOR_STK_SLOTS }, (_, i) => (byTable.get(SPONSOR_STK4_START + i) ?? [])[0] ?? '-')
 
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -165,6 +176,59 @@ export async function GET(request: NextRequest) {
       y -= 16
     }
     y -= 8
+
+    ensureSpace(120)
+    getPage().drawText(safeText('STB BASKAN'), {
+      x: 50,
+      y,
+      size: 14,
+      font: fontBold,
+      color: rgb(0.2, 0.2, 0.4),
+    })
+    y -= 22
+    for (let i = 0; i < SPONSOR_STK_SLOTS; i++) {
+      ensureSpace(60)
+      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(stbBaskanNames[i]), {
+        x: 50,
+        y,
+        size: 11,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      })
+      y -= 16
+    }
+    y -= 8
+
+    const sponsorBlocks: Array<{ label: string; names: string[] }> = [
+      { label: 'SPONSOR-STK 1', names: sponsorStk1Names },
+      { label: 'SPONSOR-STK 2', names: sponsorStk2Names },
+      { label: 'SPONSOR-STK 3', names: sponsorStk3Names },
+      { label: 'SPONSOR-STK 4', names: sponsorStk4Names },
+    ]
+
+    for (const block of sponsorBlocks) {
+      ensureSpace(120)
+      getPage().drawText(safeText(block.label), {
+        x: 50,
+        y,
+        size: 14,
+        font: fontBold,
+        color: rgb(0.2, 0.2, 0.4),
+      })
+      y -= 22
+      for (let i = 0; i < SPONSOR_STK_SLOTS; i++) {
+        ensureSpace(60)
+        getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(block.names[i]), {
+          x: 50,
+          y,
+          size: 11,
+          font,
+          color: rgb(0.1, 0.1, 0.1),
+        })
+        y -= 16
+      }
+      y -= 8
+    }
 
     const pdfBytes = await doc.save()
     const filename = `Tischlisten_${new Date().toISOString().split('T')[0]}.pdf`

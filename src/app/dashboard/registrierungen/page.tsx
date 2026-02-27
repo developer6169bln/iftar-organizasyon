@@ -140,20 +140,36 @@ const EVENT_SLUG_LABELS: Record<string, string> = {
   'kemalettingruppe': 'Kemalettingruppe',
 }
 
-/** Spool-Tisch: Wartende Gäste/Platzhalter (700). Presse: 801–812. VIP: 901–918 (ein VIP-Tisch mit 18 Plätzen). */
+/** Spool-Tisch: Wartende Gäste/Platzhalter (700). Sondertische: Presse 801–812, VIP 901–918 (18 Plätze), STB BASKAN 813–824, SPONSOR-STK 1–4 (je 12 Plätze). */
 const SPOOL_TABLE = 700
 const PRESSE_TABLE_START = 801
 const PRESSE_SLOTS = 12
 const VIP_TABLE_START = 901
 const VIP_SLOTS = 18
+const STB_BASKAN_TABLE_START = 813
+const SPONSOR_STK1_TABLE_START = 825
+const SPONSOR_STK2_TABLE_START = 837
+const SPONSOR_STK3_TABLE_START = 849
+const SPONSOR_STK4_TABLE_START = 861
+const SPONSOR_STK_SLOTS = 12
 function getSpecialTableLabel(n: number): string {
   if (n >= PRESSE_TABLE_START && n < PRESSE_TABLE_START + PRESSE_SLOTS) return 'Presse'
   if (n >= VIP_TABLE_START && n < VIP_TABLE_START + VIP_SLOTS) return 'VIP'
+  if (n >= STB_BASKAN_TABLE_START && n < STB_BASKAN_TABLE_START + SPONSOR_STK_SLOTS) return 'STB BASKAN'
+  if (n >= SPONSOR_STK1_TABLE_START && n < SPONSOR_STK1_TABLE_START + SPONSOR_STK_SLOTS) return 'SPONSOR-STK 1'
+  if (n >= SPONSOR_STK2_TABLE_START && n < SPONSOR_STK2_TABLE_START + SPONSOR_STK_SLOTS) return 'SPONSOR-STK 2'
+  if (n >= SPONSOR_STK3_TABLE_START && n < SPONSOR_STK3_TABLE_START + SPONSOR_STK_SLOTS) return 'SPONSOR-STK 3'
+  if (n >= SPONSOR_STK4_TABLE_START && n < SPONSOR_STK4_TABLE_START + SPONSOR_STK_SLOTS) return 'SPONSOR-STK 4'
   return ''
 }
 function getSpecialTablePlatz(n: number): number {
   if (n >= PRESSE_TABLE_START && n < PRESSE_TABLE_START + PRESSE_SLOTS) return n - PRESSE_TABLE_START + 1
   if (n >= VIP_TABLE_START && n < VIP_TABLE_START + VIP_SLOTS) return n - VIP_TABLE_START + 1
+  if (n >= STB_BASKAN_TABLE_START && n < STB_BASKAN_TABLE_START + SPONSOR_STK_SLOTS) return n - STB_BASKAN_TABLE_START + 1
+  if (n >= SPONSOR_STK1_TABLE_START && n < SPONSOR_STK1_TABLE_START + SPONSOR_STK_SLOTS) return n - SPONSOR_STK1_TABLE_START + 1
+  if (n >= SPONSOR_STK2_TABLE_START && n < SPONSOR_STK2_TABLE_START + SPONSOR_STK_SLOTS) return n - SPONSOR_STK2_TABLE_START + 1
+  if (n >= SPONSOR_STK3_TABLE_START && n < SPONSOR_STK3_TABLE_START + SPONSOR_STK_SLOTS) return n - SPONSOR_STK3_TABLE_START + 1
+  if (n >= SPONSOR_STK4_TABLE_START && n < SPONSOR_STK4_TABLE_START + SPONSOR_STK_SLOTS) return n - SPONSOR_STK4_TABLE_START + 1
   return 0
 }
 
@@ -1185,6 +1201,11 @@ export default function RegistrierungenPage() {
     if (!byTable.has(SPOOL_TABLE)) byTable.set(SPOOL_TABLE, [])
     for (let t = PRESSE_TABLE_START; t < PRESSE_TABLE_START + PRESSE_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     for (let t = VIP_TABLE_START; t < VIP_TABLE_START + VIP_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = STB_BASKAN_TABLE_START; t < STB_BASKAN_TABLE_START + SPONSOR_STK_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = SPONSOR_STK1_TABLE_START; t < SPONSOR_STK1_TABLE_START + SPONSOR_STK_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = SPONSOR_STK2_TABLE_START; t < SPONSOR_STK2_TABLE_START + SPONSOR_STK_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = SPONSOR_STK3_TABLE_START; t < SPONSOR_STK3_TABLE_START + SPONSOR_STK_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
+    for (let t = SPONSOR_STK4_TABLE_START; t < SPONSOR_STK4_TABLE_START + SPONSOR_STK_SLOTS; t++) if (!byTable.has(t)) byTable.set(t, [])
     const allTableNumbers = Array.from(byTable.keys()).sort((a, b) => a - b)
     const normalTableNumbers = allTableNumbers.filter((n) => n < PRESSE_TABLE_START && n !== SPOOL_TABLE)
     return (
@@ -1245,7 +1266,7 @@ export default function RegistrierungenPage() {
         {(normalTableNumbers.length > 0 || selectedEventId) && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
             <h3 className="mb-3 text-sm font-semibold text-gray-800">Tische nach Nummer (zugewiesene Gäste)</h3>
-            <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Auf Spool“ = Warteliste; „Verschieben“ = Tausch/Ziel. Spool (700), Presse (801–812), VIP (901–918, 18 Plätze) = Platzhalter.</p>
+            <p className="mb-3 text-xs text-gray-500">„P“ = Presse; „W“ = Weiblich; 4 Farben = Tischfarbe. Anwesend = Name grün. „Auf Spool“ = Warteliste; „Verschieben“ = Tausch/Ziel. Spool (700), Presse (801–812), VIP (901–918, 18 Plätze), STB BASKAN (813–824), SPONSOR-STK 1–4 (je 12 Plätze) = Platzhalter.</p>
             <div className="grid grid-cols-2 gap-4">
               {normalTableNumbers.map((num) => {
                 const guestsAtTable = byTable.get(num)!
@@ -1371,11 +1392,16 @@ export default function RegistrierungenPage() {
                 )}
               </ul>
             </div>
-            {/* Presse (12) / VIP (18): Platzhalter – Gast zuweisen oder entfernen */}
+            {/* Presse (12) / VIP (18) / STB BASKAN / SPONSOR-STK 1–4 (je 12): Platzhalter – Gast zuweisen oder entfernen */}
             <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[
                 { label: 'Presse', start: PRESSE_TABLE_START, slots: PRESSE_SLOTS, border: 'border-slate-300', bg: 'bg-slate-50/80', title: 'text-slate-800', btn: 'bg-slate-200 text-slate-800 hover:bg-slate-300' },
                 { label: 'VIP', start: VIP_TABLE_START, slots: VIP_SLOTS, border: 'border-amber-200', bg: 'bg-amber-50/80', title: 'text-amber-900', btn: 'bg-amber-200 text-amber-900 hover:bg-amber-300' },
+                { label: 'STB BASKAN', start: STB_BASKAN_TABLE_START, slots: SPONSOR_STK_SLOTS, border: 'border-sky-200', bg: 'bg-sky-50/80', title: 'text-sky-900', btn: 'bg-sky-200 text-sky-900 hover:bg-sky-300' },
+                { label: 'SPONSOR-STK 1', start: SPONSOR_STK1_TABLE_START, slots: SPONSOR_STK_SLOTS, border: 'border-emerald-200', bg: 'bg-emerald-50/80', title: 'text-emerald-900', btn: 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300' },
+                { label: 'SPONSOR-STK 2', start: SPONSOR_STK2_TABLE_START, slots: SPONSOR_STK_SLOTS, border: 'border-emerald-200', bg: 'bg-emerald-50/80', title: 'text-emerald-900', btn: 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300' },
+                { label: 'SPONSOR-STK 3', start: SPONSOR_STK3_TABLE_START, slots: SPONSOR_STK_SLOTS, border: 'border-emerald-200', bg: 'bg-emerald-50/80', title: 'text-emerald-900', btn: 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300' },
+                { label: 'SPONSOR-STK 4', start: SPONSOR_STK4_TABLE_START, slots: SPONSOR_STK_SLOTS, border: 'border-emerald-200', bg: 'bg-emerald-50/80', title: 'text-emerald-900', btn: 'bg-emerald-200 text-emerald-900 hover:bg-emerald-300' },
               ].map(({ label, start, slots, border, bg, title, btn }) => (
                 <div key={label} className={`rounded-lg border-2 ${border} ${bg} p-3`}>
                   <div className={`mb-2 font-semibold ${title}`}>{label}</div>
