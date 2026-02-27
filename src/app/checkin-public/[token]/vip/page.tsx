@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useParams, useSearchParams } from 'next/navigation'
 
 const VIP_TABLE_START = 901
 const VIP_SLOTS = 18
@@ -23,18 +23,14 @@ const SONDERTISCHE: { label: string; start: number; slots: number }[] = [
 
 function getTableLabel(tableNumber: number): string | null {
   for (const t of SONDERTISCHE) {
-    if (tableNumber >= t.start && tableNumber < t.start + t.slots) {
-      return t.label
-    }
+    if (tableNumber >= t.start && tableNumber < t.start + t.slots) return t.label
   }
   return null
 }
 
 function getPlatz(tableNumber: number): number {
   for (const t of SONDERTISCHE) {
-    if (tableNumber >= t.start && tableNumber < t.start + t.slots) {
-      return tableNumber - t.start + 1
-    }
+    if (tableNumber >= t.start && tableNumber < t.start + t.slots) return tableNumber - t.start + 1
   }
   return 0
 }
@@ -58,61 +54,34 @@ function parseAnwesend(additionalData: string | null): boolean {
   }
 }
 
-export default function CheckinVipPage() {
-  const [eventId, setEventId] = useState<string | null>(null)
+export default function PublicCheckinVipPage() {
+  const params = useParams()
+  const searchParams = useSearchParams()
+  const token = params?.token as string
+  const eventId = searchParams?.get('eventId') || undefined
   const [guests, setGuests] = useState<GuestRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [publicLink, setPublicLink] = useState('')
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   useEffect(() => {
-    const loadEvent = async () => {
-      try {
-        const projectId = typeof window !== 'undefined' ? localStorage.getItem('dashboard-project-id') : null
-        const url = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
-        const res = await fetch(url)
-        if (res.ok) {
-          const data = await res.json()
-          const event = Array.isArray(data) ? (data[0] ?? null) : data
-          if (event?.id) setEventId(event.id)
-        }
-      } catch (e) {
-        console.error(e)
-      }
-    }
-    loadEvent()
-  }, [])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const onProjectChange = async () => {
-        try {
-          const projectId = localStorage.getItem('dashboard-project-id')
-          const url = projectId ? `/api/events?projectId=${encodeURIComponent(projectId)}` : '/api/events'
-          const res = await fetch(url)
-          if (res.ok) {
-            const data = await res.json()
-            const event = Array.isArray(data) ? (data[0] ?? null) : data
-            if (event?.id) setEventId(event.id)
-          }
-        } catch {}
-      }
-      window.addEventListener('dashboard-project-changed', onProjectChange)
-      return () => window.removeEventListener('dashboard-project-changed', onProjectChange)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!eventId) {
-      setGuests([])
-      setLoading(false)
-      return
-    }
+    if (!token) return
     let cancelled = false
     setLoading(true)
-    fetch(`/api/guests?eventId=${encodeURIComponent(eventId)}`)
-      .then((res) => (res.ok ? res.json() : []))
+    setError(null)
+    const url = eventId
+      ? `/api/checkin-public/${token}/guests?eventId=${encodeURIComponent(eventId)}`
+      : `/api/checkin-public/${token}/guests`
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) setError('Ungültiger Zugangscode')
+          else setError('Fehler beim Laden der Gäste')
+          return []
+        }
+        return res.json()
+      })
       .then((list: { id: string; name: string | null; tableNumber: number | null; additionalData: string | null }[]) => {
         if (cancelled) return
         const rows: GuestRow[] = []
@@ -132,24 +101,10 @@ export default function CheckinVipPage() {
         }
         setGuests(rows)
       })
-      .catch(() => { if (!cancelled) setGuests([]) })
+      .catch(() => { if (!cancelled) setError('Fehler beim Laden') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [eventId])
-
-  useEffect(() => {
-    fetch('/api/checkin-public/link')
-      .then((res) => res.json())
-      .then((data) => {
-        const base = data.link || (typeof window !== 'undefined' ? `${window.location.origin}/checkin-public/checkin2024` : '')
-        const withEvent = eventId ? `${base}?eventId=${encodeURIComponent(eventId)}` : base
-        setPublicLink(withEvent ? `${withEvent.replace(/\?.*$/, '')}/vip${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}` : '')
-      })
-      .catch(() => {
-        const base = typeof window !== 'undefined' ? `${window.location.origin}/checkin-public/checkin2024` : ''
-        setPublicLink(eventId ? `${base}/vip?eventId=${encodeURIComponent(eventId)}` : `${base}/vip`)
-      })
-  }, [eventId])
+  }, [token, eventId])
 
   const filteredGuests = !searchQuery.trim()
     ? guests
@@ -171,7 +126,7 @@ export default function CheckinVipPage() {
     const newValue = !row.anwesend
     setTogglingId(row.id)
     try {
-      const res = await fetch('/api/checkin/anwesend', {
+      const res = await fetch(`/api/checkin-public/${token}/anwesend`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ guestId: row.id, anwesend: newValue }),
@@ -191,86 +146,52 @@ export default function CheckinVipPage() {
     }
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md rounded-lg bg-white p-6 text-center shadow-md">
+          <h1 className="mb-4 text-2xl font-bold text-gray-900">Zugriff verweigert</h1>
+          <p className="text-gray-600">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm">
+      <header className="bg-amber-600 py-4 text-white shadow">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-gray-600 hover:text-gray-900">
-                ← Zurück
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Check-in VIP & Sondertische</h1>
-            </div>
-          </div>
+          <h1 className="text-xl font-bold">Check-in VIP & Sondertische</h1>
+          <p className="mt-1 text-sm text-amber-100">
+            VIP, STB BASKAN, SPONSOR-STK 1–4 – Anwesend per Checkbox
+          </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h3 className="text-lg font-semibold text-amber-900">Externer Link (für alle ohne Login)</h3>
-          <p className="mt-1 text-sm text-amber-700">
-            Mit diesem Link kann am Einlass der Check-in VIP & Sondertische erfolgen – ohne Login, mit Suchfeld und Anwesend-Checkbox.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={publicLink}
-              readOnly
-              className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Suchen nach Name oder Tisch…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full max-w-md rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          {searchQuery && (
             <button
               type="button"
-              onClick={() => {
-                if (publicLink) {
-                  navigator.clipboard.writeText(publicLink)
-                  alert('Link kopiert!')
-                }
-              }}
-              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+              onClick={() => setSearchQuery('')}
+              className="ml-2 text-sm text-gray-600 hover:text-gray-900"
             >
-              Kopieren
+              Zurücksetzen
             </button>
-            <a
-              href={publicLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600"
-            >
-              Link öffnen
-            </a>
-          </div>
+          )}
         </div>
 
-        <p className="mb-4 text-sm text-gray-600">
-          Nur Tische: VIP, STB BASKAN, SPONSOR-STK 1–4. Anwesend per Checkbox setzen.
-        </p>
-
-        {!eventId ? (
-          <p className="rounded-lg bg-amber-50 p-4 text-amber-800">Bitte Projekt/Event auswählen.</p>
-        ) : loading ? (
+        {loading ? (
           <p className="text-gray-500">Lade Gäste …</p>
         ) : (
-          <>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                placeholder="Suchen nach Name oder Tisch…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-72 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="text-sm text-gray-600 hover:text-gray-900"
-                >
-                  Zurücksetzen
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {SONDERTISCHE.map(({ label }) => {
               const list = (byTable.get(label) ?? []).sort((a, b) => a.platz - b.platz)
               return (
@@ -313,8 +234,7 @@ export default function CheckinVipPage() {
                 </div>
               )
             })}
-            </div>
-          </>
+          </div>
         )}
       </main>
     </div>
