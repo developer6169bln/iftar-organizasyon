@@ -32,9 +32,8 @@ export async function GET(request: NextRequest) {
     const SPOOL_TABLE = 700
     const PRESSE_START = 801
     const PRESSE_SLOTS = 12
-    const VIP1_START = 901
-    const VIP2_START = 911
-    const VIP_SLOTS = 10
+    const VIP_START = 901
+    const VIP_SLOTS = 18
 
     const byTable = new Map<number, string[]>()
     for (const g of guests) {
@@ -47,8 +46,7 @@ export async function GET(request: NextRequest) {
     const normalTables = allEntries.filter(([n]) => n < PRESSE_START && n !== SPOOL_TABLE)
     const spoolNames = byTable.get(SPOOL_TABLE) ?? []
     const presseNames = Array.from({ length: PRESSE_SLOTS }, (_, i) => (byTable.get(PRESSE_START + i) ?? [])[0] ?? '-')
-    const vip1Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP1_START + i) ?? [])[0] ?? '-')
-    const vip2Names = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP2_START + i) ?? [])[0] ?? '-')
+    const vipNames = Array.from({ length: VIP_SLOTS }, (_, i) => (byTable.get(VIP_START + i) ?? [])[0] ?? '-')
 
     const doc = await PDFDocument.create()
     const font = await doc.embedFont(StandardFonts.Helvetica)
@@ -147,7 +145,7 @@ export async function GET(request: NextRequest) {
     y -= 8
 
     ensureSpace(120)
-    getPage().drawText(safeText('VIP1'), {
+    getPage().drawText(safeText('VIP'), {
       x: 50,
       y,
       size: 14,
@@ -157,29 +155,7 @@ export async function GET(request: NextRequest) {
     y -= 22
     for (let i = 0; i < VIP_SLOTS; i++) {
       ensureSpace(60)
-      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(vip1Names[i]), {
-        x: 50,
-        y,
-        size: 11,
-        font,
-        color: rgb(0.1, 0.1, 0.1),
-      })
-      y -= 16
-    }
-    y -= 8
-
-    ensureSpace(120)
-    getPage().drawText(safeText('VIP2'), {
-      x: 50,
-      y,
-      size: 14,
-      font: fontBold,
-      color: rgb(0.2, 0.2, 0.4),
-    })
-    y -= 22
-    for (let i = 0; i < VIP_SLOTS; i++) {
-      ensureSpace(60)
-      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(vip2Names[i]), {
+      getPage().drawText('  • Platz ' + String(i + 1) + ': ' + safeText(vipNames[i]), {
         x: 50,
         y,
         size: 11,
